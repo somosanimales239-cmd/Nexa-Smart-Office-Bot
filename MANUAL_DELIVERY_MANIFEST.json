@@ -1,0 +1,118 @@
+{
+  "project": "Nexa Smart Office Bot",
+  "version": "1.0.0",
+  "delivery_mode": "manual_delivery",
+  "build_targets": [
+    "nsis",
+    "portable",
+    "zip"
+  ],
+  "entry_point": "main.js",
+  "files": [
+    {
+      "path": ".github/workflows/windows-build.yml",
+      "size": 2166,
+      "sha256": "9e7ac2acf84bb3bd403d50ad0db0856ca3d73ec4db52734c254f22f2b200c614"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size": 790,
+      "sha256": "b26718afca08e11306c6e17a2047d99f4e28d119b767a7a39e8fa4c38a52c100"
+    },
+    {
+      "path": "INSTALLATION.md",
+      "size": 1000,
+      "sha256": "e94d2f87f0c7847000205a7158e2e1684bba8bd9228df151e773d5e8430f843e"
+    },
+    {
+      "path": "LICENSE",
+      "size": 1061,
+      "sha256": "46ed46827aeef657d6b6a6846944d361aa3a8db13d43d34da00a4a169cb0082f"
+    },
+    {
+      "path": "README.md",
+      "size": 1306,
+      "sha256": "9a44e76e6933363ac6ab09172ee69ae1e673c3beedffc6bedbbcd69ba6f2deba"
+    },
+    {
+      "path": "VALIDATION_REPORT.txt",
+      "size": 2413,
+      "sha256": "1374f6a4d8715ccd6fadcf9ddea04388f426ae3320da7f126217df8285b1d466"
+    },
+    {
+      "path": "build/icon.png",
+      "size": 17803,
+      "sha256": "923fe1df1b19eea7f89656ab4e44b40437aa25e7e8eb636bbd60729bed023d70"
+    },
+    {
+      "path": "main.js",
+      "size": 10218,
+      "sha256": "1d219d6727a3d45d29f24c00e28c20bba0ae27a86a8a432a1868c69cc2cb2586"
+    },
+    {
+      "path": "package-lock.json",
+      "size": 145834,
+      "sha256": "0916c014613a6a7aaea76d5ad485949e2802baa8dc15f5cdf60800fbb3d1cfa6"
+    },
+    {
+      "path": "package.json",
+      "size": 1891,
+      "sha256": "d83e056df9f624a0cb0c40b1198da0a673a79b5ebb96211bbb8b98ac7887fc76"
+    },
+    {
+      "path": "preload.js",
+      "size": 2204,
+      "sha256": "2510f1b8650c93b45d928aa584cf93839539711f37ff2a0e54487cf921972985"
+    },
+    {
+      "path": "scripts/artifact-verify.js",
+      "size": 1451,
+      "sha256": "138fe1fffd7eb1e7dce0d1642c76fc42a19b43696ddc2e3cc56af7c51fa9b8a0"
+    },
+    {
+      "path": "scripts/integration-tests.js",
+      "size": 5164,
+      "sha256": "b0272b9068a0ba63a806f1910c66facc475988f88fd92f7a39e5b8cbe11dde7f"
+    },
+    {
+      "path": "scripts/ui-smoke.js",
+      "size": 1131,
+      "sha256": "c220e3f3a5cc6eccd6eed76d075840742c53a5bed6b402b6828692c34d6e4564"
+    },
+    {
+      "path": "scripts/validate.js",
+      "size": 5122,
+      "sha256": "45d8f07880c68a73963f51068532d5f59e592c3c43c7ab89dcb69ae0126d451b"
+    },
+    {
+      "path": "src/app.js",
+      "size": 35294,
+      "sha256": "0adebc998db5198a90b6f9bb4489b8e4b517f677963053f2bf9882e89884b588"
+    },
+    {
+      "path": "src/database/database.js",
+      "size": 23765,
+      "sha256": "41b22a6c4635b9374bb482a7e0c93ad64e9907345cb24069d3c6f9954ee639ff"
+    },
+    {
+      "path": "src/index.html",
+      "size": 4087,
+      "sha256": "061b2c22af9b6b47fa2c95a2e1bbe96847e6f9d3c4170d76e6a68e3cf906796d"
+    },
+    {
+      "path": "src/services/ai-service.js",
+      "size": 6618,
+      "sha256": "e346cff97a6a8c5d4d5dd0b7723531ea71324db85cf82b4e9ab2d954fb760ec3"
+    },
+    {
+      "path": "src/services/secret-store.js",
+      "size": 1976,
+      "sha256": "a6f4fed72eaddd1c68e1b7896052236f3f1a9bc97f9102289db518e927bf9cce"
+    },
+    {
+      "path": "src/styles.css",
+      "size": 12308,
+      "sha256": "2e3d2f017da8b6a9d7819eb74c823c08123179d35385887eb74cac0723d1d923"
+    }
+  ]
+}

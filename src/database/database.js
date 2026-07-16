@@ -1,0 +1,491 @@
+'use strict';
+
+const { DatabaseSync } = require('node:sqlite');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const nowIso = () => new Date().toISOString();
+const id = () => crypto.randomUUID();
+const normalizeText = (value) => String(value ?? '').trim();
+const nullable = (value) => {
+  const text = normalizeText(value);
+  return text === '' ? null : text;
+};
+
+class DatabaseService {
+  constructor(databasePath) {
+    this.databasePath = databasePath;
+    fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+    this.open();
+  }
+
+  open() {
+    this.db = new DatabaseSync(this.databasePath);
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
+    this.migrate();
+  }
+
+  close() {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+
+  transaction(fn) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = fn();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try { this.db.exec('ROLLBACK'); } catch (_) { /* ignore rollback failure */ }
+      throw error;
+    }
+  }
+
+  migrate() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        applied_at TEXT NOT NULL
+      );
+    `);
+    const applied = new Set(this.db.prepare('SELECT id FROM migrations').all().map((row) => row.id));
+    const migrations = [
+      [1, 'initial-schema', `
+        CREATE TABLE IF NOT EXISTS contacts (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          company TEXT,
+          phone TEXT,
+          email TEXT,
+          tags TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
+        CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
+
+        CREATE TABLE IF NOT EXISTS leads (
+          id TEXT PRIMARY KEY,
+          contact_id TEXT,
+          name TEXT NOT NULL,
+          company TEXT,
+          phone TEXT,
+          email TEXT,
+          source TEXT,
+          status TEXT NOT NULL DEFAULT 'New',
+          priority TEXT NOT NULL DEFAULT 'Medium',
+          estimated_value REAL NOT NULL DEFAULT 0,
+          next_follow_up TEXT,
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+        CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads(next_follow_up);
+
+        CREATE TABLE IF NOT EXISTS tasks (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          due_at TEXT,
+          priority TEXT NOT NULL DEFAULT 'Medium',
+          status TEXT NOT NULL DEFAULT 'Pending',
+          related_type TEXT,
+          related_id TEXT,
+          reminder_at TEXT,
+          notification_sent_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_status_due ON tasks(status, due_at);
+
+        CREATE TABLE IF NOT EXISTS appointments (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          start_at TEXT NOT NULL,
+          end_at TEXT,
+          status TEXT NOT NULL DEFAULT 'Scheduled',
+          contact_id TEXT,
+          lead_id TEXT,
+          reminder_at TEXT,
+          notification_sent_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
+          FOREIGN KEY(lead_id) REFERENCES leads(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(start_at);
+
+        CREATE TABLE IF NOT EXISTS ai_suggestions (
+          id TEXT PRIMARY KEY,
+          provider TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          related_type TEXT,
+          related_id TEXT,
+          prompt TEXT NOT NULL,
+          response TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          action TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT,
+          details TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_logs(created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS backup_history (
+          id TEXT PRIMARY KEY,
+          file_path TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `],
+      [2, 'settings-defaults', `
+        INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES
+          ('preferred_provider', 'openai', datetime('now')),
+          ('openai_model', 'gpt-5.6-luna', datetime('now')),
+          ('deepseek_model', 'deepseek-v4-flash', datetime('now')),
+          ('deepseek_base_url', 'https://api.deepseek.com', datetime('now')),
+          ('notifications_enabled', '1', datetime('now')),
+          ('automatic_backups', '1', datetime('now')),
+          ('backup_retention', '10', datetime('now'));
+      `]
+    ];
+
+    for (const [migrationId, name, sql] of migrations) {
+      if (applied.has(migrationId)) continue;
+      this.transaction(() => {
+        this.db.exec(sql);
+        this.db.prepare('INSERT INTO migrations(id, name, applied_at) VALUES (?, ?, ?)')
+          .run(migrationId, name, nowIso());
+      });
+    }
+  }
+
+  log(action, entityType, entityId = null, details = '') {
+    this.db.prepare('INSERT INTO activity_logs(action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(action, entityType, entityId, normalizeText(details), nowIso());
+  }
+
+  listContacts(search = '') {
+    const q = `%${normalizeText(search)}%`;
+    return this.db.prepare(`
+      SELECT * FROM contacts
+      WHERE name LIKE ? OR COALESCE(company, '') LIKE ? OR COALESCE(email, '') LIKE ? OR COALESCE(phone, '') LIKE ? OR tags LIKE ?
+      ORDER BY updated_at DESC
+    `).all(q, q, q, q, q);
+  }
+
+  saveContact(data) {
+    const recordId = normalizeText(data.id) || id();
+    const name = normalizeText(data.name);
+    if (!name) throw new Error('Contact name is required.');
+    const existing = this.db.prepare('SELECT id, created_at FROM contacts WHERE id = ?').get(recordId);
+    const timestamp = nowIso();
+    this.db.prepare(`
+      INSERT INTO contacts(id, name, company, phone, email, tags, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, company=excluded.company, phone=excluded.phone, email=excluded.email,
+        tags=excluded.tags, notes=excluded.notes, updated_at=excluded.updated_at
+    `).run(recordId, name, nullable(data.company), nullable(data.phone), nullable(data.email), normalizeText(data.tags), normalizeText(data.notes), existing?.created_at || timestamp, timestamp);
+    this.log(existing ? 'updated' : 'created', 'contact', recordId, name);
+    return this.db.prepare('SELECT * FROM contacts WHERE id = ?').get(recordId);
+  }
+
+  deleteContact(recordId) {
+    const result = this.db.prepare('DELETE FROM contacts WHERE id = ?').run(recordId);
+    if (result.changes) this.log('deleted', 'contact', recordId);
+    return result.changes > 0;
+  }
+
+  listLeads(search = '') {
+    const q = `%${normalizeText(search)}%`;
+    return this.db.prepare(`
+      SELECT l.*, c.name AS contact_name
+      FROM leads l LEFT JOIN contacts c ON c.id = l.contact_id
+      WHERE l.name LIKE ? OR COALESCE(l.company, '') LIKE ? OR COALESCE(l.email, '') LIKE ? OR COALESCE(l.phone, '') LIKE ? OR l.status LIKE ?
+      ORDER BY CASE l.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END, l.updated_at DESC
+    `).all(q, q, q, q, q);
+  }
+
+  saveLead(data) {
+    const recordId = normalizeText(data.id) || id();
+    const name = normalizeText(data.name);
+    if (!name) throw new Error('Lead name is required.');
+    const timestamp = nowIso();
+    const existing = this.db.prepare('SELECT id, created_at FROM leads WHERE id = ?').get(recordId);
+    const allowedStatuses = new Set(['New', 'Contacted', 'Interested', 'Follow-up', 'Qualified', 'Won', 'Lost']);
+    const allowedPriorities = new Set(['Low', 'Medium', 'High']);
+    const status = allowedStatuses.has(data.status) ? data.status : 'New';
+    const priority = allowedPriorities.has(data.priority) ? data.priority : 'Medium';
+    const estimated = Number.isFinite(Number(data.estimated_value)) ? Number(data.estimated_value) : 0;
+    this.db.prepare(`
+      INSERT INTO leads(id, contact_id, name, company, phone, email, source, status, priority, estimated_value, next_follow_up, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        contact_id=excluded.contact_id, name=excluded.name, company=excluded.company, phone=excluded.phone,
+        email=excluded.email, source=excluded.source, status=excluded.status, priority=excluded.priority,
+        estimated_value=excluded.estimated_value, next_follow_up=excluded.next_follow_up,
+        notes=excluded.notes, updated_at=excluded.updated_at
+    `).run(recordId, nullable(data.contact_id), name, nullable(data.company), nullable(data.phone), nullable(data.email), nullable(data.source), status, priority, estimated, nullable(data.next_follow_up), normalizeText(data.notes), existing?.created_at || timestamp, timestamp);
+    this.log(existing ? 'updated' : 'created', 'lead', recordId, `${name} · ${status}`);
+    return this.db.prepare('SELECT * FROM leads WHERE id = ?').get(recordId);
+  }
+
+  deleteLead(recordId) {
+    const result = this.db.prepare('DELETE FROM leads WHERE id = ?').run(recordId);
+    if (result.changes) this.log('deleted', 'lead', recordId);
+    return result.changes > 0;
+  }
+
+  listTasks(search = '') {
+    const q = `%${normalizeText(search)}%`;
+    return this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE title LIKE ? OR description LIKE ? OR priority LIKE ? OR status LIKE ?
+      ORDER BY CASE status WHEN 'Pending' THEN 1 WHEN 'Completed' THEN 2 ELSE 3 END,
+               CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC, updated_at DESC
+    `).all(q, q, q, q);
+  }
+
+  saveTask(data) {
+    const recordId = normalizeText(data.id) || id();
+    const title = normalizeText(data.title);
+    if (!title) throw new Error('Task title is required.');
+    const timestamp = nowIso();
+    const existing = this.db.prepare('SELECT id, created_at FROM tasks WHERE id = ?').get(recordId);
+    const priority = ['Low', 'Medium', 'High'].includes(data.priority) ? data.priority : 'Medium';
+    const status = ['Pending', 'Completed', 'Canceled'].includes(data.status) ? data.status : 'Pending';
+    this.db.prepare(`
+      INSERT INTO tasks(id, title, description, due_at, priority, status, related_type, related_id, reminder_at, notification_sent_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title=excluded.title, description=excluded.description, due_at=excluded.due_at, priority=excluded.priority,
+        status=excluded.status, related_type=excluded.related_type, related_id=excluded.related_id,
+        reminder_at=excluded.reminder_at,
+        notification_sent_at=CASE WHEN tasks.reminder_at IS NOT excluded.reminder_at OR tasks.status IS NOT excluded.status THEN NULL ELSE tasks.notification_sent_at END,
+        updated_at=excluded.updated_at
+    `).run(recordId, title, normalizeText(data.description), nullable(data.due_at), priority, status, nullable(data.related_type), nullable(data.related_id), nullable(data.reminder_at), existing?.notification_sent_at || null, existing?.created_at || timestamp, timestamp);
+    this.log(existing ? 'updated' : 'created', 'task', recordId, `${title} · ${status}`);
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(recordId);
+  }
+
+  toggleTask(recordId) {
+    const task = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(recordId);
+    if (!task) throw new Error('Task not found.');
+    const status = task.status === 'Completed' ? 'Pending' : 'Completed';
+    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso(), recordId);
+    this.log('status_changed', 'task', recordId, status);
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(recordId);
+  }
+
+  deleteTask(recordId) {
+    const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(recordId);
+    if (result.changes) this.log('deleted', 'task', recordId);
+    return result.changes > 0;
+  }
+
+  listAppointments(search = '') {
+    const q = `%${normalizeText(search)}%`;
+    return this.db.prepare(`
+      SELECT a.*, c.name AS contact_name, l.name AS lead_name
+      FROM appointments a
+      LEFT JOIN contacts c ON c.id = a.contact_id
+      LEFT JOIN leads l ON l.id = a.lead_id
+      WHERE a.title LIKE ? OR a.description LIKE ? OR COALESCE(c.name, '') LIKE ? OR COALESCE(l.name, '') LIKE ?
+      ORDER BY a.start_at ASC
+    `).all(q, q, q, q);
+  }
+
+  saveAppointment(data) {
+    const recordId = normalizeText(data.id) || id();
+    const title = normalizeText(data.title);
+    if (!title) throw new Error('Appointment title is required.');
+    const startAt = normalizeText(data.start_at);
+    if (!startAt) throw new Error('Appointment start date and time are required.');
+    const timestamp = nowIso();
+    const existing = this.db.prepare('SELECT id, created_at, notification_sent_at FROM appointments WHERE id = ?').get(recordId);
+    const status = ['Scheduled', 'Completed', 'Canceled'].includes(data.status) ? data.status : 'Scheduled';
+    this.db.prepare(`
+      INSERT INTO appointments(id, title, description, start_at, end_at, status, contact_id, lead_id, reminder_at, notification_sent_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title=excluded.title, description=excluded.description, start_at=excluded.start_at, end_at=excluded.end_at,
+        status=excluded.status, contact_id=excluded.contact_id, lead_id=excluded.lead_id,
+        reminder_at=excluded.reminder_at,
+        notification_sent_at=CASE WHEN appointments.reminder_at IS NOT excluded.reminder_at OR appointments.status IS NOT excluded.status THEN NULL ELSE appointments.notification_sent_at END,
+        updated_at=excluded.updated_at
+    `).run(recordId, title, normalizeText(data.description), startAt, nullable(data.end_at), status, nullable(data.contact_id), nullable(data.lead_id), nullable(data.reminder_at), existing?.notification_sent_at || null, existing?.created_at || timestamp, timestamp);
+    this.log(existing ? 'updated' : 'created', 'appointment', recordId, `${title} · ${startAt}`);
+    return this.db.prepare('SELECT * FROM appointments WHERE id = ?').get(recordId);
+  }
+
+  deleteAppointment(recordId) {
+    const result = this.db.prepare('DELETE FROM appointments WHERE id = ?').run(recordId);
+    if (result.changes) this.log('deleted', 'appointment', recordId);
+    return result.changes > 0;
+  }
+
+  dashboardSummary() {
+    const scalar = (sql, ...params) => Number(this.db.prepare(sql).get(...params).value || 0);
+    const now = nowIso();
+    const today = now.slice(0, 10);
+    const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString();
+    return {
+      contacts: scalar('SELECT COUNT(*) AS value FROM contacts'),
+      activeLeads: scalar("SELECT COUNT(*) AS value FROM leads WHERE status NOT IN ('Won','Lost')"),
+      followUps: scalar("SELECT COUNT(*) AS value FROM leads WHERE status NOT IN ('Won','Lost') AND next_follow_up IS NOT NULL AND next_follow_up <= ?", weekEnd),
+      pendingTasks: scalar("SELECT COUNT(*) AS value FROM tasks WHERE status='Pending'"),
+      overdueTasks: scalar("SELECT COUNT(*) AS value FROM tasks WHERE status='Pending' AND due_at IS NOT NULL AND due_at < ?", now),
+      todayAppointments: scalar("SELECT COUNT(*) AS value FROM appointments WHERE substr(start_at, 1, 10)=? AND status='Scheduled'", today),
+      activeAlerts: this.listAlerts().length,
+      upcoming: this.db.prepare("SELECT * FROM appointments WHERE status='Scheduled' AND start_at >= ? ORDER BY start_at LIMIT 6").all(now),
+      priorities: this.db.prepare("SELECT * FROM tasks WHERE status='Pending' ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END, due_at LIMIT 6").all()
+    };
+  }
+
+  listAlerts() {
+    const now = nowIso();
+    const next24h = new Date(Date.now() + 24 * 3600000).toISOString();
+    const alerts = [];
+    for (const task of this.db.prepare("SELECT * FROM tasks WHERE status='Pending' AND due_at IS NOT NULL AND due_at < ? ORDER BY due_at").all(now)) {
+      alerts.push({ id: `task-overdue-${task.id}`, level: 'danger', type: 'Overdue task', title: task.title, date: task.due_at, entity_type: 'task', entity_id: task.id });
+    }
+    for (const lead of this.db.prepare("SELECT * FROM leads WHERE status NOT IN ('Won','Lost') AND next_follow_up IS NOT NULL AND next_follow_up <= ? ORDER BY next_follow_up").all(now)) {
+      alerts.push({ id: `lead-followup-${lead.id}`, level: 'warning', type: 'Lead follow-up', title: lead.name, date: lead.next_follow_up, entity_type: 'lead', entity_id: lead.id });
+    }
+    for (const appointment of this.db.prepare("SELECT * FROM appointments WHERE status='Scheduled' AND start_at >= ? AND start_at <= ? ORDER BY start_at").all(now, next24h)) {
+      alerts.push({ id: `appointment-upcoming-${appointment.id}`, level: 'info', type: 'Upcoming appointment', title: appointment.title, date: appointment.start_at, entity_type: 'appointment', entity_id: appointment.id });
+    }
+    return alerts.slice(0, 100);
+  }
+
+  dueNotifications() {
+    const now = nowIso();
+    const taskRows = this.db.prepare("SELECT id, title, reminder_at FROM tasks WHERE status='Pending' AND reminder_at IS NOT NULL AND reminder_at <= ? AND notification_sent_at IS NULL").all(now);
+    const appointmentRows = this.db.prepare("SELECT id, title, reminder_at FROM appointments WHERE status='Scheduled' AND reminder_at IS NOT NULL AND reminder_at <= ? AND notification_sent_at IS NULL").all(now);
+    return [
+      ...taskRows.map((row) => ({ ...row, entity_type: 'task', body: 'Task reminder' })),
+      ...appointmentRows.map((row) => ({ ...row, entity_type: 'appointment', body: 'Appointment reminder' }))
+    ];
+  }
+
+  markNotificationSent(entityType, recordId) {
+    if (entityType === 'task') this.db.prepare('UPDATE tasks SET notification_sent_at=? WHERE id=?').run(nowIso(), recordId);
+    if (entityType === 'appointment') this.db.prepare('UPDATE appointments SET notification_sent_at=? WHERE id=?').run(nowIso(), recordId);
+  }
+
+  listActivity(limit = 100) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    return this.db.prepare('SELECT * FROM activity_logs ORDER BY id DESC LIMIT ?').all(safeLimit);
+  }
+
+  getSettings() {
+    const rows = this.db.prepare('SELECT key, value FROM settings').all();
+    return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  }
+
+  saveSettings(values) {
+    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention']);
+    const statement = this.db.prepare(`
+      INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+    `);
+    this.transaction(() => {
+      for (const [key, value] of Object.entries(values || {})) {
+        if (!allowed.has(key)) continue;
+        statement.run(key, normalizeText(value), nowIso());
+      }
+    });
+    this.log('updated', 'settings', null, Object.keys(values || {}).join(', '));
+    return this.getSettings();
+  }
+
+  saveSuggestion(data) {
+    const suggestionId = id();
+    this.db.prepare(`INSERT INTO ai_suggestions(id, provider, kind, related_type, related_id, prompt, response, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(suggestionId, data.provider, data.kind, nullable(data.related_type), nullable(data.related_id), data.prompt, data.response, nowIso());
+    this.log('generated', 'ai_suggestion', suggestionId, `${data.provider} · ${data.kind}`);
+    return this.db.prepare('SELECT * FROM ai_suggestions WHERE id = ?').get(suggestionId);
+  }
+
+  listSuggestions(limit = 50) {
+    return this.db.prepare('SELECT * FROM ai_suggestions ORDER BY created_at DESC LIMIT ?').all(Math.min(Math.max(Number(limit) || 50, 1), 200));
+  }
+
+  getEntityContext(type, entityId) {
+    if (!entityId) return null;
+    if (type === 'contact') return this.db.prepare('SELECT * FROM contacts WHERE id = ?').get(entityId) || null;
+    if (type === 'lead') return this.db.prepare('SELECT * FROM leads WHERE id = ?').get(entityId) || null;
+    if (type === 'task') return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(entityId) || null;
+    if (type === 'appointment') return this.db.prepare('SELECT * FROM appointments WHERE id = ?').get(entityId) || null;
+    return null;
+  }
+
+  dailyContext() {
+    return {
+      summary: this.dashboardSummary(),
+      alerts: this.listAlerts().slice(0, 20),
+      leads: this.db.prepare("SELECT id, name, company, status, priority, next_follow_up, notes FROM leads WHERE status NOT IN ('Won','Lost') ORDER BY next_follow_up LIMIT 20").all(),
+      tasks: this.db.prepare("SELECT id, title, due_at, priority, status, description FROM tasks WHERE status='Pending' ORDER BY due_at LIMIT 20").all(),
+      appointments: this.db.prepare("SELECT id, title, start_at, status, description FROM appointments WHERE status='Scheduled' AND start_at >= ? ORDER BY start_at LIMIT 20").all(nowIso())
+    };
+  }
+
+  createBackup(backupPath) {
+    fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+    if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+    const escaped = backupPath.replaceAll("'", "''");
+    this.db.exec(`VACUUM INTO '${escaped}'`);
+    const stat = fs.statSync(backupPath);
+    const backupId = id();
+    this.db.prepare('INSERT INTO backup_history(id, file_path, file_size, created_at) VALUES (?, ?, ?, ?)')
+      .run(backupId, backupPath, stat.size, nowIso());
+    this.log('created', 'backup', backupId, path.basename(backupPath));
+    return { id: backupId, file_path: backupPath, file_size: stat.size, created_at: nowIso() };
+  }
+
+  listBackups() {
+    return this.db.prepare('SELECT * FROM backup_history ORDER BY created_at DESC').all();
+  }
+
+  restoreBackup(backupPath) {
+    if (!fs.existsSync(backupPath)) throw new Error('Backup file does not exist.');
+    const safetyPath = `${this.databasePath}.before-restore-${Date.now()}.sqlite`;
+    this.close();
+    fs.copyFileSync(this.databasePath, safetyPath);
+    try {
+      fs.copyFileSync(backupPath, this.databasePath);
+      this.open();
+      this.log('restored', 'backup', null, path.basename(backupPath));
+      return { restored: true, safety_copy: safetyPath };
+    } catch (error) {
+      try {
+        fs.copyFileSync(safetyPath, this.databasePath);
+        this.open();
+      } catch (_) { /* preserve original error */ }
+      throw error;
+    }
+  }
+}
+
+module.exports = { DatabaseService };

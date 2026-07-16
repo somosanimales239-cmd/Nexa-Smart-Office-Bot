@@ -1,0 +1,50 @@
+NEXA SMART OFFICE BOT v1.0.0 — VALIDATION REPORT
+Generated: 2026-07-16
+
+SCOPE
+- Complete Electron source project for Nexa Manual Delivery.
+- Windows targets: NSIS Installer, Portable EXE and Windows ZIP.
+- Local SQLite via Node/Electron built-in node:sqlite; no native SQLite npm package.
+- OpenAI Responses API and DeepSeek Chat Completions with user-managed encrypted keys.
+
+COMPLETED LOCAL CHECKS
+- JavaScript syntax: PASS for every .js file.
+- Source and security validator: 78/78 PASS.
+- SQLite/business integration suite: 22/22 PASS.
+- Migrations idempotent: PASS.
+- Contacts CRUD/search: PASS.
+- Leads CRUD/status/relationship: PASS.
+- Tasks CRUD/completion/overdue: PASS.
+- Agenda CRUD/relationships: PASS.
+- Alerts and reminder state: PASS.
+- Settings allowlist: PASS.
+- AI suggestion persistence and response extraction: PASS.
+- Backup creation/history: PASS.
+- Activity audit records: PASS.
+- Secure renderer contract: contextIsolation=true, nodeIntegration=false, sandbox=true.
+- API keys: no hardcoded keys; Electron safeStorage encryption path is present.
+- Workflow contracts: Windows runner, Node 24, validate, test, UI smoke, build and artifact verification.
+
+BUILD GATE
+The GitHub Actions workflow will not upload deliverables unless all of these pass:
+1. npm run validate
+2. npm test
+3. npm run ui:smoke
+4. npm run build:win
+5. npm run verify:artifacts
+6. ZIP runtime check for resources/app.asar and the application EXE
+
+UI SMOKE NOTE
+The Electron UI-smoke implementation is included and mandatory in GitHub Actions. It was not executable in this container because the Electron runtime binary could not be downloaded from GitHub's release CDN in the isolated environment. The source package itself and npm dependency lock were created successfully. GitHub's Windows runner will download Electron and must pass the smoke test before artifacts are uploaded.
+
+DELIVERABLES EXPECTED FROM GITHUB ACTIONS
+- Nexa-Smart-Office-Bot-Setup-1.0.0-x64.exe
+- Nexa-Smart-Office-Bot-Portable-1.0.0-x64.exe
+- Nexa-Smart-Office-Bot-1.0.0-x64.zip
+- artifact-manifest.json with sizes and SHA-256 hashes
+
+DATA SAFETY
+- Installer uninstallation does not delete app data.
+- Portable builds store data in “Nexa Smart Office Bot Data” beside the portable executable.
+- Installed builds use Electron's per-user application data directory.
+- Backups use SQLite VACUUM INTO and restore creates a safety copy first.

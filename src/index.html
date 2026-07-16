@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://api.openai.com https://api.deepseek.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'">
+  <title>Nexa Smart Office Bot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">N</div>
+        <div><strong>Nexa</strong><span>Smart Office Bot</span></div>
+      </div>
+      <nav class="nav-list" aria-label="Main navigation">
+        <button class="nav-item active" data-view="dashboard" data-testid="nav-dashboard"><span>⌂</span>Dashboard</button>
+        <button class="nav-item" data-view="contacts" data-testid="nav-contacts"><span>◎</span>Contacts</button>
+        <button class="nav-item" data-view="leads" data-testid="nav-leads"><span>◈</span>Leads</button>
+        <button class="nav-item" data-view="agenda" data-testid="nav-agenda"><span>□</span>Agenda</button>
+        <button class="nav-item" data-view="tasks" data-testid="nav-tasks"><span>✓</span>Tasks</button>
+        <button class="nav-item" data-view="ai" data-testid="nav-ai"><span>✦</span>AI Suggestions</button>
+        <button class="nav-item" data-view="alerts" data-testid="nav-alerts"><span>!</span>Alerts <em id="alert-count">0</em></button>
+        <button class="nav-item" data-view="activity" data-testid="nav-activity"><span>≡</span>Activity</button>
+        <button class="nav-item" data-view="settings" data-testid="nav-settings"><span>⚙</span>Settings</button>
+        <button class="nav-item" data-view="about" data-testid="nav-about"><span>i</span>About</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="system-dot"></div>
+        <div><strong>Local workspace</strong><span id="sidebar-version">v1.0.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SMART BUSINESS WORKSPACE</p>
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <div class="top-actions">
+          <div class="provider-pill" id="provider-pill"><span></span><b>AI not configured</b></div>
+          <button class="icon-button" id="refresh-button" title="Refresh" aria-label="Refresh">↻</button>
+          <button class="primary-button" id="quick-add-button" data-testid="quick-add">+ Quick add</button>
+        </div>
+      </header>
+      <section id="app-content" class="content" data-testid="app-content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <dialog id="entity-dialog" class="dialog">
+    <form method="dialog" id="entity-form">
+      <div class="dialog-header">
+        <div><p class="eyebrow" id="dialog-eyebrow">RECORD</p><h2 id="dialog-title">Edit record</h2></div>
+        <button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button>
+      </div>
+      <div id="dialog-fields" class="form-grid"></div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary-button" data-close-dialog>Cancel</button>
+        <button type="submit" class="primary-button" data-testid="save-record">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="dialog confirm-dialog">
+    <form method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CONFIRMATION</p><h2 id="confirm-title">Confirm action</h2></div></div>
+      <p id="confirm-message" class="muted"></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button">Cancel</button>
+        <button value="confirm" class="danger-button">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+  <script src="app.js"></script>
+</body>
+</html>
