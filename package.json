@@ -59,6 +59,12 @@
                     "arch": [
                         "x64"
                     ]
+                },
+                {
+                    "target": "zip",
+                    "arch": [
+                        "x64"
+                    ]
                 }
             ],
             "artifactName": "Nexa-Smart-Office-Bot-${version}-${arch}.${ext}"
