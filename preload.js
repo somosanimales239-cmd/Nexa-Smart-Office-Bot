@@ -102,6 +102,8 @@ contextBridge.exposeInMainWorld('nexa', Object.freeze({
     markRead: function markRead(threadId, lastMessageId) { return invoke('messages:mark-read', { thread_id: threadId, last_message_id: lastMessageId || null }); },
     knowledgeList: function knowledgeList(search) { return invoke('messages:knowledge-list', { search: search || '' }); },
     knowledgeSave: function knowledgeSave(data) { return invoke('messages:knowledge-save', data || {}); },
+    knowledgeToggle: function knowledgeToggle(id, enabled) { return invoke('messages:knowledge-toggle', { id: id, enabled: enabled }); },
+    knowledgeSummary: function knowledgeSummary() { return invoke('messages:knowledge-summary'); },
     knowledgeDelete: function knowledgeDelete(id) { return invoke('messages:knowledge-delete', { id: id }); }
   }),
   notifications: Object.freeze({

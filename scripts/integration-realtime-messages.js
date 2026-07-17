@@ -113,31 +113,31 @@ const engine = new MessageResponseEngine(database);
     assert.equal(match.matched, true);
     const result = await ai.generateMessageReply({ thread_id: 'thread-1', provider: 'openai' });
     assert.equal(result.engine, 'knowledge');
-    assert.match(result.draft.body, /currently available/i);
+    assert.match(result.draft.body, /currently available|current availability/i);
   });
 
   await test('AI fallback receives the complete conversation when knowledge does not match', async function () {
     database.saveMessageThreadSnapshot(
       { thread_id: 'thread-ai', subject: 'Financing question', participant_name: 'Customer Two', can_reply: 1 },
       [
-        { message_id: 'ai-1', thread_id: 'thread-ai', sender_type: 'customer', sender_name: 'Customer Two', direction: 'inbound', body: 'Do you offer a payment plan with a trade-in?', sent_at: '2026-07-17T13:00:00Z' },
-        { message_id: 'ai-2', thread_id: 'thread-ai', sender_type: 'dealer', sender_name: 'Dealer', direction: 'outbound', body: 'I can review the available options.', sent_at: '2026-07-17T13:01:00Z' },
-        { message_id: 'ai-3', thread_id: 'thread-ai', sender_type: 'customer', sender_name: 'Customer Two', direction: 'inbound', body: 'My trade is a 2018 model. What information do you need?', sent_at: '2026-07-17T13:02:00Z' }
+        { message_id: 'ai-1', thread_id: 'thread-ai', sender_type: 'customer', sender_name: 'Customer Two', direction: 'inbound', body: 'I have an unusual multi-company export request that does not fit a standard retail transaction.', sent_at: '2026-07-17T13:00:00Z' },
+        { message_id: 'ai-2', thread_id: 'thread-ai', sender_type: 'dealer', sender_name: 'Dealer', direction: 'outbound', body: 'Please explain the structure you need reviewed.', sent_at: '2026-07-17T13:01:00Z' },
+        { message_id: 'ai-3', thread_id: 'thread-ai', sender_type: 'customer', sender_name: 'Customer Two', direction: 'inbound', body: 'It involves three foreign entities, a custom escrow arrangement, and documentation outside your normal process. Who should review it?', sent_at: '2026-07-17T13:02:00Z' }
       ],
       { thread_id: 'thread-ai' }
     );
     let captured = null;
     ai.providers.openai = {
       getStatus: function getStatus() { return { configured: true, provider: 'openai', model: 'test-model' }; },
-      generateSuggestion: async function generateSuggestion(prompt) { captured = prompt; return 'Please share the year, make, model, mileage and condition of your trade so we can review the available options.'; },
+      generateSuggestion: async function generateSuggestion(prompt) { captured = prompt; return 'This request needs specialized human review. I can summarize the entities, escrow structure, and required documents for an authorized manager.'; },
       cancelRequest: function cancelRequest() { return false; }
     };
     const result = await ai.generateMessageReply({ thread_id: 'thread-ai', provider: 'openai' });
     assert.equal(result.engine, 'ai');
-    assert.match(result.draft.body, /year, make, model/i);
-    assert.match(captured.user, /payment plan with a trade-in/i);
-    assert.match(captured.user, /2018 model/i);
-    assert.match(captured.user, /What information do you need/i);
+    assert.match(result.draft.body, /specialized human review/i);
+    assert.match(captured.user, /unusual multi-company export request/i);
+    assert.match(captured.user, /custom escrow arrangement/i);
+    assert.match(captured.user, /Who should review it/i);
   });
 
   await test('message send uses POST, bearer auth and idempotency key', async function () {

@@ -467,3 +467,21 @@ tbody tr:hover { background: rgba(107,124,255,.045); }
   .conversation-header { align-items:flex-start; flex-direction:column; }
   .live-indicator { margin-left:0; }
 }
+
+/* Nexa Smart Office Bot 1.5.0 — Automotive Dealer Knowledge Library */
+.knowledge-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
+.knowledge-summary-grid article { display:grid; gap:4px; padding:14px; border:1px solid #263552; border-radius:14px; background:linear-gradient(145deg,#101a2f,#0c1426); }
+.knowledge-summary-grid span { color:#9ca9bd; font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
+.knowledge-summary-grid strong { font-size:24px; line-height:1; color:#f4f7ff; }
+.knowledge-summary-grid small { color:#72819a; font-size:9px; line-height:1.4; }
+.knowledge-safety-note { display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:center; margin-bottom:10px; padding:12px 14px; border:1px solid #284a4c; border-radius:13px; background:#0e2024; }
+.knowledge-safety-note b { color:#80ead9; font-size:10px; white-space:nowrap; }
+.knowledge-safety-note span { color:#a9c5c3; font-size:9px; line-height:1.45; }
+.knowledge-badges { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+.knowledge-card.knowledge-disabled { opacity:.58; }
+.knowledge-card.knowledge-disabled h3,
+.knowledge-card.knowledge-disabled p { text-decoration:none; }
+.knowledge-search { margin-bottom:8px; }
+.knowledge-search input { min-width:0; width:100%; }
+@media (max-width:1180px) { .knowledge-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:720px) { .knowledge-summary-grid { grid-template-columns:1fr; } .knowledge-safety-note { grid-template-columns:1fr; } }

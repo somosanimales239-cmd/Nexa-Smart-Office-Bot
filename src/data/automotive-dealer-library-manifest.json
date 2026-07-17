@@ -1,0 +1,43 @@
+{
+  "name": "Nexa Automotive Dealer Knowledge Library",
+  "version": "1.0.0",
+  "record_count": 2880,
+  "base_intents": 120,
+  "dealer_segments": [
+    "used-auto",
+    "new-auto",
+    "truck-commercial",
+    "motorcycle",
+    "powersports",
+    "rv-camper",
+    "trailer",
+    "marine",
+    "fleet",
+    "luxury-exotic",
+    "heavy-equipment",
+    "ev-hybrid"
+  ],
+  "languages": [
+    "en",
+    "es"
+  ],
+  "response_variants_per_record": 3,
+  "total_response_variants": 8640,
+  "categories": [
+    "Appointments & Follow-up",
+    "Delivery & Documents",
+    "Financing & Credit",
+    "Inventory & Availability",
+    "Pricing & Payments",
+    "Safety, Privacy & Escalation",
+    "Service & Ownership",
+    "Trade-in & Appraisal",
+    "Vehicle Details & Condition"
+  ],
+  "safety_design": [
+    "No automatic financing approval claims",
+    "No unverified price, availability, appointment, warranty or legal promises",
+    "Sensitive identity and financial documents routed to secure channels",
+    "Emergency, fraud and complaint situations escalated to humans"
+  ]
+}

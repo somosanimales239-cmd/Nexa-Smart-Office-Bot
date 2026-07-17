@@ -1,18 +1,26 @@
 # Changelog
 
+## 1.5.0
+
+- Added the Nexa Automotive Dealer Knowledge Library.
+- Added 2,880 built-in knowledge records.
+- Added 120 core dealership intentions across 12 dealer segments.
+- Added English and Spanish knowledge matching.
+- Added 8,640 natural built-in response variations.
+- Added automatic language detection and dealer-segment inference.
+- Added deterministic response variation to reduce repetitive replies.
+- Added safety metadata and required-context metadata.
+- Added built-in library summary cards in Messages > Knowledge Engine.
+- Added search and 40-record pagination for the library.
+- Added enable and disable controls for built-in knowledge.
+- Prevented accidental deletion or overwrite of built-in records.
+- Preserved custom user-approved knowledge with higher matching priority.
+- Added migration 6 with idempotent library installation.
+- Added 10 dedicated automotive-library integration tests.
+
 ## 1.4.0
 
-- Rebuilt Messages as a split inbox and full-conversation workspace.
-- Added authorized full-thread loading through the `message-thread` API resource.
-- Added near-real-time refresh intervals of 3, 5, 10 or 15 seconds while a conversation is open.
-- Added inbound and outbound message bubbles, sender identity, timestamps and delivery status.
-- Added a durable local cache for message threads, entries, reply drafts and outbox attempts.
-- Added a Knowledge Engine that checks approved local answers before using OpenAI or DeepSeek.
-- Added confidence-based matching and usage counts for reusable response knowledge.
-- Added AI fallback with the complete bounded conversation and safe connected-business context.
-- Added user-confirmed sending through `message-send` with idempotency protection.
-- Added `message-read` support.
-- Added an optional “Teach Nexa from this approved reply” workflow.
-- Added a website capability banner when the connected API still exposes metadata only.
-- Updated AI Suggestions with a Live conversation reply mode.
-- Preserved all v1.3.0 scrolling, 40-record pagination, visual agenda, contacts, leads and connected workspace behavior.
+- Added full message conversation mirroring.
+- Added knowledge-first response drafting.
+- Added OpenAI and DeepSeek fallback.
+- Added user-confirmed website message sending.

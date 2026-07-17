@@ -518,30 +518,76 @@ class DatabaseService {
     const q = '%' + normalizeText(search).toLowerCase() + '%';
     return this.db.prepare(`SELECT * FROM response_knowledge
       WHERE lower(label) LIKE ? OR lower(category) LIKE ? OR lower(triggers) LIKE ? OR lower(response) LIKE ?
-      ORDER BY enabled DESC, use_count DESC, updated_at DESC`).all(q, q, q, q);
+        OR lower(intent_key) LIKE ? OR lower(dealer_segment) LIKE ? OR lower(tags_json) LIKE ?
+      ORDER BY enabled DESC, built_in ASC, use_count DESC, category ASC, label ASC`).all(q, q, q, q, q, q, q);
+  }
+
+  knowledgeLibrarySummary() {
+    const totals = this.db.prepare(`SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN built_in=1 THEN 1 ELSE 0 END) AS built_in,
+      SUM(CASE WHEN built_in=0 THEN 1 ELSE 0 END) AS custom,
+      SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) AS enabled,
+      COUNT(DISTINCT category) AS categories,
+      COUNT(DISTINCT CASE WHEN built_in=1 THEN intent_key END) AS base_intents,
+      COUNT(DISTINCT CASE WHEN built_in=1 THEN dealer_segment END) AS dealer_segments,
+      COUNT(DISTINCT CASE WHEN built_in=1 THEN locale END) AS languages
+      FROM response_knowledge`).get();
+    const categoryRows = this.db.prepare(`SELECT category, COUNT(*) AS count FROM response_knowledge WHERE built_in=1 GROUP BY category ORDER BY category`).all();
+    return Object.assign({}, totals || {}, {
+      library_version: this.getSettings().automotive_knowledge_library_version || '',
+      response_variants: Number((totals && totals.built_in) || 0) * 3,
+      category_rows: categoryRows
+    });
   }
 
   saveResponseKnowledge(values) {
     const knowledgeId = normalizeText(values && values.id) || id();
+    const existing = this.db.prepare('SELECT * FROM response_knowledge WHERE id=?').get(knowledgeId);
+    if (existing && Number(existing.built_in) === 1) throw new Error('Built-in library records cannot be overwritten. Disable them or create a custom response.');
     const label = normalizeText(values && values.label) || 'Approved reply';
     const triggers = normalizeText(values && values.triggers);
     const response = normalizeText(values && values.response);
     if (!triggers || !response) throw new Error('Knowledge triggers and response are required.');
     const timestamp = nowIso();
+    const variants = Array.isArray(values && values.response_variants) && values.response_variants.length ? values.response_variants : [response];
     this.db.prepare(`
-      INSERT INTO response_knowledge(id, label, category, triggers, response, enabled, use_count, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+      INSERT INTO response_knowledge(
+        id, label, category, triggers, response, enabled, use_count, created_at, updated_at,
+        intent_key, locale, dealer_segment, tags_json, response_variants_json, required_context_json,
+        safety_level, built_in, library_version, source
+      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?)
       ON CONFLICT(id) DO UPDATE SET label=excluded.label, category=excluded.category, triggers=excluded.triggers,
-        response=excluded.response, enabled=excluded.enabled, updated_at=excluded.updated_at
-    `).run(knowledgeId, label, normalizeText(values.category || 'General'), triggers, response,
-      values.enabled === false || Number(values.enabled) === 0 ? 0 : 1, timestamp, timestamp);
+        response=excluded.response, enabled=excluded.enabled, updated_at=excluded.updated_at,
+        locale=excluded.locale, dealer_segment=excluded.dealer_segment, tags_json=excluded.tags_json,
+        response_variants_json=excluded.response_variants_json, required_context_json=excluded.required_context_json,
+        safety_level=excluded.safety_level, source=excluded.source
+    `).run(
+      knowledgeId, label, normalizeText(values.category || 'General'), triggers, response,
+      values.enabled === false || Number(values.enabled) === 0 ? 0 : 1, timestamp, timestamp,
+      normalizeText(values.intent_key || 'custom'), normalizeText(values.locale || 'auto'),
+      normalizeText(values.dealer_segment || 'all-dealers'), JSON.stringify(values.tags || []),
+      JSON.stringify(variants), JSON.stringify(values.required_context || []),
+      normalizeText(values.safety_level || 'user-approved'), normalizeText(values.source || 'User approved')
+    );
     this.log('saved', 'response_knowledge', knowledgeId, label);
     return this.db.prepare('SELECT * FROM response_knowledge WHERE id=?').get(knowledgeId);
   }
 
+  setResponseKnowledgeEnabled(knowledgeId, enabled) {
+    const wanted = normalizeText(knowledgeId);
+    const result = this.db.prepare('UPDATE response_knowledge SET enabled=?, updated_at=? WHERE id=?')
+      .run(enabled === false || Number(enabled) === 0 ? 0 : 1, nowIso(), wanted);
+    if (result.changes) this.log(enabled ? 'enabled' : 'disabled', 'response_knowledge', wanted);
+    return this.db.prepare('SELECT * FROM response_knowledge WHERE id=?').get(wanted) || null;
+  }
+
   deleteResponseKnowledge(knowledgeId) {
-    const result = this.db.prepare('DELETE FROM response_knowledge WHERE id=?').run(normalizeText(knowledgeId));
-    if (result.changes) this.log('deleted', 'response_knowledge', normalizeText(knowledgeId));
+    const wanted = normalizeText(knowledgeId);
+    const row = this.db.prepare('SELECT built_in FROM response_knowledge WHERE id=?').get(wanted);
+    if (row && Number(row.built_in) === 1) throw new Error('Built-in library records cannot be deleted. Disable the record instead.');
+    const result = this.db.prepare('DELETE FROM response_knowledge WHERE id=?').run(wanted);
+    if (result.changes) this.log('deleted', 'response_knowledge', wanted);
     return result.changes > 0;
   }
 

@@ -1,35 +1,31 @@
-Nexa Smart Office Bot 1.4.0 Validation Report
+Nexa Smart Office Bot 1.5.0 Validation Report
 
-Scope
-- Full authorized conversation mirroring.
-- Near-real-time thread refresh.
-- Knowledge-first reply drafting.
-- OpenAI or DeepSeek fallback only when approved local knowledge does not match.
-- User-confirmed message sending with durable outbox and idempotency protection.
-- Message read-state synchronization.
-- Updated AI Suggestions conversation workflow.
+Package feature: Nexa Automotive Dealer Knowledge Library
+Library records: 2,880
+Core intents: 120
+Dealer segments: 12
+Languages: English and Spanish
+Response variants: 8,640
+Business categories: 9
 
-Completed validation
-- Every JavaScript file passed Node syntax validation.
+Validation completed:
+- Project validator passed.
 - Delivery validator passed.
-- Internal project validator passed.
-- Nexa approved contract gate passed.
+- JavaScript syntax validation passed.
+- 27 core integration tests passed.
+- 18 API synchronization and notification tests passed.
+- Complete workspace reflection test passed.
+- 9 real-time messaging tests passed.
+- 10 automotive knowledge library tests passed.
 - Implementation tests passed.
 - Acceptance tests passed.
-- Core SQLite and business integration suite passed.
-- Full connected-business synchronization suite passed.
-- Complete workspace reflection suite passed.
-- Real-time Messages suite passed 9 of 9 checks.
-- Migration 5 is idempotent and creates message thread, entry, draft, outbox and response knowledge tables.
-- Sensitive unexpected API fields are discarded.
-- Full message bodies are accepted only through the dedicated authorized thread endpoint.
-- Knowledge matching creates a local draft before any external AI request.
-- Website sending uses POST, Bearer authentication and an idempotency key.
-- The IPC send handler rejects requests without explicit user confirmation.
+- Migration 6 installed 2,880 records and remained idempotent.
+- Built-in knowledge disable and enable controls passed.
+- Built-in deletion protection passed.
+- Custom knowledge priority passed.
+- English and Spanish matching passed.
+- Trailer dealer segment inference passed.
+- Financing safety response test passed.
 - Installer, Portable and Windows ZIP targets remain configured.
 
-External dependency
-The current documented AutoMarket Pro API exposes only message thread metadata. Full conversation reading, sending and read-state updates become active after the website implements the server contract included in MESSAGING_API_SERVER_CONTRACT.md. Until then, Nexa shows the inbox metadata and an exact capability warning without breaking other synchronized resources.
-
-External-stage validation
-Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. The workflow stops before publishing Installer, Portable or ZIP if those checks fail.
+The Electron UI smoke test and Windows packaging remain mandatory in GitHub Actions before artifacts are published.

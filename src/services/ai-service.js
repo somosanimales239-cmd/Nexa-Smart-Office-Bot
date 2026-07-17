@@ -111,7 +111,21 @@ class AIService {
         trigger_text: localMatch.latestMessage,
         body: localMatch.response
       });
-      return { engine: 'knowledge', confidence: localMatch.confidence, knowledge_id: localMatch.knowledgeId, draft: savedLocal };
+      return {
+        engine: 'knowledge',
+        confidence: localMatch.confidence,
+        knowledge_id: localMatch.knowledgeId,
+        label: localMatch.label,
+        category: localMatch.category,
+        intent_key: localMatch.intentKey,
+        locale: localMatch.locale,
+        dealer_segment: localMatch.dealerSegment,
+        safety_level: localMatch.safetyLevel,
+        required_context: localMatch.requiredContext,
+        built_in: localMatch.builtIn,
+        library_version: localMatch.libraryVersion,
+        draft: savedLocal
+      };
     }
     if (!allowFallback && mode !== 'ai_only') {
       throw new Error('No approved knowledge reply matched this message. AI fallback is disabled.');

@@ -1,5 +1,8 @@
 'use strict';
 
+const AUTOMOTIVE_DEALER_LIBRARY = require('../data/automotive-dealer-knowledge-library.json');
+const AUTOMOTIVE_DEALER_LIBRARY_MANIFEST = require('../data/automotive-dealer-library-manifest.json');
+
 const NEXA_SCHEMA_MIGRATION_CONTRACT = 'migration marker: NEXA_SCHEMA_MIGRATION_V1';
 
 const NEXA_SCHEMA_MIGRATION_V1 = 'NEXA_SCHEMA_MIGRATION_V1';
@@ -247,6 +250,46 @@ function applyMigrations(database) {
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_learning_enabled', '0', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_send_confirmation', '1', datetime('now'));"
       ].join(' ')
+    },
+    {
+      id: 6,
+      name: 'NEXA_AUTOMOTIVE_DEALER_KNOWLEDGE_LIBRARY_V1',
+      apply: function installAutomotiveDealerKnowledgeLibrary(database) {
+        addColumnIfMissing(database, 'response_knowledge', 'intent_key', "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(database, 'response_knowledge', 'locale', "TEXT NOT NULL DEFAULT 'en'");
+        addColumnIfMissing(database, 'response_knowledge', 'dealer_segment', "TEXT NOT NULL DEFAULT 'generic'");
+        addColumnIfMissing(database, 'response_knowledge', 'tags_json', "TEXT NOT NULL DEFAULT '[]'");
+        addColumnIfMissing(database, 'response_knowledge', 'response_variants_json', "TEXT NOT NULL DEFAULT '[]'");
+        addColumnIfMissing(database, 'response_knowledge', 'required_context_json', "TEXT NOT NULL DEFAULT '[]'");
+        addColumnIfMissing(database, 'response_knowledge', 'safety_level', "TEXT NOT NULL DEFAULT 'standard'");
+        addColumnIfMissing(database, 'response_knowledge', 'built_in', 'INTEGER NOT NULL DEFAULT 0');
+        addColumnIfMissing(database, 'response_knowledge', 'library_version', "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(database, 'response_knowledge', 'source', "TEXT NOT NULL DEFAULT 'User approved'");
+        database.exec('CREATE INDEX IF NOT EXISTS idx_response_knowledge_library ON response_knowledge(built_in, locale, dealer_segment, intent_key);');
+        database.exec('CREATE INDEX IF NOT EXISTS idx_response_knowledge_category ON response_knowledge(category, enabled, locale);');
+        const insert = database.prepare(`
+          INSERT OR IGNORE INTO response_knowledge(
+            id, label, category, triggers, response, enabled, use_count, created_at, updated_at,
+            intent_key, locale, dealer_segment, tags_json, response_variants_json, required_context_json,
+            safety_level, built_in, library_version, source
+          ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const installedAt = nowIso();
+        AUTOMOTIVE_DEALER_LIBRARY.forEach(function seedKnowledge(record) {
+          insert.run(
+            String(record.id), String(record.label), String(record.category), String(record.triggers), String(record.response),
+            Number(record.enabled) === 0 ? 0 : 1, installedAt, installedAt, String(record.intent_key || ''),
+            String(record.locale || 'en'), String(record.dealer_segment || 'generic'), JSON.stringify(record.tags || []),
+            JSON.stringify(record.response_variants || [record.response]), JSON.stringify(record.required_context || []),
+            String(record.safety_level || 'standard'), 1, String(record.library_version || AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.version),
+            String(record.source || AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.name)
+          );
+        });
+        database.prepare(`INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('automotive_knowledge_library_version', ?, ?)`)
+          .run(String(AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.version), installedAt);
+        database.prepare(`INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('automotive_knowledge_library_count', ?, ?)`)
+          .run(String(AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.record_count), installedAt);
+      }
     }
 
   ];

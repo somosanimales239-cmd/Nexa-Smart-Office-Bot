@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { registerIpcHandler } = require('./ipc-utils');
 
-const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete';
+const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete, messages:knowledge-toggle, messages:knowledge-summary';
 
 function threadParts(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
@@ -106,11 +106,25 @@ function registerMessagesIpc(ipcMain, services) {
   });
 
   registerIpcHandler(ipcMain, 'messages:knowledge-save', function saveKnowledge(payload) {
-    return database.saveResponseKnowledge(payload || {});
+    const saved = database.saveResponseKnowledge(payload || {});
+    if (aiService.messageEngine && typeof aiService.messageEngine.invalidate === 'function') aiService.messageEngine.invalidate();
+    return saved;
+  });
+
+  registerIpcHandler(ipcMain, 'messages:knowledge-toggle', function toggleKnowledge(payload) {
+    const saved = database.setResponseKnowledgeEnabled(String(payload && payload.id || ''), payload && payload.enabled);
+    if (aiService.messageEngine && typeof aiService.messageEngine.invalidate === 'function') aiService.messageEngine.invalidate();
+    return saved;
+  });
+
+  registerIpcHandler(ipcMain, 'messages:knowledge-summary', function knowledgeSummary() {
+    return database.knowledgeLibrarySummary();
   });
 
   registerIpcHandler(ipcMain, 'messages:knowledge-delete', function deleteKnowledge(payload) {
-    return { deleted: database.deleteResponseKnowledge(String(payload && payload.id || '')) };
+    const deleted = database.deleteResponseKnowledge(String(payload && payload.id || ''));
+    if (aiService.messageEngine && typeof aiService.messageEngine.invalidate === 'function') aiService.messageEngine.invalidate();
+    return { deleted: deleted };
   });
 }
 

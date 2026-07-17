@@ -61,6 +61,7 @@ const state = {
   messageError: '',
   messageTab: 'inbox',
   messageKnowledge: [],
+  knowledgeSummary: null,
   messagePollBusy: false,
   messageLastPollAt: 0
 };
@@ -160,7 +161,8 @@ async function refreshAll(options) {
     api.integration.get(),
     api.notifications.list(150, false),
     api.notifications.preferences(),
-    api.messages.knowledgeList('')
+    api.messages.knowledgeList(''),
+    api.messages.knowledgeSummary()
   ]);
   state.meta = results[0];
   state.dashboard = results[1];
@@ -179,6 +181,7 @@ async function refreshAll(options) {
   state.unreadNotifications = results[13] ? Number(results[13].unread || 0) : 0;
   state.notificationPreferences = Array.isArray(results[14]) ? results[14] : [];
   state.messageKnowledge = Array.isArray(results[15]) ? results[15] : [];
+  state.knowledgeSummary = results[16] || null;
   document.getElementById('alert-count').textContent = String(state.alerts.length);
   document.getElementById('notification-count').textContent = String(state.unreadNotifications);
   document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
@@ -561,9 +564,20 @@ function renderConversationBubbles() {
 }
 
 function renderKnowledgeCenter() {
-  const page=paginateItems(state.messageKnowledge.filter(function filterKnowledge(row){return remoteMatches(row,state.search); }),'message-knowledge');
-  const rows=page.items.map(function knowledgeRow(row){return '<article class="knowledge-card"><div><span>'+esc(row.category||'General')+'</span><h3>'+esc(row.label||'Approved reply')+'</h3><p><b>Triggers:</b> '+esc(row.triggers)+'</p><p>'+esc(row.response)+'</p><small>Used '+esc(row.use_count||0)+' times</small></div><button class="danger-button" data-nexa-action="message-knowledge-delete" data-knowledge-id="'+esc(row.id)+'">Delete</button></article>';}).join('')||emptyMini('No approved response knowledge','Open a conversation, prepare or write a reply, then choose Teach Nexa.');
-  return '<div class="message-knowledge-layout"><article class="panel-card"><div class="panel-header"><div><h3>Knowledge-first response engine</h3><p>Nexa uses approved local answers before spending an AI request.</p></div>'+badge('Local first','success')+'</div><div class="form-grid"><label>Label<input id="knowledge-label" value="Approved customer reply"></label><label>Category<input id="knowledge-category" value="General"></label><label class="span-2">Customer words or intent<textarea id="knowledge-triggers" placeholder="Example: what are your hours, when are you open"></textarea></label><label class="span-2">Approved response<textarea id="knowledge-response" placeholder="Write the response Nexa may suggest when this intent matches."></textarea></label></div><div class="dialog-actions"><button class="primary-button" data-nexa-action="message-knowledge-save">Save knowledge</button></div></article><article class="panel-card"><div class="panel-header"><div><h3>Approved responses</h3><p>'+state.messageKnowledge.length+' local knowledge records</p></div></div><div class="knowledge-list">'+rows+'</div>'+renderPagination(page,'message-knowledge','knowledge records')+'</article></div>';
+  const summary=state.knowledgeSummary||{};
+  const filtered=state.messageKnowledge.filter(function filterKnowledge(row){return remoteMatches(row,state.search); });
+  const page=paginateItems(filtered,'message-knowledge');
+  const rows=page.items.map(function knowledgeRow(row){
+    const isBuiltIn=Number(row.built_in||0)===1;
+    const enabled=Number(row.enabled||0)===1;
+    const control=isBuiltIn
+      ? '<button class="ghost-button" data-nexa-action="message-knowledge-toggle" data-knowledge-id="'+esc(row.id)+'" data-enabled="'+(enabled?'0':'1')+'">'+(enabled?'Disable':'Enable')+'</button>'
+      : '<button class="danger-button" data-nexa-action="message-knowledge-delete" data-knowledge-id="'+esc(row.id)+'">Delete</button>';
+    return '<article class="knowledge-card '+(enabled?'':'knowledge-disabled')+'"><div><div class="knowledge-badges">'+badge(isBuiltIn?'Built-in':'Custom',isBuiltIn?'info':'success')+badge(String(row.locale||'auto').toUpperCase(),'')+badge(String(row.dealer_segment||'all dealers').replaceAll('-',' '),'')+(enabled?'':badge('Disabled','warning'))+'</div><span>'+esc(row.category||'General')+'</span><h3>'+esc(row.label||'Approved reply')+'</h3><p><b>Triggers:</b> '+esc(row.triggers)+'</p><p>'+esc(row.response)+'</p><small>Intent: '+esc(row.intent_key||'custom')+' · Safety: '+esc(row.safety_level||'standard')+' · Used '+esc(row.use_count||0)+' times</small></div>'+control+'</article>';
+  }).join('')||emptyMini('No matching knowledge','Try another phrase or create a custom approved response.');
+  const summaryCards='<div class="knowledge-summary-grid"><article><span>Built-in library</span><strong>'+esc(summary.built_in||0)+'</strong><small>Installed for every user</small></article><article><span>Natural variants</span><strong>'+esc(summary.response_variants||0)+'</strong><small>Three approved variations per built-in record</small></article><article><span>Dealer types</span><strong>'+esc(summary.dealer_segments||0)+'</strong><small>Auto, truck, motorcycle, RV, trailer, marine and more</small></article><article><span>Languages</span><strong>'+esc(summary.languages||0)+'</strong><small>English and Spanish</small></article></div>';
+  const safety='<div class="knowledge-safety-note"><b>Automotive safety guard</b><span>The built-in library never promises financing approval, unverified inventory, discounts, appointments, warranties, legal outcomes, or sensitive-document handling. Nexa escalates those cases or asks for verified data.</span></div>';
+  return summaryCards+safety+'<div class="message-knowledge-layout"><article class="panel-card"><div class="panel-header"><div><h3>Custom business knowledge</h3><p>Add dealership-specific policies or teach Nexa from a reply you reviewed and approved.</p></div>'+badge('Knowledge first','success')+'</div><div class="form-grid"><label>Label<input id="knowledge-label" value="Approved customer reply"></label><label>Category<input id="knowledge-category" value="Custom dealership knowledge"></label><label class="span-2">Customer words or intent<textarea id="knowledge-triggers" placeholder="Example: what are your hours, when are you open"></textarea></label><label class="span-2">Approved response<textarea id="knowledge-response" placeholder="Write the response Nexa may suggest when this intent matches."></textarea></label></div><div class="dialog-actions"><button class="primary-button" data-nexa-action="message-knowledge-save">Save custom knowledge</button></div></article><article class="panel-card"><div class="panel-header"><div><h3>Automotive Dealer Library</h3><p>'+filtered.length+' matching of '+state.messageKnowledge.length+' total records · Library '+esc(summary.library_version||'1.0.0')+'</p></div></div><div class="message-inbox-toolbar knowledge-search"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search category, intent, vehicle type, English or Spanish…"><span>40 per page</span></div><div class="knowledge-list">'+rows+'</div>'+renderPagination(page,'message-knowledge','knowledge records')+'</article></div>';
 }
 
 function renderMessages() {
@@ -581,7 +595,7 @@ function renderMessages() {
   const thread=state.messageConversation&&state.messageConversation.thread?state.messageConversation.thread:selected||{};
   const canReply=Boolean(state.messageThreadId)&&!Boolean(thread.is_announcement)&&thread.can_reply!==false&&Number(thread.can_reply)!==0;
   const latest=latestInboundMessage();
-  const draftMeta=state.messageDraftMeta?'<div class="draft-source">'+badge(state.messageDraftMeta.engine==='knowledge'?'Knowledge match':'AI fallback',state.messageDraftMeta.engine==='knowledge'?'success':'info')+(state.messageDraftMeta.confidence?'<span>'+Math.round(Number(state.messageDraftMeta.confidence)*100)+'% confidence</span>':'')+'</div>':'';
+  const draftMeta=state.messageDraftMeta?'<div class="draft-source">'+badge(state.messageDraftMeta.engine==='knowledge'?(state.messageDraftMeta.built_in?'Automotive library':'Custom knowledge'):'AI fallback',state.messageDraftMeta.engine==='knowledge'?'success':'info')+(state.messageDraftMeta.confidence?'<span>'+Math.round(Number(state.messageDraftMeta.confidence)*100)+'% confidence</span>':'')+(state.messageDraftMeta.category?'<span>'+esc(state.messageDraftMeta.category)+'</span>':'')+(state.messageDraftMeta.safety_level&&state.messageDraftMeta.safety_level!=='standard'?'<span>Safety: '+esc(state.messageDraftMeta.safety_level)+'</span>':'')+'</div>':'';
   const capabilityWarning=(!capabilities.fullThread||!capabilities.send)?'<div class="message-capability-banner"><b>Website API upgrade required for full two-way chat</b><span>Needed: <code>message-thread</code> + <code>message-send</code> and the <code>messages:write</code> scope. Metadata-only messages remain readable.</span></div>':'';
   const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle"><input id="message-teach-after-send" type="checkbox"> Teach Nexa from this approved reply</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send approved reply</button></div></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
   const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p></div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions and user-approved sending.</p></div></div>';
@@ -1061,7 +1075,7 @@ async function prepareMessageReply() {
   try {
     const result=await api.messages.draft({thread_id:state.messageThreadId,provider:provider,focus:'Reply to the latest customer message using the complete conversation. Keep the reply concise and professional.'});
     state.messageDraft=result.draft&&result.draft.body||'';
-    state.messageDraftMeta={engine:result.engine,confidence:result.confidence||0,draft_id:result.draft&&result.draft.id,provider:result.provider||null};
+    state.messageDraftMeta={engine:result.engine,confidence:result.confidence||0,draft_id:result.draft&&result.draft.id,provider:result.provider||null,label:result.label||'',category:result.category||'',safety_level:result.safety_level||'',built_in:Boolean(result.built_in),library_version:result.library_version||''};
     toast(result.engine==='knowledge'?'Reply prepared from approved knowledge.':'Reply prepared with '+String(result.provider||'AI')+'.');
   } catch(error) { state.messageError=error.message; toast(error.message,'error'); }
   finally { state.messageBusy=false; if(state.view==='messages')renderView(); }
@@ -1079,7 +1093,7 @@ async function sendMessageReply() {
     const result=await api.messages.send({thread_id:state.messageThreadId,body:body,user_confirmed:true,draft_id:state.messageDraftMeta&&state.messageDraftMeta.draft_id||null,teach:Boolean(document.getElementById('message-teach-after-send')&&document.getElementById('message-teach-after-send').checked),trigger_text:latest&&latest.body||'',knowledge_label:'Approved reply for '+String(selectedMessageThread()&&selectedMessageThread().subject||'customer conversation')});
     state.messageConversation=result.conversation||state.messageConversation;
     state.messageDraft='';state.messageDraftMeta=null;
-    state.messageKnowledge=await api.messages.knowledgeList('');
+    const refreshedKnowledge=await Promise.all([api.messages.knowledgeList(''),api.messages.knowledgeSummary()]);state.messageKnowledge=refreshedKnowledge[0];state.knowledgeSummary=refreshedKnowledge[1];
     toast('Reply sent after user approval.');
   } catch(error) { toast(error.message,'error'); }
   finally { state.messageBusy=false; if(state.view==='messages')renderView(); }
@@ -1100,7 +1114,7 @@ async function saveMessageKnowledgeForm() {
   const response=document.getElementById('knowledge-response');
   try {
     await api.messages.knowledgeSave({label:label&&label.value,category:category&&category.value,triggers:triggers&&triggers.value,response:response&&response.value,enabled:true});
-    state.messageKnowledge=await api.messages.knowledgeList('');
+    const refreshed=await Promise.all([api.messages.knowledgeList(''),api.messages.knowledgeSummary()]);state.messageKnowledge=refreshed[0];state.knowledgeSummary=refreshed[1];
     toast('Approved response knowledge saved.');renderView();
   } catch(error){toast(error.message,'error');}
 }
@@ -1276,7 +1290,8 @@ function bindViewEvents() {
   document.querySelectorAll('[data-nexa-action="message-tab-knowledge"]').forEach(function bindKnowledge(button){button.addEventListener('click',function(){state.messageTab='knowledge';state.search='';renderView();});});
   const knowledgeSave=document.querySelector('[data-nexa-action="message-knowledge-save"]');
   if(knowledgeSave)knowledgeSave.addEventListener('click',saveMessageKnowledgeForm);
-  document.querySelectorAll('[data-nexa-action="message-knowledge-delete"]').forEach(function bindKnowledgeDelete(button){button.addEventListener('click',async function(){const confirmed=await confirmAction('Delete approved response','Remove this knowledge record from the local response engine?');if(!confirmed)return;await api.messages.knowledgeDelete(button.dataset.knowledgeId);state.messageKnowledge=await api.messages.knowledgeList('');toast('Knowledge record deleted.');renderView();});});
+  document.querySelectorAll('[data-nexa-action="message-knowledge-toggle"]').forEach(function bindKnowledgeToggle(button){button.addEventListener('click',async function(){await api.messages.knowledgeToggle(button.dataset.knowledgeId,Number(button.dataset.enabled)===1);const refreshed=await Promise.all([api.messages.knowledgeList(''),api.messages.knowledgeSummary()]);state.messageKnowledge=refreshed[0];state.knowledgeSummary=refreshed[1];toast(Number(button.dataset.enabled)===1?'Built-in knowledge enabled.':'Built-in knowledge disabled.');renderView();});});
+  document.querySelectorAll('[data-nexa-action="message-knowledge-delete"]').forEach(function bindKnowledgeDelete(button){button.addEventListener('click',async function(){const confirmed=await confirmAction('Delete approved response','Remove this custom knowledge record from the local response engine?');if(!confirmed)return;await api.messages.knowledgeDelete(button.dataset.knowledgeId);const refreshed=await Promise.all([api.messages.knowledgeList(''),api.messages.knowledgeSummary()]);state.messageKnowledge=refreshed[0];state.knowledgeSummary=refreshed[1];toast('Knowledge record deleted.');renderView();});});
   if(state.view==='messages'&&state.messageTab==='inbox'&&!state.messageThreadId){const first=integrationRemote('messages')[0];if(first)setTimeout(function autoOpenFirst(){if(state.view==='messages'&&!state.messageThreadId)loadMessageThread(remoteItemId('messages',first,0),false);},0);}
   document.querySelectorAll('[data-nexa-action="agenda-prev"],[data-nexa-action="agenda-next"],[data-nexa-action="agenda-today"],[data-nexa-action="agenda-month"],[data-nexa-action="agenda-week"]').forEach(function bindAgendaControl(button) {
     button.addEventListener('click', function controlAgenda() {

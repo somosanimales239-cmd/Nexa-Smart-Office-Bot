@@ -344,7 +344,7 @@ class AutoMarketApiService {
         Accept: 'application/json',
         Authorization: 'Bearer ' + apiKey,
         'X-Nexa-Api-Key': apiKey,
-        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.4.0'
+        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.5.0'
       };
       if (method !== 'GET') headers['Content-Type'] = 'application/json';
       if (requestOptions.idempotencyKey) headers['Idempotency-Key'] = String(requestOptions.idempotencyKey);

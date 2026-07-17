@@ -1,26 +1,32 @@
-# Nexa Smart Office Bot 1.4.0
+# Nexa Smart Office Bot 1.5.0
 
-A local-first Windows business assistant with a complete AutoMarket Pro workspace and a human-approved real-time messaging workflow.
+Nexa Smart Office Bot is a local-first Windows business assistant with AutoMarket Pro synchronization, complete message conversations, user-approved replies, contacts, leads, agenda, tasks, notifications and AI provider fallback.
 
-## Main workspaces
+## New in 1.5.0
 
-- Dashboard with local and connected business totals.
-- Unified Contacts with local records and synchronized website agenda contacts.
-- Unified Leads with local opportunities, website orders and reseller appointments.
-- Visual Agenda for tasks, appointments, reminders and connected events.
-- Messages with inbox synchronization, full conversation bubbles, live refresh, read state, reply drafts and user-approved sending.
-- Knowledge Engine with reusable approved answers that are checked before OpenAI or DeepSeek.
-- AI Suggestions with complete selected conversation context and explicit human approval.
-- API Sync Inspector, Nexa Pulse, Activity, Settings and backups.
+The program now includes the Nexa Automotive Dealer Knowledge Library:
 
-## Message response order
+- 2,880 built-in dealership knowledge records.
+- 120 core customer intentions.
+- 12 automotive dealer segments.
+- English and Spanish support.
+- 8,640 natural response variations.
+- Custom approved knowledge takes priority over the built-in library.
+- Built-in knowledge can be disabled without being deleted.
+- OpenAI or DeepSeek is used only when local knowledge does not match strongly enough.
 
-1. Nexa loads the authorized conversation from AutoMarket Pro.
-2. The local Knowledge Engine compares the latest customer message against approved responses.
-3. A strong local match creates a draft without using an external AI request.
-4. When no approved answer matches, Nexa can call the selected OpenAI or DeepSeek provider.
-5. The draft is shown to the user for editing and confirmation.
-6. Only the user-approved reply is submitted to the website API.
-7. The user may optionally teach Nexa from that approved reply.
+The library covers inventory, prices, appointments, financing, credit, trade-ins, vehicle details, delivery, documents, service, warranties, safety, privacy, fraud and human escalation.
 
-Nexa never auto-sends a customer message. Full message bodies are cached locally only when the connected website explicitly grants the message-thread capability.
+See `AUTOMOTIVE_KNOWLEDGE_LIBRARY.md` for the complete design.
+
+## Safety
+
+Nexa never automatically sends a customer message. The user reviews and confirms every outgoing response. Built-in answers are designed not to invent prices, availability, approvals, appointments, warranties, legal outcomes or sensitive information.
+
+## Windows delivery
+
+The project remains configured for:
+
+- NSIS Installer.
+- Portable EXE.
+- Windows ZIP.

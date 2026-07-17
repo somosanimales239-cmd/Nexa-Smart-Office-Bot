@@ -1,4 +1,4 @@
-# AutoMarket Pro two-way Messages API contract for Nexa 1.4.0
+# AutoMarket Pro two-way Messages API contract for Nexa 1.5.0
 
 This contract is the required website-side addition for complete message history and user-approved replies. The current metadata-only `messages` resource may remain unchanged.
 
