@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
     "application_version": "1.0.1",
-    "workspace_revision": "1.0.5",
+    "workspace_revision": "1.0.6",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -16,5 +16,5 @@
         "SBO-04-ui-validation-delivery"
     ],
     "version": "1.0.1",
-    "updated_at": "2026-07-16 20:32:45"
+    "updated_at": "2026-07-16 20:59:44"
 }
