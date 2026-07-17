@@ -26,7 +26,15 @@ const requirements = [
   ['src/ipc/integrations-ipc.js', 'integration:test'],
   ['src/ipc/notifications-ipc.js', 'notifications:permission'],
   ['src/index.html', 'data-testid="connected-business"'],
-  ['src/index.html', 'data-testid="smart-notifications"']
+  ['src/index.html', 'data-testid="smart-notifications"'],
+  ['src/index.html', 'data-testid="api-sync-inspector"'],
+  ['src/services/automarket-api-service.js', 'NEXA_API_SYNC_INSPECTOR_V1'],
+  ['src/services/automarket-api-service.js', 'RESOURCE_FIELD_ALLOWLISTS'],
+  ['src/services/notification-service.js', 'NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2'],
+  ['src/database/migrations.js', 'integration_resource_status'],
+  ['src/database/migrations.js', 'integration_cache'],
+  ['src/ipc/integrations-ipc.js', 'integration:inspector'],
+  ['src/ipc/integrations-ipc.js', 'integration:items']
 ];
 
 const failures = [];

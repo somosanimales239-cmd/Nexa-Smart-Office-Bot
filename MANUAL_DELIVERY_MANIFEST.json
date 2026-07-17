@@ -1,172 +1,161 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.1.0",
-  "minimum_base_version": "1.0.1",
+  "update_version": "1.2.0",
+  "minimum_base_version": "1.1.0",
   "delivery_type": "manual_delivery_update",
   "openai_required": false,
-  "database_migration": "additive migration 3 on first application launch",
+  "database_migration": "additive and idempotent migration 4 on first application launch",
   "files": [
     {
+      "path": "API_SYNC_INSPECTOR.md",
+      "sha256": "5b4adc9c1253a69835e7bd801a683590276243953a6d5f3f475a9a34b1579460",
+      "size": 812,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "CHANGELOG.md",
-      "sha256": "5ac94cfe8998663449a77be14b62adab7fb34d687910790a5f9dbbc6f57ea3f9",
-      "size": 2287,
+      "sha256": "38e5f65b8be661bfd24da5f66e471b7d6e0f918cfb23f6b0d567bf3a20618aae",
+      "size": 1210,
       "operation": "replace_or_create"
     },
     {
       "path": "CONNECTED_BUSINESS_SETUP.md",
-      "sha256": "555d0fa1decaa23e576f4fa6c4139b0798ded6aa858710e09f39b9bd48b50ce5",
-      "size": 2441,
+      "sha256": "9b5c12dbf649c9362b641a0dd87ffe93bbfda4726926f1da800d3351216d941d",
+      "size": 2455,
       "operation": "replace_or_create"
     },
     {
       "path": "INSTALLATION.md",
-      "sha256": "f5eea7748a877d9634a7cc64e42d35281c6ed2d397da75db423b53dad1b447be",
-      "size": 1549,
+      "sha256": "c964c85a131b91cd291ed9908a605e637a0eb9db84855667ccdb5e06a1568817",
+      "size": 1767,
       "operation": "replace_or_create"
     },
     {
       "path": "README.md",
-      "sha256": "b83875ecb975d034400f3250a6ab1b31992b96e60846ee2c6e0d554072fb6f47",
-      "size": 1852,
+      "sha256": "96d5428cba3469af6e02eaf915ad09df51739123fc08cf339dc3e3856cc18e86",
+      "size": 1597,
       "operation": "replace_or_create"
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "8d3b91f7dc517e74f6b25c03e8a6122188c6c8f6d40c733c521b92cb90627605",
-      "size": 2103,
+      "sha256": "6ec819b13d0c7d99b8fdf27f938a4b5162adcdfb1cccf4ed84f77abf258badd0",
+      "size": 2528,
       "operation": "replace_or_create"
     },
     {
       "path": "main.js",
-      "sha256": "a7d11f8fbe2b93133af59b8657a23f5e5e05c7670d3db7c914ced62fb2fb8f7f",
-      "size": 9974,
+      "sha256": "ceb221d8512105524d8f689e4e14ac52cd8167b5628e82133838ad0777cd87ae",
+      "size": 9996,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "cd5164f57fb6371417d92a148fde04e2b98826a76399e4869b3743c910464038",
-      "size": 504,
+      "sha256": "c77e312fdaf01628a633f2fd3b336f22670d5b5a3c94d41a70f9b4c0854cb34e",
+      "size": 527,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "fae79191b75c02d0f76e3ef271166ba4bc3019b9373b9d004ca6f15140cc5bc1",
+      "sha256": "7dffbbf4850fbe93dff205dc6ebcd913b93293cdc32a09885e1102e29ec7af7a",
       "size": 102947,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "59681f69a338c7b6c0eca2a24e9050f000561ac3cb1332cc09ba9685383574b9",
-      "size": 2629,
+      "sha256": "169847035d8292859d99962cd4b2abea5a025fec4a78bf3a815609177452da93",
+      "size": 2666,
       "operation": "replace_or_create"
     },
     {
       "path": "preload.js",
-      "sha256": "30095d2f927c313a252bb525827ae41f594101344e8751b5b34af661f8f2b76f",
-      "size": 7028,
+      "sha256": "be6e14ea045c5069f7f0169cc068521c70bb45f949581906d149c2902813400f",
+      "size": 7268,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/acceptance-tests.js",
+      "sha256": "633fad1e0db690a472ba57861fe716c536386736eaff7923c8f46027f861c623",
+      "size": 1519,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "9fd651e71834b84be1ac226a594fc09b94d0c3298ba7f15e39b3c098a6cb1abc",
-      "size": 1187,
+      "sha256": "61547ab4a94ac68a21db3bcd365ab5fc7b8ead51f6018e22faa80cada4d9a3a9",
+      "size": 2186,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "31454e25bee922e966fa789c282dd44bbdf9f2ca542ddd72b7039dea4a10204a",
-      "size": 5972,
+      "sha256": "45e2ec21aaf70835dca4160894233c46baece5204b21239fb3de7786505b28d6",
+      "size": 14341,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-tests.js",
-      "sha256": "39f65a6c8062a54696df531de95a32b0daecbe95ed0b459239ac87d360e45300",
-      "size": 7233,
+      "sha256": "3b6b0936fdb93113801d28147f7a0d9bd617fdc26028d1fbb7faa36fe257d40a",
+      "size": 7307,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/nexa-contract-gate.js",
-      "sha256": "7fde8fcf98a4714ba56c531d8ef353ced7047cfea2bf80e6d39b514c85308121",
-      "size": 2130,
+      "sha256": "40a6bed24bf42bcde28a571b13aadb018ea0c92be82b4eb57d0d363b15dcaeb5",
+      "size": 2659,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "a466d0d17c3ac44b09035a73f5f9342a1f375f6f4f2d805f93a92aa9d1f46988",
-      "size": 2045,
+      "sha256": "ba5ed29fc67811f65c653846ca5be764a5490686d1da9fe8e9b9f8276b73d69e",
+      "size": 2249,
       "operation": "replace_or_create"
     },
     {
       "path": "src/app.js",
-      "sha256": "cc14d0736875ff07016d1410b64a9d6e24abd7ecb35ae547112beea3154551e6",
-      "size": 72805,
-      "operation": "replace_or_create"
-    },
-    {
-      "path": "src/assets/nexa-ai-orb.png",
-      "sha256": "af12aa0964db54b579747934b2883911a409a47e8500df44917ca803d0a8b81f",
-      "size": 49207,
-      "operation": "replace_or_create"
-    },
-    {
-      "path": "src/assets/nexa-ai-orb.svg",
-      "sha256": "d9c3bc0a7ce46a3f50e851d18de25e65e6927ceafb7157a52ee01f30679f3d17",
-      "size": 1576,
+      "sha256": "7421d388cd5c6529a1530ab46c625b63c5f1815632cb87476093914fa17dd1aa",
+      "size": 93456,
       "operation": "replace_or_create"
     },
     {
       "path": "src/database/database.js",
-      "sha256": "a2482ed02b766a8b851431b54e49d66bfd9e3ffb5a14a2b3a0b60337cd5c203e",
-      "size": 28015,
+      "sha256": "2da945a2f26e65a7307d6ffea4bbfda0df8d0c50e6f2f4ce3fd24426c26a736f",
+      "size": 41343,
       "operation": "replace_or_create"
     },
     {
       "path": "src/database/migrations.js",
-      "sha256": "38cfa92da1becc31075a4f2d38dccce791c8df930191e43fa4f995aafabb9a92",
-      "size": 10406,
+      "sha256": "f1305507d78d6b28b9c1f78af59f3ae83fd41354d7c28aba62e29a30f3b177c6",
+      "size": 14515,
       "operation": "replace_or_create"
     },
     {
       "path": "src/index.html",
-      "sha256": "1f5cd06fae0c2c13c935055419a53a53c40af4f637c2518d71369128f6cd3110",
-      "size": 7182,
+      "sha256": "bbb65d6ff98712ffdd364ddaddb275d537de0e77c448f5a2dc319b68688ee318",
+      "size": 7362,
       "operation": "replace_or_create"
     },
     {
       "path": "src/ipc/integrations-ipc.js",
-      "sha256": "d9b1ff27b6b10e0c537411ee30f8dc5812f57a8b3f051ffe3d522adb767bb29c",
-      "size": 2793,
-      "operation": "replace_or_create"
-    },
-    {
-      "path": "src/ipc/notifications-ipc.js",
-      "sha256": "0e6bdb9a513f246e83945d4ada2f9aac0d9ea482267d7e9d6d40d74ad4c8bd5e",
-      "size": 3109,
+      "sha256": "0bcfee932c1e9efa8d89cddd4a26bf6b2a24c74ccf37aab7ad4879338a156b4b",
+      "size": 6467,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automarket-api-service.js",
-      "sha256": "ab8d8dccbbed087677b03813440c49801a1659f32ee40d3744c9bb2e3f5f7222",
-      "size": 5263,
+      "sha256": "d3e433eec5aa058f4df26aeb08c672b743065fce866bacc12913ba5011e1207e",
+      "size": 19731,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/notification-service.js",
-      "sha256": "afe6c2cf3af85769c5b609e7df13fcd78a66dd5389afd053d9d075fdd2e6255d",
-      "size": 15205,
-      "operation": "replace_or_create"
-    },
-    {
-      "path": "src/services/settings-service.js",
-      "sha256": "c2e8699c9880e9c6b3a9976a3d18a78452fd3634cbf1a0b5d385a5cd9bef864c",
-      "size": 3842,
+      "sha256": "6268938314937b5af075d4638305f9169cedbeee68aa74d76b822f34b2b47584",
+      "size": 26392,
       "operation": "replace_or_create"
     },
     {
       "path": "src/styles.css",
-      "sha256": "bcb06e76fe2f63f63a786ad9cc3072b42ed2effd8629c9365f2e79d54b8a086a",
-      "size": 23372,
+      "sha256": "e652365782e76c6a4de724d08d226a95ca48d08c331ce87c8155e07e8df7f914",
+      "size": 29305,
       "operation": "replace_or_create"
     }
-  ]
+  ],
+  "notes": "Includes the complete v1.2.0 API synchronization update and the SBO-04 exact UI data-testid contract marker correction."
 }

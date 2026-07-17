@@ -3,11 +3,22 @@
 const NEXA_SCHEMA_MIGRATION_CONTRACT = 'migration marker: NEXA_SCHEMA_MIGRATION_V1';
 
 const NEXA_SCHEMA_MIGRATION_V1 = 'NEXA_SCHEMA_MIGRATION_V1';
-const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, notification_preferences, notification_events';
+const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, integration_resource_status, integration_cache, integration_sync_runs, notification_preferences, notification_events';
 
 const nowIso = function nowIso() {
   return new Date().toISOString();
 };
+
+function tableColumns(database, tableName) {
+  return new Set(database.prepare('PRAGMA table_info(' + tableName + ')').all().map(function mapColumn(row) {
+    return String(row.name || '');
+  }));
+}
+
+function addColumnIfMissing(database, tableName, columnName, definition) {
+  const columns = tableColumns(database, tableName);
+  if (!columns.has(columnName)) database.exec('ALTER TABLE ' + tableName + ' ADD COLUMN ' + columnName + ' ' + definition + ';');
+}
 
 function applyMigrations(database) {
   database.exec([
@@ -68,6 +79,7 @@ function applyMigrations(database) {
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_base_url', '', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_sync_enabled', '0', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_poll_minutes', '5', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_max_items', '100', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_user_consent', '0', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_consent_at', '', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_sound', '1', datetime('now'));",
@@ -87,6 +99,70 @@ function applyMigrations(database) {
         "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_business_update',1,0,1,datetime('now'));",
         "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('system_test',1,1,1,datetime('now'));"
       ].join(' ')
+    },
+    {
+      id: 4,
+      name: 'NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2',
+      apply: function applyConnectedBusinessFullSync(database) {
+        addColumnIfMissing(database, 'integration_status', 'owner_type', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'owner_id', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'user_id', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'api_version', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'sync_state', "TEXT NOT NULL DEFAULT 'idle'");
+        addColumnIfMissing(database, 'integration_status', 'last_attempt_at', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'last_success_at', 'TEXT');
+        addColumnIfMissing(database, 'integration_status', 'resource_success_count', 'INTEGER NOT NULL DEFAULT 0');
+        addColumnIfMissing(database, 'integration_status', 'resource_failure_count', 'INTEGER NOT NULL DEFAULT 0');
+        database.exec([
+          `CREATE TABLE IF NOT EXISTS integration_resource_status (
+            resource TEXT PRIMARY KEY,
+            account_type TEXT,
+            required_scope TEXT,
+            allowed INTEGER NOT NULL DEFAULT 1,
+            status TEXT NOT NULL DEFAULT 'never',
+            item_count INTEGER NOT NULL DEFAULT 0,
+            http_status INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT NOT NULL DEFAULT '',
+            last_started_at TEXT,
+            last_checked_at TEXT,
+            last_success_at TEXT,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            payload_hash TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+          );`,
+          `CREATE TABLE IF NOT EXISTS integration_cache (
+            resource TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            normalized_phone TEXT NOT NULL DEFAULT '',
+            normalized_email TEXT NOT NULL DEFAULT '',
+            search_text TEXT NOT NULL DEFAULT '',
+            sort_date TEXT,
+            payload_hash TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(resource, item_id)
+          );`,
+          'CREATE INDEX IF NOT EXISTS idx_integration_cache_resource ON integration_cache(resource, updated_at DESC);',
+          'CREATE INDEX IF NOT EXISTS idx_integration_cache_phone ON integration_cache(normalized_phone);',
+          'CREATE INDEX IF NOT EXISTS idx_integration_cache_email ON integration_cache(normalized_email);',
+          `CREATE TABLE IF NOT EXISTS integration_sync_runs (
+            id TEXT PRIMARY KEY,
+            account_type TEXT,
+            status TEXT NOT NULL,
+            trigger_type TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            planned_resources INTEGER NOT NULL DEFAULT 0,
+            successful_resources INTEGER NOT NULL DEFAULT 0,
+            failed_resources INTEGER NOT NULL DEFAULT 0,
+            error_summary TEXT NOT NULL DEFAULT ''
+          );`,
+          'CREATE INDEX IF NOT EXISTS idx_integration_sync_runs_started ON integration_sync_runs(started_at DESC);',
+          "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_max_items', '100', datetime('now'));"
+        ].join(' '));
+      }
     }
   ];
 
@@ -94,7 +170,8 @@ function applyMigrations(database) {
     if (applied.has(migration.id)) return;
     database.exec('BEGIN IMMEDIATE');
     try {
-      database.exec(migration.sql);
+      if (typeof migration.apply === 'function') migration.apply(database);
+      else database.exec(migration.sql);
       database.prepare('INSERT INTO migrations(id, name, applied_at) VALUES (?, ?, ?)').run(migration.id, migration.name, nowIso());
       database.exec('COMMIT');
     } catch (error) {

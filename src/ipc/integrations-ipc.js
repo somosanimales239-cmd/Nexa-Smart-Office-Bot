@@ -1,8 +1,22 @@
 'use strict';
 
 const { registerIpcHandler } = require('./ipc-utils');
+const { stableHash } = require('../services/automarket-api-service');
+const { cacheItemsFromPayload, resourceItemCount } = require('../services/notification-service');
 
-const INTEGRATION_IPC_CONTRACT = 'IPC channels: integration:get, integration:save, integration:test, integration:sync, integration:resource, integration:disconnect';
+const INTEGRATION_IPC_CONTRACT = 'IPC channels: integration:get, integration:save, integration:test, integration:sync, integration:inspector, integration:items, integration:resource, integration:disconnect';
+
+function integrationState(database, settingsService) {
+  const overview = database.connectedBusinessOverview();
+  return {
+    settings: settingsService.getPublicSettings(),
+    status: database.getIntegrationStatus(),
+    snapshots: database.listIntegrationSnapshots(),
+    resources: overview.resources,
+    syncRuns: overview.syncRuns,
+    remote: overview.remote
+  };
+}
 
 function registerIntegrationsIpc(ipcMain, services) {
   const database = services.database;
@@ -11,11 +25,20 @@ function registerIntegrationsIpc(ipcMain, services) {
   const notificationService = services.notificationService;
 
   registerIpcHandler(ipcMain, 'integration:get', function getIntegration() {
+    return integrationState(database, settingsService);
+  });
+
+  registerIpcHandler(ipcMain, 'integration:inspector', function getInspector() {
     return {
-      settings: settingsService.getPublicSettings(),
       status: database.getIntegrationStatus(),
-      snapshots: database.listIntegrationSnapshots()
+      resources: database.listIntegrationResourceStatus(),
+      syncRuns: database.listIntegrationSyncRuns(30)
     };
+  });
+
+  registerIpcHandler(ipcMain, 'integration:items', function getItems(payload) {
+    const input = payload || {};
+    return database.listIntegrationCache(String(input.resource || ''), String(input.search || ''), Number(input.limit || 100));
   });
 
   registerIpcHandler(ipcMain, 'integration:save', function saveIntegration(payload) {
@@ -29,7 +52,49 @@ function registerIntegrationsIpc(ipcMain, services) {
 
   registerIpcHandler(ipcMain, 'integration:test', async function testIntegration() {
     const result = await apiService.testConnection();
-    database.saveIntegrationStatus({ connected: 1, connection_map_json: JSON.stringify(result.connectionMap || {}), last_sync_at: result.testedAt, last_error: '' });
+    const identity = result.identity || {};
+    result.diagnostics.forEach(function saveDiagnostic(diagnostic) {
+      database.saveIntegrationResourceStatus({
+        resource: diagnostic.resource,
+        account_type: identity.account_type,
+        required_scope: '',
+        allowed: 1,
+        status: 'ok',
+        item_count: 1,
+        http_status: diagnostic.httpStatus,
+        last_error: '',
+        last_started_at: diagnostic.checkedAt,
+        last_checked_at: diagnostic.checkedAt,
+        last_success_at: diagnostic.checkedAt,
+        duration_ms: diagnostic.durationMs,
+        payload_hash: stableHash(diagnostic.resource === 'ping' ? result.ping : result.connectionMap)
+      });
+    });
+    database.saveIntegrationSnapshot({
+      resource: 'ping', payload_hash: stableHash(result.ping), item_count: 1,
+      payload_json: JSON.stringify(result.ping || {}), last_checked_at: result.testedAt, last_changed_at: result.testedAt
+    });
+    database.saveIntegrationSnapshot({
+      resource: 'connection-map', payload_hash: stableHash(result.connectionMap), item_count: 1,
+      payload_json: JSON.stringify(result.connectionMap || {}), last_checked_at: result.testedAt, last_changed_at: result.testedAt
+    });
+    database.replaceIntegrationCache('ping', [result.ping || {}]);
+    database.replaceIntegrationCache('connection-map', [result.connectionMap || {}]);
+    database.saveIntegrationStatus({
+      connected: 1,
+      account_type: identity.account_type,
+      account_id: identity.account_id,
+      store_id: identity.store_id,
+      owner_type: identity.owner_type,
+      owner_id: identity.owner_id,
+      user_id: identity.user_id,
+      api_version: identity.api_version,
+      scopes_json: JSON.stringify(identity.scopes || []),
+      connection_map_json: JSON.stringify(result.connectionMap || {}),
+      sync_state: 'tested',
+      last_attempt_at: result.testedAt,
+      last_error: ''
+    });
     return result;
   });
 
@@ -40,27 +105,55 @@ function registerIntegrationsIpc(ipcMain, services) {
   registerIpcHandler(ipcMain, 'integration:resource', async function fetchResource(payload) {
     const resource = String(payload.resource || 'ping');
     const query = payload.query && typeof payload.query === 'object' ? payload.query : {};
-    const response = await apiService.fetchResource(resource, query);
-    database.saveIntegrationSnapshot({
-      resource: resource,
-      payload_hash: require('../services/automarket-api-service').stableHash(response.payload),
-      item_count: Array.isArray(response.payload) ? response.payload.length : 0,
-      payload_json: JSON.stringify(response.payload || null),
-      last_checked_at: response.receivedAt,
-      last_changed_at: response.receivedAt
-    });
-    return response;
+    const startedAt = new Date().toISOString();
+    try {
+      const response = await apiService.fetchResource(resource, query);
+      const items = cacheItemsFromPayload(resource, response.payload);
+      database.replaceIntegrationCache(resource, items);
+      database.saveIntegrationSnapshot({
+        resource: resource,
+        payload_hash: stableHash(response.payload),
+        item_count: resourceItemCount(response.payload),
+        payload_json: JSON.stringify(response.payload || null),
+        last_checked_at: response.receivedAt,
+        last_changed_at: response.receivedAt
+      });
+      database.saveIntegrationResourceStatus({
+        resource: resource,
+        status: 'ok',
+        item_count: resourceItemCount(response.payload),
+        http_status: response.status,
+        last_error: '',
+        last_started_at: startedAt,
+        last_checked_at: response.receivedAt,
+        last_success_at: response.receivedAt,
+        duration_ms: response.durationMs,
+        payload_hash: stableHash(response.payload)
+      });
+      return response;
+    } catch (error) {
+      database.saveIntegrationResourceStatus({
+        resource: resource,
+        status: Number(error.status || 0) === 403 ? 'forbidden' : 'failed',
+        http_status: Number(error.status || 0),
+        last_error: error.message,
+        last_started_at: startedAt,
+        last_checked_at: new Date().toISOString()
+      });
+      throw error;
+    }
   });
 
   registerIpcHandler(ipcMain, 'integration:disconnect', function disconnectIntegration() {
     settingsService.removeSecret('automarket');
     database.saveSettings({ automarket_sync_enabled: '0' });
-    database.saveIntegrationStatus({ connected: 0, last_error: 'Disconnected by user.' });
+    database.clearIntegrationData();
     return { disconnected: true };
   });
 }
 
 module.exports = {
   INTEGRATION_IPC_CONTRACT,
+  integrationState,
   registerIntegrationsIpc
 };

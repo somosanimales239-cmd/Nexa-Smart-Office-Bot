@@ -13,6 +13,30 @@ const nullable = (value) => {
   const text = normalizeText(value);
   return text === '' ? null : text;
 };
+const normalizePhone = (value) => {
+  const digits = String(value ?? '').replace(/\D+/g, '');
+  if (!digits) return '';
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  if (digits.length >= 10) return digits.slice(-10);
+  return digits;
+};
+const normalizeEmail = (value) => normalizeText(value).toLowerCase();
+const integrationItemIdentity = (resource, item, index = 0) => {
+  if (!item || typeof item !== 'object') return `${resource}:${index}`;
+  const keysByResource = {
+    agenda: ['contact_id', 'id'], orders: ['order_id', 'appointment_id', 'id'], messages: ['thread_id', 'message_id', 'id'],
+    listings: ['listing_id', 'id'], resellers: ['reseller_id', 'appointment_id', 'id'], stores: ['store_id', 'id'],
+    users: ['user_id', 'account_id', 'id'], validation: ['validation_id', 'id'], 'reseller-profile': ['reseller_id', 'id'],
+    'reseller-listings': ['assignment_id', 'listing_id', 'id'], 'reseller-appointments': ['appointment_id', 'id'],
+    store: ['store_id', 'id'], 'dealer-summary': ['store_id', 'id'], 'reseller-summary': ['reseller_id', 'id'],
+    'admin-summary': ['id'], 'api-keys-status': ['id']
+  };
+  const keys = keysByResource[resource] || ['id', 'uuid'];
+  for (const key of keys) {
+    if (item[key] !== undefined && item[key] !== null && String(item[key]) !== '') return String(item[key]);
+  }
+  return crypto.createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 24);
+};
 
 class DatabaseService {
   constructor(databasePath) {
@@ -341,12 +365,34 @@ class DatabaseService {
   }
 
   dailyContext() {
+    const connectedStatus = this.getIntegrationStatus();
+    const connectedSummary = this.listIntegrationCache('dealer-summary', '', 1)[0]
+      || this.listIntegrationCache('reseller-summary', '', 1)[0]
+      || this.listIntegrationCache('admin-summary', '', 1)[0]
+      || {};
+    const connectedListings = this.listIntegrationCache('listings', '', 30).concat(this.listIntegrationCache('reseller-listings', '', 30));
     return {
       summary: this.dashboardSummary(),
       alerts: this.listAlerts().slice(0, 20),
       leads: this.db.prepare("SELECT id, name, company, status, priority, next_follow_up, notes FROM leads WHERE status NOT IN ('Won','Lost') ORDER BY next_follow_up LIMIT 20").all(),
       tasks: this.db.prepare("SELECT id, title, due_at, priority, status, description FROM tasks WHERE status='Pending' ORDER BY due_at LIMIT 20").all(),
-      appointments: this.db.prepare("SELECT id, title, start_at, status, description FROM appointments WHERE status='Scheduled' AND start_at >= ? ORDER BY start_at LIMIT 20").all(nowIso())
+      appointments: this.db.prepare("SELECT id, title, start_at, status, description FROM appointments WHERE status='Scheduled' AND start_at >= ? ORDER BY start_at LIMIT 20").all(nowIso()),
+      connected_business: {
+        connected: Number(connectedStatus.connected || 0) === 1,
+        account_type: connectedStatus.account_type || null,
+        store_id: connectedStatus.store_id || null,
+        sync_state: connectedStatus.sync_state || 'idle',
+        last_sync_at: connectedStatus.last_sync_at || null,
+        summary: connectedSummary,
+        recent_orders: this.listIntegrationCache('orders', '', 15),
+        reseller_appointments: this.listIntegrationCache('reseller-appointments', '', 15),
+        agenda_contacts: this.listIntegrationCache('agenda', '', 15),
+        unread_message_threads: this.listIntegrationCache('messages', '', 15).filter(function unread(item) { return Number(item.unread_count || 0) > 0 || Number(item.is_announcement || 0) === 1; }),
+        listings_needing_attention: connectedListings.filter(function needsAttention(item) {
+          return !item.main_image_url || item.price === null || item.price === undefined || Number(item.price) <= 0 || String(item.status || '').toLowerCase() !== 'active';
+        }).slice(0, 15),
+        resellers: this.listIntegrationCache('resellers', '', 15)
+      }
     };
   }
 
@@ -355,7 +401,9 @@ class DatabaseService {
   getIntegrationStatus() {
     return this.db.prepare("SELECT * FROM integration_status WHERE integration_id='automarket'").get() || {
       integration_id: 'automarket', connected: 0, account_type: null, account_id: null, store_id: null,
-      scopes_json: '[]', connection_map_json: '{}', last_sync_at: null, last_error: '', updated_at: null
+      owner_type: null, owner_id: null, user_id: null, api_version: null, scopes_json: '[]', connection_map_json: '{}',
+      sync_state: 'idle', last_sync_at: null, last_attempt_at: null, last_success_at: null,
+      resource_success_count: 0, resource_failure_count: 0, last_error: '', updated_at: null
     };
   }
 
@@ -363,15 +411,26 @@ class DatabaseService {
     const current = this.getIntegrationStatus();
     const next = Object.assign({}, current, values || {});
     this.db.prepare(`
-      INSERT INTO integration_status(integration_id, connected, account_type, account_id, store_id, scopes_json, connection_map_json, last_sync_at, last_error, updated_at)
-      VALUES ('automarket', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO integration_status(
+        integration_id, connected, account_type, account_id, store_id, scopes_json, connection_map_json,
+        last_sync_at, last_error, updated_at, owner_type, owner_id, user_id, api_version, sync_state,
+        last_attempt_at, last_success_at, resource_success_count, resource_failure_count
+      ) VALUES ('automarket', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(integration_id) DO UPDATE SET
         connected=excluded.connected, account_type=excluded.account_type, account_id=excluded.account_id,
         store_id=excluded.store_id, scopes_json=excluded.scopes_json, connection_map_json=excluded.connection_map_json,
-        last_sync_at=excluded.last_sync_at, last_error=excluded.last_error, updated_at=excluded.updated_at
-    `).run(Number(next.connected) ? 1 : 0, nullable(next.account_type), nullable(next.account_id), nullable(next.store_id),
+        last_sync_at=excluded.last_sync_at, last_error=excluded.last_error, updated_at=excluded.updated_at,
+        owner_type=excluded.owner_type, owner_id=excluded.owner_id, user_id=excluded.user_id,
+        api_version=excluded.api_version, sync_state=excluded.sync_state, last_attempt_at=excluded.last_attempt_at,
+        last_success_at=excluded.last_success_at, resource_success_count=excluded.resource_success_count,
+        resource_failure_count=excluded.resource_failure_count
+    `).run(
+      Number(next.connected) ? 1 : 0, nullable(next.account_type), nullable(next.account_id), nullable(next.store_id),
       normalizeText(next.scopes_json || '[]'), normalizeText(next.connection_map_json || '{}'), nullable(next.last_sync_at),
-      normalizeText(next.last_error), nowIso());
+      normalizeText(next.last_error), nowIso(), nullable(next.owner_type), nullable(next.owner_id), nullable(next.user_id),
+      nullable(next.api_version), normalizeText(next.sync_state || 'idle'), nullable(next.last_attempt_at),
+      nullable(next.last_success_at), Number(next.resource_success_count || 0), Number(next.resource_failure_count || 0)
+    );
     return this.getIntegrationStatus();
   }
 
@@ -384,15 +443,186 @@ class DatabaseService {
   }
 
   saveIntegrationSnapshot(values) {
+    const previous = this.getIntegrationSnapshot(values.resource);
+    const nextHash = normalizeText(values.payload_hash);
+    const checkedAt = normalizeText(values.last_checked_at || nowIso());
+    const changedAt = previous && previous.payload_hash === nextHash
+      ? previous.last_changed_at
+      : normalizeText(values.last_changed_at || checkedAt);
     this.db.prepare(`
       INSERT INTO integration_snapshots(resource, payload_hash, item_count, payload_json, last_checked_at, last_changed_at)
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(resource) DO UPDATE SET payload_hash=excluded.payload_hash, item_count=excluded.item_count,
         payload_json=excluded.payload_json, last_checked_at=excluded.last_checked_at, last_changed_at=excluded.last_changed_at
-    `).run(normalizeText(values.resource), normalizeText(values.payload_hash), Number(values.item_count || 0),
-      normalizeText(values.payload_json || 'null'), normalizeText(values.last_checked_at || nowIso()),
-      normalizeText(values.last_changed_at || nowIso()));
+    `).run(normalizeText(values.resource), nextHash, Number(values.item_count || 0),
+      normalizeText(values.payload_json || 'null'), checkedAt, changedAt);
     return this.getIntegrationSnapshot(values.resource);
+  }
+
+  getIntegrationResourceStatus(resource) {
+    return this.db.prepare('SELECT * FROM integration_resource_status WHERE resource=?').get(normalizeText(resource)) || null;
+  }
+
+  listIntegrationResourceStatus() {
+    return this.db.prepare(`
+      SELECT * FROM integration_resource_status
+      ORDER BY CASE resource WHEN 'ping' THEN 0 WHEN 'connection-map' THEN 1 ELSE 2 END, resource
+    `).all();
+  }
+
+  saveIntegrationResourceStatus(values) {
+    const resource = normalizeText(values.resource);
+    if (!resource) throw new Error('Integration resource is required.');
+    const current = this.getIntegrationResourceStatus(resource) || {};
+    const next = Object.assign({}, current, values || {});
+    this.db.prepare(`
+      INSERT INTO integration_resource_status(
+        resource, account_type, required_scope, allowed, status, item_count, http_status, last_error,
+        last_started_at, last_checked_at, last_success_at, duration_ms, payload_hash, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(resource) DO UPDATE SET
+        account_type=excluded.account_type, required_scope=excluded.required_scope, allowed=excluded.allowed,
+        status=excluded.status, item_count=excluded.item_count, http_status=excluded.http_status,
+        last_error=excluded.last_error, last_started_at=excluded.last_started_at,
+        last_checked_at=excluded.last_checked_at, last_success_at=excluded.last_success_at,
+        duration_ms=excluded.duration_ms, payload_hash=excluded.payload_hash, updated_at=excluded.updated_at
+    `).run(
+      resource, nullable(next.account_type), normalizeText(next.required_scope), Number(next.allowed === 0 ? 0 : 1),
+      normalizeText(next.status || 'never'), Number(next.item_count || 0), Number(next.http_status || 0),
+      normalizeText(next.last_error), nullable(next.last_started_at), nullable(next.last_checked_at),
+      nullable(next.last_success_at), Number(next.duration_ms || 0), normalizeText(next.payload_hash), nowIso()
+    );
+    return this.getIntegrationResourceStatus(resource);
+  }
+
+  beginIntegrationSyncRun(triggerType, accountType, plannedResources) {
+    const runId = id();
+    this.db.prepare(`
+      INSERT INTO integration_sync_runs(id, account_type, status, trigger_type, started_at, planned_resources)
+      VALUES (?, ?, 'running', ?, ?, ?)
+    `).run(runId, nullable(accountType), normalizeText(triggerType || 'automatic'), nowIso(), Number(plannedResources || 0));
+    return runId;
+  }
+
+  finishIntegrationSyncRun(runId, values) {
+    this.db.prepare(`
+      UPDATE integration_sync_runs
+      SET account_type=?, status=?, completed_at=?, planned_resources=?, successful_resources=?, failed_resources=?, error_summary=?
+      WHERE id=?
+    `).run(nullable(values.account_type), normalizeText(values.status || 'completed'), nowIso(),
+      Number(values.planned_resources || 0), Number(values.successful_resources || 0), Number(values.failed_resources || 0),
+      normalizeText(values.error_summary), runId);
+    return this.db.prepare('SELECT * FROM integration_sync_runs WHERE id=?').get(runId) || null;
+  }
+
+  listIntegrationSyncRuns(limit = 20) {
+    return this.db.prepare('SELECT * FROM integration_sync_runs ORDER BY started_at DESC LIMIT ?')
+      .all(Math.min(Math.max(Number(limit) || 20, 1), 100));
+  }
+
+  replaceIntegrationCache(resource, items) {
+    const resourceName = normalizeText(resource);
+    const records = Array.isArray(items) ? items : [];
+    const seenAt = nowIso();
+    const ids = [];
+    const upsert = this.db.prepare(`
+      INSERT INTO integration_cache(
+        resource, item_id, normalized_phone, normalized_email, search_text, sort_date,
+        payload_hash, payload_json, first_seen_at, last_seen_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(resource, item_id) DO UPDATE SET
+        normalized_phone=excluded.normalized_phone, normalized_email=excluded.normalized_email,
+        search_text=excluded.search_text, sort_date=excluded.sort_date, payload_hash=excluded.payload_hash,
+        payload_json=excluded.payload_json, last_seen_at=excluded.last_seen_at, updated_at=excluded.updated_at
+    `);
+    this.transaction(() => {
+      records.forEach((item, index) => {
+        const itemId = integrationItemIdentity(resourceName, item, index);
+        ids.push(itemId);
+        const phone = normalizePhone(item && (item.phone || item.customer_phone || item.reseller_phone));
+        const email = normalizeEmail(item && (item.email || item.customer_email || item.reseller_email));
+        const searchText = Object.values(item || {}).filter(function scalar(value) {
+          return ['string', 'number', 'boolean'].includes(typeof value);
+        }).join(' ').toLowerCase() + ' ' + phone + ' ' + email;
+        const sortDate = nullable(item && (item.updated_at || item.created_at || item.last_seen_at || item.last_message_at || item.appointment_date || item.start_at));
+        const payloadJson = JSON.stringify(item || {});
+        const payloadHash = crypto.createHash('sha256').update(payloadJson).digest('hex');
+        const existing = this.db.prepare('SELECT first_seen_at FROM integration_cache WHERE resource=? AND item_id=?').get(resourceName, itemId);
+        upsert.run(resourceName, itemId, phone, email, searchText, sortDate, payloadHash, payloadJson,
+          existing && existing.first_seen_at ? existing.first_seen_at : seenAt, seenAt, seenAt);
+      });
+      if (ids.length) {
+        const placeholders = ids.map(function placeholder() { return '?'; }).join(',');
+        this.db.prepare(`DELETE FROM integration_cache WHERE resource=? AND item_id NOT IN (${placeholders})`).run(resourceName, ...ids);
+      } else {
+        this.db.prepare('DELETE FROM integration_cache WHERE resource=?').run(resourceName);
+      }
+    });
+    return this.listIntegrationCache(resourceName, '', 500);
+  }
+
+  listIntegrationCache(resource, search = '', limit = 100) {
+    const resourceName = normalizeText(resource);
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const query = normalizeText(search).toLowerCase();
+    const normalizedPhoneQuery = normalizePhone(search);
+    const phonePattern = normalizedPhoneQuery ? '%' + normalizedPhoneQuery + '%' : '__NEXA_NO_PHONE_MATCH__';
+    const rows = query
+      ? this.db.prepare(`
+          SELECT * FROM integration_cache
+          WHERE resource=? AND (search_text LIKE ? OR normalized_phone LIKE ? OR normalized_email LIKE ?)
+          ORDER BY COALESCE(sort_date, updated_at) DESC LIMIT ?
+        `).all(resourceName, '%' + query + '%', phonePattern, '%' + query + '%', safeLimit)
+      : this.db.prepare('SELECT * FROM integration_cache WHERE resource=? ORDER BY COALESCE(sort_date, updated_at) DESC LIMIT ?')
+          .all(resourceName, safeLimit);
+    return rows.map(function parseRow(row) {
+      let payload = {};
+      try { payload = JSON.parse(row.payload_json || '{}'); } catch (_) { payload = {}; }
+      return Object.assign({}, payload, {
+        __resource: row.resource,
+        __item_id: row.item_id,
+        __normalized_phone: row.normalized_phone,
+        __normalized_email: row.normalized_email,
+        __first_seen_at: row.first_seen_at,
+        __last_seen_at: row.last_seen_at
+      });
+    });
+  }
+
+  integrationCacheCount(resource) {
+    const row = this.db.prepare('SELECT COUNT(*) AS total FROM integration_cache WHERE resource=?').get(normalizeText(resource));
+    return Number(row && row.total || 0);
+  }
+
+  connectedBusinessOverview() {
+    const resources = this.listIntegrationResourceStatus();
+    const remote = {};
+    const limits = {
+      agenda: 200, orders: 100, listings: 100, messages: 100, resellers: 100,
+      'reseller-appointments': 100, 'reseller-listings': 100, stores: 100, users: 100, validation: 100,
+      store: 1, 'dealer-summary': 1, 'reseller-profile': 1, 'reseller-summary': 1, 'admin-summary': 1,
+      'api-keys-status': 20
+    };
+    Object.keys(limits).forEach((resource) => {
+      remote[resource] = this.listIntegrationCache(resource, '', limits[resource]);
+    });
+    return {
+      resources: resources,
+      syncRuns: this.listIntegrationSyncRuns(20),
+      remote: remote
+    };
+  }
+
+  clearIntegrationData() {
+    this.transaction(() => {
+      this.db.exec('DELETE FROM integration_cache; DELETE FROM integration_resource_status; DELETE FROM integration_snapshots; DELETE FROM integration_sync_runs;');
+      this.saveIntegrationStatus({
+        connected: 0, account_type: null, account_id: null, store_id: null, owner_type: null, owner_id: null,
+        user_id: null, api_version: null, scopes_json: '[]', connection_map_json: '{}', sync_state: 'idle',
+        last_sync_at: null, last_attempt_at: null, last_success_at: null, resource_success_count: 0,
+        resource_failure_count: 0, last_error: 'Disconnected by user.'
+      });
+    });
   }
 
   createNotificationEvent(values) {
@@ -506,4 +736,4 @@ class DatabaseService {
   }
 }
 
-module.exports = { DatabaseService };
+module.exports = { DatabaseService, integrationItemIdentity, normalizeEmail, normalizePhone };

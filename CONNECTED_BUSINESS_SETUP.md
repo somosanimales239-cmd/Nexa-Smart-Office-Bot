@@ -1,13 +1,33 @@
 # Connected Business setup
 
-## AutoMarket Pro API key
+## API endpoint and authentication
 
-Create the key from one of these existing AutoMarket Pro areas:
+Nexa accepts the public AutoMarket Pro website URL and adds `/api/v1/index.php` automatically.
 
-- Admin: `Admin > API Keys` (`/admin/api_keys.php`)
-- Dealer: `Dealer Office > API Keys` (`/dealer/api_keys.php`)
+Every request sends both supported headers:
 
-Recommended dealer scopes:
+- `Authorization: Bearer YOUR_API_KEY`
+- `X-Nexa-Api-Key: YOUR_API_KEY`
+
+The API key is protected with Electron `safeStorage`. It is not returned to the renderer, stored in SQLite, written to logs or included in builds and backups.
+
+## Synchronization order
+
+Nexa now performs the complete sequence:
+
+1. `resource=ping`
+2. `resource=connection-map`
+3. Detect Dealer, Reseller or Administrator account.
+4. Read the granted scopes and available resources.
+5. Synchronize each permitted resource.
+6. Filter the response to the documented safe fields.
+7. Store a read-only local cache.
+8. Update Dashboard, Contacts, Leads, Agenda and Connected Business.
+9. Record the result in API Sync Inspector.
+
+## Dealer key
+
+Recommended scopes:
 
 - `store:read`
 - `dealer:read`
@@ -17,38 +37,43 @@ Recommended dealer scopes:
 - `messages:read`
 - `resellers:read`
 
-An administrator may additionally grant `admin:read` when platform totals are needed.
+Nexa synchronizes store, dealer-summary, listings, orders, agenda, message metadata and reseller activity.
 
-The complete API key is displayed only once by AutoMarket Pro. Paste it directly into Nexa Smart Office Bot and keep the original in a secure password manager.
+## Reseller key
 
-## Connect the application
+Recommended scopes:
 
-1. Open **Connected Business**.
-2. Enter the public HTTPS URL of the AutoMarket Pro website. A domain such as `https://example.com` is sufficient; Nexa adds `/api/v1/index.php` automatically.
-3. Paste the API key.
-4. Choose an automatic synchronization interval.
-5. Press **Test connection**. The application saves the key encrypted before testing.
-6. Press **Sync now** to create the first local baseline.
+- `reseller-profile:read`
+- `reseller:read`
+- `reseller-listings:read`
+- `reseller-appointments:read`
+- `agenda:read`
+- `messages:read`
 
-The first synchronization does not announce all historical records. Later changes can create notifications according to the choices in **Nexa Pulse**.
+Nexa synchronizes the reseller profile, summary, assigned listings, appointments, agenda contacts and message metadata.
 
-## Security behavior
+## Administrator key
 
-- The API key is stored through Windows/Electron `safeStorage` and is never returned to the renderer.
-- Nexa sends the key through `Authorization: Bearer` only to the configured HTTPS endpoint.
-- The key is never written to logs, backups, GitHub, build artifacts, HTML, or SQLite.
-- Nexa only reads scopes granted by the key.
-- Dealer keys remain limited by the server to their store.
-- Passwords, validation documents, driver-license images, raw credit applications, full private message bodies, database files, and server secrets are not imported.
-- Disconnecting removes the encrypted local key and stops automatic synchronization.
+Recommended scopes depend on the desired views:
 
-## Nexa Pulse permission
+- `admin:read`
+- `users:read`
+- `stores:read`
+- `listings:read`
+- `orders:read`
+- `agenda:read`
+- `messages:read`
+- `resellers:read`
+- `validation:read`
 
-1. Open **Nexa Pulse**.
-2. Press **Enable notifications**.
-3. Review the confirmation dialog and choose **Allow notifications**.
-4. Select which categories can appear inside the application, as Windows notifications, both, or neither.
-5. Configure quiet hours, sound, tray monitoring, and optional Windows startup.
-6. Press **Send test**.
+Nexa can synchronize the administrative summary, stores, safe user metadata, listings, orders, agenda, message metadata, resellers, dealer validation metadata and API-key status.
 
-Large notifications appear inside Nexa with the animated AI assistant and thought cloud. Windows receives a smaller native notification while the program is running in the foreground or system tray.
+## Security filtering
+
+Nexa only caches documented safe fields. It rejects or discards unexpected password, API secret, SMTP secret, reset-token and private database fields even if a remote endpoint mistakenly includes them.
+
+It does not import full private message bodies, database files, password vaults, API key hashes, sensitive document images or complete credit applications.
+
+## Partial synchronization
+
+A missing scope does not disconnect the whole account. API Sync Inspector records the affected resource as **Missing scope** and continues loading every other permitted resource.

@@ -86,6 +86,8 @@ contextBridge.exposeInMainWorld('nexa', Object.freeze({
   }),
   integration: Object.freeze({
     get: function get() { return invoke('integration:get'); },
+    inspector: function inspector() { return invoke('integration:inspector'); },
+    items: function items(resource, search, limit) { return invoke('integration:items', { resource: resource, search: search || '', limit: limit || 100 }); },
     save: function save(data) { return invoke('integration:save', data); },
     test: function test() { return invoke('integration:test'); },
     sync: function sync() { return invoke('integration:sync'); },

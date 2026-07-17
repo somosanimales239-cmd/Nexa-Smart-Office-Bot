@@ -2,6 +2,7 @@
 
 const NEXA_UI_CONTRACT_V1 = 'NEXA_UI_CONTRACT_V1';
 const UI_TESTID_CONTRACT = 'data-testid values for dashboard, sidebar, contacts, leads, agenda, tasks, ai, alerts, activity, settings, about';
+const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, smart-notifications';
 const ACTION_CONTRACT = 'data-nexa-action on every actionable button/form';
 
 window.__NEXA_ERRORS__ = [];
@@ -53,6 +54,7 @@ const state = {
 const viewTitles = {
   dashboard: 'Dashboard',
   connected: 'Connected Business',
+  'sync-inspector': 'API Sync Inspector',
   contacts: 'Contacts',
   leads: 'Leads',
   agenda: 'Agenda',
@@ -211,6 +213,7 @@ function renderView() {
     const renderers = {
       dashboard: renderDashboard,
       connected: renderConnectedBusiness,
+      'sync-inspector': renderApiSyncInspector,
       contacts: renderContacts,
       leads: renderLeads,
       agenda: renderAgenda,
@@ -231,10 +234,62 @@ function renderView() {
   }
 }
 
+
+function integrationRemote(resource) {
+  const integration = state.integration || {};
+  const remote = integration.remote && typeof integration.remote === 'object' ? integration.remote : {};
+  return Array.isArray(remote[resource]) ? remote[resource] : [];
+}
+
+function integrationResourceStatus(resource) {
+  const integration = state.integration || {};
+  const resources = Array.isArray(integration.resources) ? integration.resources : [];
+  return resources.find(function findResource(row) { return row.resource === resource; }) || null;
+}
+
+function connectedAccountLabel(status) {
+  const type = String(status && status.account_type || 'unknown').toLowerCase();
+  if (type === 'dealer') return 'Dealer account';
+  if (type === 'reseller') return 'Reseller account';
+  if (type === 'admin') return 'Administrator account';
+  return 'Connected account';
+}
+
+function remoteMatches(item, query) {
+  const value = String(query || '').trim().toLowerCase();
+  if (!value) return true;
+  const phoneDigits = value.replace(/\D+/g, '');
+  const haystack = Object.values(item || {}).filter(function scalar(entry) {
+    return ['string', 'number', 'boolean'].includes(typeof entry);
+  }).join(' ').toLowerCase();
+  const itemPhone = String(item && (item.__normalized_phone || item.phone || item.customer_phone || item.reseller_phone) || '').replace(/\D+/g, '');
+  return haystack.includes(value) || (phoneDigits && itemPhone.includes(phoneDigits));
+}
+
+function remoteStatusBadge(resource) {
+  const row = integrationResourceStatus(resource);
+  if (!row) return badge('Not synced', 'warning');
+  if (row.status === 'ok') return badge('Loaded ' + String(row.item_count || 0), 'success');
+  if (row.status === 'syncing') return badge('Syncing', 'info');
+  if (row.status === 'forbidden') return badge('Missing scope', 'warning');
+  return badge('Failed', 'danger');
+}
+
+function remoteReadOnlyNote() {
+  return '<p class="connected-readonly-note">Connected records are read-only copies from AutoMarket Pro. Edit the original record on the website.</p>';
+}
+
 function renderDashboard() {
   const dashboard = state.dashboard || {};
+  const integration = state.integration || {};
+  const integrationStatus = integration.status || {};
+  const connected = Number(integrationStatus.connected || 0) === 1;
+  const remoteSummary = integrationSnapshot('dealer-summary') || integrationSnapshot('reseller-summary') || integrationSnapshot('admin-summary') || {};
+  const remoteContacts = integrationRemote('agenda').length;
+  const remoteOrders = integrationRemote('orders').length + integrationRemote('reseller-appointments').length;
+  const remoteListings = integrationRemote('listings').length + integrationRemote('reseller-listings').length;
   const stats = [
-    ['Contacts', dashboard.contacts || 0, 'People in your local workspace'],
+    ['Contacts', dashboard.contacts || 0, 'Local workspace · ' + String(remoteContacts) + ' connected'],
     ['Active leads', dashboard.activeLeads || 0, String(dashboard.followUps || 0) + ' need follow-up soon'],
     ['Pending tasks', dashboard.pendingTasks || 0, String(dashboard.overdueTasks || 0) + ' overdue'],
     ["Today's meetings", dashboard.todayAppointments || 0, String(dashboard.activeAlerts || 0) + ' active alerts']
@@ -251,9 +306,15 @@ function renderDashboard() {
   const providerName = state.settings && state.settings.preferred_provider ? state.settings.preferred_provider : 'openai';
   const providerConfigured = Boolean(state.settings && state.settings.secrets && state.settings.secrets[providerName] && state.settings.secrets[providerName].configured);
   const alerts = state.alerts.slice(0, 4).map(alertMini).join('') || emptyMini('No active alerts', 'You are caught up.');
-  return sectionHeader('Your business at a glance', 'Local data, upcoming work and suggested priorities.', '<button class="primary-button" data-nexa-action="task-create">+ New task</button>') +
+  const connectedPanel = connected
+    ? '<article class="panel-card connected-dashboard-card"><div class="panel-header"><div><h3>' + esc(connectedAccountLabel(integrationStatus)) + '</h3><p>AutoMarket Pro live cache</p></div>' + badge(String(integrationStatus.sync_state || 'connected'), integrationStatus.sync_state === 'ready' ? 'success' : 'warning') + '</div>' +
+      '<div class="connected-dashboard-stats"><div><span>Listings</span><strong>' + esc(remoteSummary.active_listings !== undefined ? remoteSummary.active_listings : remoteListings) + '</strong></div><div><span>Orders</span><strong>' + esc(remoteSummary.total_orders !== undefined ? remoteSummary.total_orders : remoteOrders) + '</strong></div><div><span>Agenda contacts</span><strong>' + esc(remoteSummary.agenda_contacts !== undefined ? remoteSummary.agenda_contacts : remoteContacts) + '</strong></div><div><span>Unread messages</span><strong>' + esc(remoteSummary.unread_messages || remoteSummary.total_messages || integrationRemote('messages').length) + '</strong></div></div>' +
+      '<div class="button-row"><button class="ghost-button" data-go="connected" data-nexa-action="navigate-connected">Open connected data</button><button class="ghost-button" data-go="sync-inspector" data-nexa-action="navigate-sync-inspector">Open sync inspector</button></div></article>'
+    : '<article class="panel-card connected-dashboard-card"><div class="panel-header"><div><h3>Connected Business</h3><p>AutoMarket Pro is not connected</p></div>' + badge('Not connected', 'warning') + '</div><p class="muted">Connect a scoped API key to load contacts, listings, orders, messages and account-specific resources.</p><button class="primary-button" data-go="connected" data-nexa-action="navigate-connected">Connect website</button></article>';
+  return sectionHeader('Your business at a glance', 'Local data, connected business activity and suggested priorities.', '<button class="primary-button" data-nexa-action="task-create">+ New task</button>') +
     '<div class="grid stats-grid">' + statHtml + '</div>' +
     '<div class="grid dashboard-grid">' +
+      connectedPanel +
       '<article class="panel-card"><div class="panel-header"><div><h3>Upcoming agenda</h3><p>Next scheduled appointments</p></div><button class="ghost-button" data-go="agenda" data-nexa-action="agenda-day">Open agenda</button></div><div class="list">' + upcoming + '</div></article>' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Priority tasks</h3><p>Items that deserve attention</p></div><button class="ghost-button" data-go="tasks" data-nexa-action="navigate-tasks">Open tasks</button></div><div class="list">' + priorities + '</div></article>' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Smart assistant</h3><p>Get an action plan from your configured provider</p></div>' + (providerConfigured ? badge('Ready', 'success') : badge('Not configured', 'warning')) + '</div><p class="muted">Nexa can review your pending work and suggest practical next actions. It never sends messages or edits records without approval.</p><button class="primary-button" data-go="ai" data-nexa-action="navigate-ai">Generate suggestions</button></article>' +
@@ -268,8 +329,15 @@ function renderContacts() {
   const body = rows.map(function renderContact(contact) {
     return '<tr><td><b>' + esc(contact.name) + '</b></td><td>' + esc(contact.company || '—') + '</td><td>' + esc(contact.phone || '—') + '</td><td>' + esc(contact.email || '—') + '</td><td>' + esc(contact.tags || '—') + '</td><td><div class="row-actions"><button data-nexa-action="contact-edit" data-record-id="' + esc(contact.id) + '">Edit</button><button data-nexa-action="contact-delete" data-record-id="' + esc(contact.id) + '">Delete</button></div></td></tr>';
   }).join('');
-  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Tags</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No contacts found', 'Create your first contact or change the search.', 'contacts-empty');
-  return sectionHeader('Contacts', 'Keep customer and business relationships organized.') + toolbar('Contacts', 'contact-create', 'contact-search', 'new-contact') + table;
+  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Tags</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No local contacts found', 'Create your first contact or change the search.', 'contacts-empty');
+  const remoteRows = integrationRemote('agenda').filter(function filterRemote(item) { return remoteMatches(item, state.search); });
+  const remoteBody = remoteRows.map(function renderRemoteContact(contact) {
+    return '<tr><td><b>' + esc(contact.name || 'Unnamed contact') + '</b><br><span class="muted">' + esc(contact.source_type || contact.created_from || 'Connected agenda') + '</span></td><td>' + esc(contact.phone || '—') + '</td><td>' + esc(contact.email || '—') + '</td><td>' + esc(contact.location || '—') + '</td><td>' + esc(contact.times_seen || 1) + '</td><td>' + badge('Connected', 'info') + '</td></tr>';
+  }).join('');
+  const remoteTable = remoteBody
+    ? '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected contacts</h3><p>AutoMarket Pro agenda · duplicate phone formats are normalized</p></div>' + remoteStatusBadge('agenda') + '</div>' + remoteReadOnlyNote() + '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Location</th><th>Seen</th><th></th></tr></thead><tbody>' + remoteBody + '</tbody></table></div></article>'
+    : '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected contacts</h3><p>AutoMarket Pro agenda</p></div>' + remoteStatusBadge('agenda') + '</div>' + emptyMini('No connected contacts loaded', 'Open API Sync Inspector to see whether agenda loaded or failed.') + '</article>';
+  return sectionHeader('Contacts', 'Manage local contacts and read connected AutoMarket Pro agenda contacts.') + toolbar('Contacts', 'contact-create', 'contact-search', 'new-contact') + table + remoteTable;
 }
 
 function renderLeads() {
@@ -279,8 +347,17 @@ function renderLeads() {
   const body = rows.map(function renderLead(lead) {
     return '<tr><td><b>' + esc(lead.name) + '</b><br><span class="muted">' + esc(lead.company || lead.contact_name || '') + '</span></td><td>' + badge(lead.status) + '</td><td>' + badge(lead.priority) + '</td><td>' + money(lead.estimated_value) + '</td><td>' + formatDate(lead.next_follow_up) + '</td><td><div class="row-actions"><button data-nexa-action="ai-generate" data-ai-lead="' + esc(lead.id) + '">Suggest</button><button data-nexa-action="lead-edit" data-record-id="' + esc(lead.id) + '">Edit</button><button data-nexa-action="lead-delete" data-record-id="' + esc(lead.id) + '">Delete</button></div></td></tr>';
   }).join('');
-  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Lead</th><th>Status</th><th>Priority</th><th>Value</th><th>Next follow-up</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No leads found', 'Create a lead to begin tracking your pipeline.', 'leads-empty');
-  return sectionHeader('Leads', 'Track opportunities, priorities and the next follow-up.') + toolbar('Leads', 'lead-create', 'lead-search', 'new-lead') + table;
+  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Lead</th><th>Status</th><th>Priority</th><th>Value</th><th>Next follow-up</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No local leads found', 'Create a lead to begin tracking your pipeline.', 'leads-empty');
+  const connectedLeads = integrationRemote('orders').concat(integrationRemote('reseller-appointments')).filter(function filterRemote(item) { return remoteMatches(item, state.search); });
+  const connectedBody = connectedLeads.map(function renderConnectedLead(lead) {
+    const status = lead.appointment_status || lead.status || lead.sale_status || 'new';
+    const source = lead.source || (lead.reseller_id ? 'Reseller' : 'Order');
+    return '<tr><td><b>' + esc(lead.customer_name || lead.reseller_name || 'Connected lead') + '</b><br><span class="muted">' + esc(lead.listing_title || lead.store_name || source) + '</span></td><td>' + badge(status) + '</td><td>' + esc(lead.customer_phone || '—') + '</td><td>' + esc(lead.customer_email || '—') + '</td><td>' + formatDate(lead.appointment_date || lead.updated_at || lead.created_at) + '</td><td>' + badge(source, 'info') + '</td></tr>';
+  }).join('');
+  const connectedTable = connectedBody
+    ? '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected leads and orders</h3><p>Orders and reseller appointments from AutoMarket Pro</p></div>' + badge(String(connectedLeads.length) + ' loaded', 'success') + '</div>' + remoteReadOnlyNote() + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Status</th><th>Phone</th><th>Email</th><th>Activity</th><th>Source</th></tr></thead><tbody>' + connectedBody + '</tbody></table></div></article>'
+    : '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected leads and orders</h3><p>Orders and reseller appointments</p></div>' + remoteStatusBadge('orders') + '</div>' + emptyMini('No connected leads loaded', 'Synchronize orders or reseller appointments to populate this section.') + '</article>';
+  return sectionHeader('Leads', 'Track local opportunities and connected website inquiries.') + toolbar('Leads', 'lead-create', 'lead-search', 'new-lead') + table + connectedTable;
 }
 
 function renderTasks() {
@@ -309,8 +386,16 @@ function renderAgenda() {
     }).join('');
     return '<div class="agenda-day"><h3>' + formatDate(day, false) + '</h3>' + entries + '</div>';
   }).join('');
+  const connectedAppointments = integrationRemote('reseller-appointments').concat(integrationRemote('orders').filter(function orderHasAppointment(item) {
+    return Boolean(item.appointment_date || item.appointment_time || String(item.order_type || '').toLowerCase().includes('appointment'));
+  })).filter(function filterRemote(item) { return remoteMatches(item, state.search); });
+  const connectedAgenda = connectedAppointments.map(function renderRemoteAppointment(item) {
+    const dateText = [item.appointment_date || '', item.appointment_time || ''].join(' ').trim() || item.updated_at || item.created_at;
+    return '<div class="connected-appointment"><div class="timeline-dot"></div><div><strong>' + esc(item.customer_name || item.listing_title || 'Connected appointment') + '</strong><span>' + esc(item.listing_title || item.store_name || item.dealer_name || 'AutoMarket Pro') + '</span><small>' + esc(dateText || 'Date not supplied') + ' · ' + esc(item.appointment_status || item.status || 'pending') + '</small></div></div>';
+  }).join('');
   const viewButtons = '<div class="row-actions"><button class="ghost-button" data-nexa-action="agenda-day">Day</button><button class="ghost-button" data-nexa-action="agenda-week">Week</button></div>';
-  return sectionHeader('Agenda', 'A simple daily and weekly view of local appointments.', viewButtons) + toolbar('Appointments', 'appointment-create', 'appointment-search', 'new-appointment') + (agenda || emptyMini('No appointments found', 'Create your first appointment or change the search.'));
+  const remotePanel = '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected appointments</h3><p>Dealer and reseller appointment activity</p></div>' + badge(String(connectedAppointments.length) + ' loaded', connectedAppointments.length ? 'success' : 'warning') + '</div>' + (connectedAgenda ? '<div class="connected-appointment-list">' + connectedAgenda + '</div>' : emptyMini('No connected appointments loaded', 'Synchronize orders or reseller appointments.')) + '</article>';
+  return sectionHeader('Agenda', 'A daily and weekly view of local and connected appointments.', viewButtons) + toolbar('Appointments', 'appointment-create', 'appointment-search', 'new-appointment') + (agenda || emptyMini('No local appointments found', 'Create your first appointment or change the search.')) + remotePanel;
 }
 
 function renderAI() {
@@ -359,7 +444,7 @@ function integrationSnapshot(resource) {
 function dataList(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
-  const keys = ['items', 'records', 'rows', 'listings', 'orders', 'contacts', 'messages', 'resellers', 'data'];
+  const keys = ['items', 'records', 'rows', 'listings', 'orders', 'contacts', 'agenda', 'messages', 'threads', 'resellers', 'appointments', 'assignments', 'stores', 'users', 'validations', 'data'];
   for (const key of keys) if (Array.isArray(payload[key])) return payload[key];
   return [];
 }
@@ -376,21 +461,90 @@ function renderConnectedSummary(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return emptyMini('No summary cached', 'Press Sync now after connecting your API key.');
   const entries = Object.entries(payload).filter(function filterSummary(entry) {
     return ['string', 'number', 'boolean'].includes(typeof entry[1]);
-  }).slice(0, 12);
+  }).slice(0, 16);
   if (!entries.length) return emptyMini('No summary fields', 'The connected endpoint did not return summary values.');
   return '<div class="connected-metrics">' + entries.map(function renderMetric(entry) {
     return '<div class="connected-metric"><span>' + esc(entry[0].replaceAll('_', ' ')) + '</span><strong>' + esc(valueLabel(entry[1])) + '</strong></div>';
   }).join('') + '</div>';
 }
 
-function renderConnectedRows(resource, payload) {
-  const items = dataList(payload).slice(0, 8);
-  if (!items.length) return emptyMini('No ' + resource + ' cached', 'The first synchronization creates a safe baseline. New changes will generate alerts.');
-  return '<div class="connected-record-list">' + items.map(function renderRemoteItem(item) {
-    const title = item.title || item.name || item.customer_name || item.store_name || item.subject || item.email || item.phone || resource;
-    const subtitle = item.status || item.company || item.created_at || item.date || item.updated_at || '';
-    return '<div class="connected-record"><div><strong>' + esc(title) + '</strong><span>' + esc(valueLabel(subtitle)) + '</span></div>' + (item.status ? badge(item.status) : '') + '</div>';
+function remoteTitle(resource, item) {
+  if (!item || typeof item !== 'object') return resource;
+  return item.title || item.listing_title || item.name || item.customer_name || item.reseller_name || item.store_name || item.subject || item.business_name || item.email || item.phone || resource;
+}
+
+function remoteSubtitle(resource, item) {
+  if (!item || typeof item !== 'object') return '';
+  if (resource === 'messages') return [item.is_announcement ? 'Admin announcement' : item.context_type, item.unread_count ? item.unread_count + ' unread' : '', item.last_message_at].filter(Boolean).join(' · ');
+  if (resource === 'listings' || resource === 'reseller-listings') return [item.status, item.category, item.price !== undefined ? money(item.price) : ''].filter(Boolean).join(' · ');
+  if (resource === 'orders' || resource === 'reseller-appointments') return [item.status || item.appointment_status, item.customer_phone, item.appointment_date].filter(Boolean).join(' · ');
+  return [item.status, item.company, item.location, item.updated_at || item.created_at].filter(Boolean).join(' · ');
+}
+
+function renderConnectedRows(resource, payloadOrItems, limit) {
+  const items = Array.isArray(payloadOrItems) ? payloadOrItems : dataList(payloadOrItems);
+  const ordered = resource === 'messages'
+    ? items.slice().sort(function announcementsFirst(a, b) { return Number(Boolean(b.is_announcement)) - Number(Boolean(a.is_announcement)); })
+    : items;
+  const rows = ordered.slice(0, Number(limit || 8));
+  if (!rows.length) return emptyMini('No ' + resource + ' cached', 'Open API Sync Inspector to see whether this resource loaded or failed.');
+  return '<div class="connected-record-list">' + rows.map(function renderRemoteItem(item) {
+    const title = remoteTitle(resource, item);
+    const subtitle = remoteSubtitle(resource, item);
+    const url = item.listing_url || item.public_store_url || item.profile_url || '';
+    const announcement = item.is_announcement ? '<span class="connected-announcement">Announcement</span>' : '';
+    const link = url ? '<a class="ghost-button connected-open-link" href="' + esc(url) + '" target="_blank" rel="noreferrer">Open</a>' : '';
+    return '<div class="connected-record ' + (item.is_announcement ? 'announcement' : '') + '"><div><strong>' + esc(title) + '</strong><span>' + esc(valueLabel(subtitle)) + '</span></div><div class="connected-record-actions">' + announcement + (item.status ? badge(item.status) : '') + link + '</div></div>';
   }).join('') + '</div>';
+}
+
+function connectedResourceDefinitions(accountType) {
+  const definitions = {
+    dealer: [
+      ['store', 'Store profile', 'Public business profile and status'],
+      ['dealer-summary', 'Dealer summary', 'Listings, orders, messages and appointments'],
+      ['listings', 'Listings', 'Inventory, images, pricing and status'],
+      ['orders', 'Orders and appointments', 'Customer inquiries and reseller appointments'],
+      ['agenda', 'Agenda contacts', 'Customers and repeat contacts'],
+      ['messages', 'Message activity', 'Safe thread metadata and announcements'],
+      ['resellers', 'Resellers', 'Appointments, sales and commission activity']
+    ],
+    reseller: [
+      ['reseller-profile', 'Reseller profile', 'Connected reseller identity and status'],
+      ['reseller-summary', 'Reseller summary', 'Assignments, appointments, sales and commissions'],
+      ['reseller-listings', 'Assigned listings', 'Listings available to promote'],
+      ['reseller-appointments', 'Appointments', 'Customers, outcomes and commissions'],
+      ['agenda', 'Agenda contacts', 'Connected customer directory'],
+      ['messages', 'Message activity', 'Safe thread metadata and announcements']
+    ],
+    admin: [
+      ['admin-summary', 'Platform summary', 'Users, dealers, stores, listings and orders'],
+      ['stores', 'Stores', 'Dealer stores and marketplace activity'],
+      ['users', 'Users', 'Safe account metadata without passwords'],
+      ['listings', 'Listings', 'Marketplace inventory'],
+      ['orders', 'Orders', 'Platform order and appointment records'],
+      ['agenda', 'Agenda contacts', 'Connected contacts'],
+      ['messages', 'Message activity', 'Safe thread metadata and announcements'],
+      ['resellers', 'Resellers', 'Reseller performance and appointments'],
+      ['validation', 'Dealer validation', 'Pending and reviewed validation metadata'],
+      ['api-keys-status', 'API key status', 'Non-secret API integration health']
+    ]
+  };
+  return definitions[String(accountType || '').toLowerCase()] || [];
+}
+
+function parseIntegrationJson(value, fallback) {
+  try { return value ? JSON.parse(value) : fallback; } catch (error) { return fallback; }
+}
+
+function renderConnectionProgress(resources) {
+  const rows = Array.isArray(resources) ? resources : [];
+  const ok = rows.filter(function successful(row) { return row.status === 'ok'; }).length;
+  const failed = rows.filter(function failedRow(row) { return ['failed', 'forbidden'].includes(row.status); }).length;
+  const syncing = rows.filter(function syncingRow(row) { return row.status === 'syncing'; }).length;
+  const total = rows.length;
+  const percent = total ? Math.round((ok / total) * 100) : 0;
+  return '<div class="sync-progress"><div class="sync-progress-head"><span>' + ok + ' loaded · ' + failed + ' failed · ' + syncing + ' working</span><strong>' + percent + '%</strong></div><div class="sync-progress-track"><span style="width:' + percent + '%"></span></div></div>';
 }
 
 function renderConnectedBusiness() {
@@ -398,41 +552,85 @@ function renderConnectedBusiness() {
   const settings = integration.settings || state.settings || {};
   const secrets = settings.secrets || {};
   const status = integration.status || {};
+  const resources = Array.isArray(integration.resources) ? integration.resources : [];
   const connected = Number(status.connected || 0) === 1;
   const keyState = secrets.automarket || { configured: false, masked: '' };
-  const summary = integrationSnapshot('dealer-summary') || integrationSnapshot('admin-summary');
-  const store = integrationSnapshot('store');
-  const connectionMap = status.connection_map_json ? (function parseMap() { try { return JSON.parse(status.connection_map_json); } catch (error) { return {}; } }()) : {};
-  const mapResources = connectionMap.resources || connectionMap.available_resources || connectionMap.endpoints || [];
-  const resourceCount = Array.isArray(mapResources) ? mapResources.length : Object.keys(mapResources || {}).length;
-  return sectionHeader('Connected Business', 'Connect AutoMarket Pro with a scoped API key. Passwords and full private messages are never requested.', '<button class="primary-button" id="integration-sync-top" data-nexa-action="integration-sync">Sync now</button>') +
+  const accountType = String(status.account_type || 'unknown').toLowerCase();
+  const connectionMap = parseIntegrationJson(status.connection_map_json, {});
+  const scopes = parseIntegrationJson(status.scopes_json, []);
+  const definitions = connectedResourceDefinitions(accountType);
+  const identityPayload = integrationRemote(accountType === 'dealer' ? 'store' : accountType === 'reseller' ? 'reseller-profile' : 'admin-summary')[0] || {};
+  const summaryPayload = integrationRemote(accountType === 'dealer' ? 'dealer-summary' : accountType === 'reseller' ? 'reseller-summary' : 'admin-summary')[0] || {};
+  const resourceCards = definitions.map(function renderResourceDefinition(definition) {
+    const resource = definition[0];
+    const title = definition[1];
+    const description = definition[2];
+    const items = integrationRemote(resource);
+    return '<article class="panel-card connected-resource-card"><div class="panel-header"><div><h3>' + esc(title) + '</h3><p>' + esc(description) + '</p></div>' + remoteStatusBadge(resource) + '</div>' +
+      (['store', 'dealer-summary', 'reseller-profile', 'reseller-summary', 'admin-summary', 'api-keys-status'].includes(resource)
+        ? renderConnectedSummary(items[0] || integrationSnapshot(resource))
+        : renderConnectedRows(resource, items, 6)) + '</article>';
+  }).join('');
+  return sectionHeader('Connected Business', 'A real read-only sync from AutoMarket Pro, separated by account type and API scope.', '<div class="button-row"><button class="secondary-button" data-go="sync-inspector" data-nexa-action="navigate-sync-inspector">API Sync Inspector</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync now</button></div>') +
     '<div class="connection-hero ' + (connected ? 'connected' : '') + '">' +
       '<div class="connection-orb"><img src="assets/nexa-ai-orb.svg" alt="Nexa connected assistant"><span></span></div>' +
-      '<div><p class="eyebrow">SECURE WEBSITE CONNECTION</p><h2>' + (connected ? 'Your business is connected' : 'Connect your AutoMarket Pro website') + '</h2><p>' + (connected ? 'Nexa can read the resources allowed by this API key and create controlled notifications.' : 'Create a key in AutoMarket Pro, paste it once, and Nexa stores it with Windows secure storage.') + '</p></div>' +
-      '<div class="connection-status">' + badge(connected ? 'Connected' : 'Not connected', connected ? 'success' : 'warning') + '<span>Last sync: ' + formatDate(status.last_sync_at) + '</span></div>' +
+      '<div><p class="eyebrow">SECURE WEBSITE CONNECTION</p><h2>' + (connected ? esc(connectedAccountLabel(status)) + ' connected' : 'Connect your AutoMarket Pro website') + '</h2><p>' + (connected ? 'Nexa detected the account, loaded the resources granted to this key, and saved a local read-only cache.' : 'Create a scoped key in AutoMarket Pro, paste it once, and Nexa protects it with Windows secure storage.') + '</p></div>' +
+      '<div class="connection-status">' + badge(connected ? String(status.sync_state || 'connected') : 'Not connected', connected && status.sync_state === 'ready' ? 'success' : 'warning') + '<span>Last success: ' + formatDate(status.last_success_at || status.last_sync_at) + '</span></div>' +
     '</div>' +
     '<form id="integration-form" class="grid connection-grid" data-nexa-action="integration-save">' +
-      '<article class="setting-block"><div class="panel-header"><div><h3>API connection</h3><p>Authorization: Bearer API key</p></div></div>' +
+      '<article class="setting-block"><div class="panel-header"><div><h3>API connection</h3><p>Bearer key + X-Nexa-Api-Key fallback</p></div></div>' +
         '<label>Website URL<input name="automarket_base_url" type="url" placeholder="https://yourdomain.com" value="' + esc(settings.automarket_base_url || '') + '"></label>' +
         '<label>API key<input name="automarket_api_key" type="password" autocomplete="off" placeholder="Paste a new key to connect or rotate"></label>' +
         '<div class="key-state"><span>Stored key: <b>' + esc(keyState.configured ? keyState.masked : 'Not configured') + '</b></span><span>Encrypted by Windows</span></div>' +
         '<label>Automatic sync<select name="automarket_sync_enabled"><option value="1"' + (settings.automarket_sync_enabled === '1' ? ' selected' : '') + '>Enabled</option><option value="0"' + (settings.automarket_sync_enabled !== '1' ? ' selected' : '') + '>Disabled</option></select></label>' +
         '<label>Check for updates every<select name="automarket_poll_minutes">' + [1,5,15,30,60].map(function option(minutes) { return '<option value="' + minutes + '"' + (String(settings.automarket_poll_minutes || '5') === String(minutes) ? ' selected' : '') + '>' + minutes + ' minute' + (minutes === 1 ? '' : 's') + '</option>'; }).join('') + '</select></label>' +
-        '<div class="button-row"><button class="primary-button" type="submit" data-nexa-action="integration-save">Save connection</button><button class="secondary-button" type="button" id="integration-test" data-nexa-action="integration-test">Test connection</button><button class="danger-button" type="button" id="integration-disconnect" data-nexa-action="integration-disconnect">Disconnect</button></div>' +
+        '<label>Maximum records per resource<select name="automarket_max_items">' + [25,50,100].map(function maxOption(limit) { return '<option value="' + limit + '"' + (String(settings.automarket_max_items || '100') === String(limit) ? ' selected' : '') + '>' + limit + '</option>'; }).join('') + '</select></label>' +
+        '<div class="button-row"><button class="primary-button" type="submit" data-nexa-action="integration-save">Save connection</button><button class="secondary-button" type="button" id="integration-test" data-nexa-action="integration-test">Test and load data</button><button class="danger-button" type="button" id="integration-disconnect" data-nexa-action="integration-disconnect">Disconnect</button></div>' +
       '</article>' +
-      '<article class="setting-block"><div class="panel-header"><div><h3>Connection map</h3><p>Discovered capabilities and last health result</p></div></div>' +
-        '<div class="connection-facts"><div><span>Status</span><strong>' + (connected ? 'Available' : 'Waiting') + '</strong></div><div><span>Resources discovered</span><strong>' + resourceCount + '</strong></div><div><span>Last error</span><strong>' + esc(status.last_error || 'None') + '</strong></div><div><span>Scope isolation</span><strong>API-key controlled</strong></div></div>' +
-        '<p class="muted">Nexa only reads resources granted to the key. Passwords, validation documents, raw credit applications, private message bodies and API secrets are not imported.</p>' +
+      '<article class="setting-block"><div class="panel-header"><div><h3>Connected identity</h3><p>Account type, ownership and granted resources</p></div></div>' +
+        '<div class="connection-facts"><div><span>Account type</span><strong>' + esc(status.account_type || 'Waiting') + '</strong></div><div><span>Owner type</span><strong>' + esc(status.owner_type || '—') + '</strong></div><div><span>Account ID</span><strong>' + esc(status.account_id || status.owner_id || '—') + '</strong></div><div><span>Store ID</span><strong>' + esc(status.store_id || '—') + '</strong></div><div><span>API version</span><strong>' + esc(status.api_version || connectionMap.api_version || 'v1') + '</strong></div><div><span>Scopes</span><strong>' + esc(Array.isArray(scopes) ? scopes.length : 0) + '</strong></div></div>' +
+        renderConnectionProgress(resources) +
+        '<p class="muted">Nexa never imports passwords, server secrets, raw SQLite files, API-key hashes, private message bodies or sensitive document images.</p>' +
       '</article>' +
     '</form>' +
-    '<div class="grid connected-data-grid">' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Business summary</h3><p>Dealer or admin counts</p></div></div>' + renderConnectedSummary(summary) + '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Store profile</h3><p>Connected public store information</p></div></div>' + renderConnectedSummary(store) + '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Orders</h3><p>Recent order and appointment activity</p></div></div>' + renderConnectedRows('orders', integrationSnapshot('orders')) + '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Messages</h3><p>Thread metadata and unread counts only</p></div></div>' + renderConnectedRows('messages', integrationSnapshot('messages')) + '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Listings</h3><p>Active inventory and image URLs</p></div></div>' + renderConnectedRows('listings', integrationSnapshot('listings')) + '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Agenda & resellers</h3><p>Contacts and reseller appointment activity</p></div></div>' + renderConnectedRows('agenda', integrationSnapshot('agenda')) + renderConnectedRows('resellers', integrationSnapshot('resellers')) + '</article>' +
-    '</div>';
+    '<div class="grid connected-identity-grid"><article class="panel-card"><div class="panel-header"><div><h3>Connected profile</h3><p>Store, reseller or administrator identity</p></div></div>' + renderConnectedSummary(identityPayload) + '</article><article class="panel-card"><div class="panel-header"><div><h3>Business summary</h3><p>Current account activity totals</p></div></div>' + renderConnectedSummary(summaryPayload) + '</article></div>' +
+    '<div class="grid connected-data-grid">' + (resourceCards || emptyMini('No account resources discovered', 'Use Test and discover, then open API Sync Inspector for details.')) + '</div>';
+}
+
+function inspectorStatusBadge(row) {
+  const status = String(row && row.status || 'never');
+  if (status === 'ok') return badge('OK', 'success');
+  if (status === 'syncing') return badge('Working', 'info');
+  if (status === 'forbidden') return badge('Forbidden', 'warning');
+  if (status === 'failed') return badge('Failed', 'danger');
+  return badge('Waiting', 'warning');
+}
+
+function renderApiSyncInspector() {
+  const integration = state.integration || {};
+  const status = integration.status || {};
+  const resources = Array.isArray(integration.resources) ? integration.resources : [];
+  const runs = Array.isArray(integration.syncRuns) ? integration.syncRuns : [];
+  const query = String(state.search || '').toLowerCase();
+  const filtered = resources.filter(function filterResource(row) {
+    return [row.resource, row.status, row.required_scope, row.last_error].join(' ').toLowerCase().includes(query);
+  });
+  const body = filtered.map(function renderInspectorRow(row) {
+    const error = row.last_error || '—';
+    return '<tr><td><b>' + esc(row.resource) + '</b></td><td>' + inspectorStatusBadge(row) + '</td><td>' + esc(row.item_count || 0) + '</td><td>' + esc(row.required_scope || '—') + '</td><td>' + esc(row.http_status || '—') + '</td><td>' + esc(row.duration_ms ? row.duration_ms + ' ms' : '—') + '</td><td>' + formatDate(row.last_success_at || row.last_checked_at) + '</td><td class="inspector-error">' + esc(error) + '</td></tr>';
+  }).join('');
+  const table = body
+    ? '<div class="table-wrap inspector-table"><table><thead><tr><th>Resource</th><th>Status</th><th>Count</th><th>Required scope</th><th>HTTP</th><th>Time</th><th>Last success</th><th>Last error</th></tr></thead><tbody>' + body + '</tbody></table></div>'
+    : emptyMini('No API resource history', 'Test the connection or run a synchronization to create diagnostic rows.');
+  const runRows = runs.map(function renderRun(run) {
+    return '<div class="sync-run"><div><strong>' + esc(run.trigger_type) + ' synchronization</strong><span>' + formatDate(run.started_at) + ' · ' + esc(run.account_type || 'unknown') + '</span></div><div class="sync-run-counts"><span>' + esc(run.successful_resources || 0) + ' OK</span><span>' + esc(run.failed_resources || 0) + ' failed</span>' + badge(run.status, run.status === 'completed' ? 'success' : run.status === 'partial' ? 'warning' : 'danger') + '</div></div>';
+  }).join('') || emptyMini('No sync runs yet', 'The complete run history will appear here.');
+  return sectionHeader('API Sync Inspector', 'See exactly what is loading, what failed, which scope is required and when each resource last succeeded.', '<div class="button-row"><button class="secondary-button" data-go="connected" data-nexa-action="navigate-connected">Connection settings</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync all resources</button></div>') +
+    '<div class="inspector-hero"><div><p class="eyebrow">LIVE API DIAGNOSTICS</p><h2>' + esc(connectedAccountLabel(status)) + '</h2><p>' + esc(status.last_error || 'All available resources are reporting normally.') + '</p></div><div class="inspector-hero-state">' + badge(status.sync_state || 'idle', status.sync_state === 'ready' ? 'success' : status.sync_state === 'partial' ? 'warning' : 'info') + '<span>Last attempt: ' + formatDate(status.last_attempt_at) + '</span></div></div>' +
+    renderConnectionProgress(resources) +
+    '<div class="toolbar inspector-toolbar"><div class="search-box"><input id="view-search" data-nexa-action="integration-inspector-search" type="search" value="' + esc(state.search) + '" placeholder="Search resource, scope or error…"></div><button class="ghost-button" data-integration-sync="1" data-nexa-action="integration-retry-failed">Retry failed resources</button></div>' +
+    '<article class="panel-card"><div class="panel-header"><div><h3>Resource status</h3><p>Ping → connection-map → account-specific resources</p></div><strong>' + esc(resources.length) + '</strong></div>' + table + '</article>' +
+    '<article class="panel-card"><div class="panel-header"><div><h3>Recent synchronization runs</h3><p>Manual and automatic background history</p></div></div><div class="sync-run-list">' + runRows + '</div></article>';
 }
 
 const notificationTypeLabels = {
@@ -840,8 +1038,14 @@ function bindViewEvents() {
         testButton.disabled = true;
         const data = Object.fromEntries(new FormData(integrationForm).entries());
         await api.integration.save(data);
-        await api.integration.test();
-        toast('AutoMarket Pro connection successful.');
+        const testResult = await api.integration.test();
+        const syncResult = await api.integration.sync();
+        if (syncResult.failureCount) {
+          toast('Connection verified for ' + String(testResult.identity && testResult.identity.account_type || 'account') + ', but ' + String(syncResult.failureCount) + ' resources need attention.', 'error');
+          navigate('sync-inspector');
+        } else {
+          toast('Connection verified and ' + String(syncResult.successCount || 0) + ' resources loaded.');
+        }
         await refreshAll();
       } catch (error) {
         toast(error.message, 'error');
@@ -851,7 +1055,7 @@ function bindViewEvents() {
     });
     const disconnectButton = document.getElementById('integration-disconnect');
     if (disconnectButton) disconnectButton.addEventListener('click', async function disconnectIntegration() {
-      const confirmed = await confirmAction('Disconnect website', 'Remove the encrypted API key and stop automatic synchronization? Cached summaries and notification history will remain local.');
+      const confirmed = await confirmAction('Disconnect website', 'Remove the encrypted API key, stop automatic synchronization, and clear the local connected-business cache? Local contacts, leads, tasks and notification history will remain.');
       if (!confirmed) return;
       await api.integration.disconnect();
       toast('Connected business disconnected.');
@@ -859,20 +1063,28 @@ function bindViewEvents() {
     });
   }
 
-  const syncButtons = [document.getElementById('integration-sync-top')].filter(Boolean);
+  const syncButtons = Array.from(document.querySelectorAll('[data-integration-sync]'));
   syncButtons.forEach(function bindSync(button) {
     button.addEventListener('click', async function syncConnectedBusiness() {
+      const originalText = button.textContent;
       try {
-        button.disabled = true;
+        syncButtons.forEach(function disableSync(item) { item.disabled = true; });
         button.textContent = 'Synchronizing…';
         const result = await api.integration.sync();
-        toast('Connected business synchronized: ' + String((result.resources || []).length) + ' resources checked.');
+        if (result.failureCount) {
+          toast('Synchronization completed: ' + String(result.successCount || 0) + ' loaded, ' + String(result.failureCount) + ' failed. Open API Sync Inspector.', 'error');
+          navigate('sync-inspector');
+        } else {
+          toast('Connected business synchronized: ' + String(result.successCount || (result.resources || []).length) + ' resources loaded.');
+        }
         await refreshAll();
       } catch (error) {
         toast(error.message, 'error');
+        navigate('sync-inspector');
+        await refreshAll();
       } finally {
-        button.disabled = false;
-        button.textContent = 'Sync now';
+        syncButtons.forEach(function enableSync(item) { item.disabled = false; });
+        button.textContent = originalText;
       }
     });
   });

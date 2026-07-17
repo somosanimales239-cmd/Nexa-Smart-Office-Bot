@@ -27,7 +27,7 @@ try {
   db = new DatabaseService(dbPath);
 
   test('database file is created', () => assert.equal(fs.existsSync(dbPath), true));
-  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 3); });
+  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 4); });
 
   let contact;
   test('contact can be created', () => { contact = db.saveContact({ name:'Ana Rivera', company:'Rivera LLC', email:'ana@example.com', phone:'555-0101', tags:'VIP' }); assert.equal(contact.name,'Ana Rivera'); });
@@ -54,7 +54,7 @@ try {
 
   test('connected business tables are created', () => {
     const names = db.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((row)=>row.name);
-    ['integration_status','integration_snapshots','notification_preferences','notification_events'].forEach((name)=>assert(names.includes(name)));
+    ['integration_status','integration_snapshots','integration_resource_status','integration_cache','integration_sync_runs','notification_preferences','notification_events'].forEach((name)=>assert(names.includes(name)));
   });
   test('integration status and snapshots persist', () => {
     db.saveIntegrationStatus({ connected:1, account_type:'dealer', store_id:'store-1', scopes_json:'["store:read"]', last_sync_at:new Date().toISOString() });

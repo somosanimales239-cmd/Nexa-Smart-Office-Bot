@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
-    "application_version": "1.1.0",
-    "workspace_revision": "1.0.18",
+    "application_version": "1.2.0",
+    "workspace_revision": "1.0.22",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -15,8 +15,9 @@
         "SBO-03-agenda-alerts-ai",
         "SBO-04-ui-validation-delivery",
         "SBO-05-connected-business-api",
-        "SBO-06-smart-notifications"
+        "SBO-06-smart-notifications",
+        "SBO-07-full-api-sync-inspector"
     ],
-    "version": "1.1.0",
-    "updated_at": "2026-07-16 23:49:44"
+    "version": "1.2.0",
+    "updated_at": "2026-07-17 09:22:22"
 }

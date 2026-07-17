@@ -1,7 +1,7 @@
 {
     "name": "nexa-smart-office-bot",
-    "version": "1.1.0",
-    "description": "Local-first smart office assistant with contacts, leads, agenda, AI suggestions, secure AutoMarket Pro API integration and permission-controlled smart notifications.",
+    "version": "1.2.0",
+    "description": "Local-first smart office assistant with contacts, leads, agenda, secure AI providers, full account-aware AutoMarket Pro synchronization, API Sync Inspector and permission-controlled smart notifications.",
     "main": "main.js",
     "author": "Nexa",
     "license": "MIT",

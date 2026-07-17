@@ -28,7 +28,7 @@ const Tray = electron.Tray;
 const Menu = electron.Menu;
 const nativeImage = electron.nativeImage;
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const NOTIFICATION_IMPLEMENTATION_MARKER = 'notification marker: new Notification(...)';
 const webPreferences = {
   preload: path.join(__dirname, 'preload.js'),
@@ -137,7 +137,7 @@ async function runSmokeWhenReady(windowInstance) {
       result = await windowInstance.webContents.executeJavaScript([
         '(function () {',
         '  var ready = document.body.dataset.ready === "true";',
-        '  var required = ["dashboard", "sidebar", "connected-business", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "smart-notifications", "activity", "settings", "about"];',
+        '  var required = ["dashboard", "sidebar", "connected-business", "api-sync-inspector", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "smart-notifications", "activity", "settings", "about"];',
         '  var missing = required.filter(function (id) { return !document.querySelector("[data-testid=\\\"" + id + "\\\"]"); });',
         '  return { ready: ready, missing: missing, title: document.title, errors: window.__NEXA_ERRORS__ || [] };',
         '}())'

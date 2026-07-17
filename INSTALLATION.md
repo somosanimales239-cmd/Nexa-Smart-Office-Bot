@@ -1,38 +1,41 @@
-# Nexa Smart Office Bot 1.1.0 update
+# Nexa Smart Office Bot 1.2.0 update
 
-This is an update for an existing Nexa Smart Office Bot 1.0.1 workspace.
+This package updates an existing Nexa Smart Office Bot 1.1.0 workspace through Nexa App Builder Pro Manual Delivery.
 
-## Apply through Nexa Manual Delivery
+## Apply the update
 
-1. Open **Manual Delivery** in Nexa App Builder Pro.
+1. Open **Manual Delivery**.
 2. Select the existing **Nexa Smart Office Bot** project.
 3. Create a new manual delivery.
-4. Upload `Nexa_Smart_Office_Bot_v1.1.0_CONNECTED_BUSINESS_NOTIFICATIONS_UPDATE.zip`.
+4. Upload `Nexa_Smart_Office_Bot_v1.2.0_FULL_API_SYNC_UPDATE.zip`.
 5. Review the modified and new files.
 6. Press **Apply staged files** once.
-7. Confirm that the project version is `1.1.0` and Windows readiness is green.
+7. Confirm that the project version is `1.2.0` and Local build validation is green.
 8. Press **Push to GitHub & Build**.
-9. Wait for validation, UI smoke, NSIS, Portable, ZIP, installer/uninstaller testing, and artifact upload.
+9. Wait for validation, tests, Electron UI smoke, NSIS, Portable, ZIP, installer testing and artifact upload.
 
-Do not create an AI Engineering Task. This update contains the source files and does not use the development OpenAI key.
+Do not create an AI Engineering Task. This update contains the complete source changes and does not use the development OpenAI account.
 
-## Existing local data
+## Existing data is preserved
 
-Migration 3 is additive. It does not delete or recreate contacts, leads, tasks, appointments, reminders, suggestions, settings, activity history, or backups.
+Migration 4 is additive and idempotent. It preserves local contacts, leads, tasks, appointments, reminders, notification history, settings, API keys and backups.
 
-The application creates these new tables on first launch:
+It adds:
 
-- `integration_status`
-- `integration_snapshots`
-- `notification_preferences`
-- `notification_events`
+- Detailed resource status.
+- Protected connected-business cache.
+- Synchronization run history.
+- Extended connected-account identity and health fields.
+
+A v1.1.0 database was upgraded during testing while preserving its local contact and connection identity.
 
 ## After installing the Windows update
 
-1. Open **Connected Business** and connect the AutoMarket Pro API key.
-2. Open **Nexa Pulse** and explicitly allow notifications.
-3. Select notification categories and delivery channels.
-4. Send a test notification.
-5. Optionally enable **Keep monitoring in tray** and **Start with Windows**.
+1. Open **Connected Business**.
+2. Press **Test connection and load data** or **Sync now**.
+3. Open **API Sync Inspector**.
+4. Verify that `ping` and `connection-map` are green.
+5. Review the count and error for each account-specific resource.
+6. Grant any missing scope in AutoMarket Pro, rotate the key when necessary, and synchronize again.
 
-See `CONNECTED_BUSINESS_SETUP.md` for scopes and security details.
+Connected data is read-only inside Nexa. Original marketplace records remain controlled by AutoMarket Pro.

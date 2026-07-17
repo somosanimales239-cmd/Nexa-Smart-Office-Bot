@@ -1,45 +1,48 @@
-Nexa Smart Office Bot 1.1.0 validation report
-------------------------------------------------
+Nexa Smart Office Bot 1.2.0 validation report
 
 Scope
------
-Connected Business API-key integration, AutoMarket Pro resource discovery/cache,
-permission-controlled Nexa Pulse notifications, Windows native alerts, animated
-in-app notification assistant, quiet hours, system tray, and Windows startup.
+- Full AutoMarket Pro synchronization after connection.
+- Dealer, Reseller and Administrator resource planning.
+- Protected local connected-business cache.
+- API Sync Inspector.
+- Connected data in Dashboard, Contacts, Leads and Agenda.
+- Per-resource errors and missing-scope diagnostics.
+- Safe response field filtering.
+- Connected appointment reminders.
 
-Completed validation
---------------------
-- All project JavaScript files passed `node --check`.
-- `npm run validate`: PASS.
-- Delivery validator: PASS.
-- Internal project validator: PASS.
-- Nexa contract gate: PASS.
-- Core SQLite/CRUD/backup integration tests: 27 PASS.
-- Connected-business/API/notification tests: 7 PASS.
-- Implementation tests: PASS.
-- Acceptance tests: PASS.
-- `npm ci --ignore-scripts` installed 284 locked packages successfully.
-- Package lock was sanitized of 284 environment-specific internal registry URLs.
-- No API key, production database, customer data, node_modules, or build artifact is included.
+Completed checks
+- JavaScript syntax: passed for every source and script file.
+- Delivery validator: passed.
+- Internal project validator: passed.
+- Nexa contract gate: passed.
+- Core SQLite and CRUD integration tests: 27 passed.
+- Full API synchronization and notification tests: 18 passed.
+- Implementation tests: passed.
+- Acceptance tests: passed.
+- GitHub Actions YAML parsing: passed.
+- Git conflict-marker scan: passed.
+- Credential-pattern scan: passed after excluding deliberate non-secret test fixtures.
+- v1.1.0 to v1.2.0 database upgrade: passed with local data and connection identity preserved.
+- Portable package-lock installation graph: 284 packages installed with lifecycle scripts disabled for the local dependency test.
 
-Tested behaviors
-----------------
-- Migration 3 is idempotent.
-- New integration and notification tables are created.
-- Website URLs normalize to `/api/v1/index.php`.
-- Bearer authentication is used without exposing the key publicly.
-- `ping` and `connection-map` discovery works against a controlled API fixture.
-- First synchronization creates a baseline without historical notification spam.
-- A later new order creates one deduplicated notification.
-- Notification permission is explicit.
-- A native notification is delivered by the controlled Notification fixture.
-- Integration status, snapshots, preferences, read state, dismissal, and dedupe persist.
-- Installer, Portable, and ZIP targets remain declared.
+API behavior verified
+- Both supported API-key headers are sent.
+- ping is called before connection-map.
+- Account type and available resources are discovered.
+- Dealer, Reseller and Administrator plans differ correctly.
+- Missing scopes remain visible in API Sync Inspector.
+- Missing scopes do not trigger unnecessary HTTP requests.
+- One failed resource produces a partial result without discarding successful cached data.
+- Resource counts and exact errors are stored.
+- Agenda phone formats are normalized for search.
+- Unexpected secret or sensitive response fields are discarded by field allowlists.
+- The public settings and cache do not expose the API key.
+- Disconnect removes connected cache while preserving local contacts and records.
+- Connected data is included in a bounded safe AI context.
+- Connected appointments create deduplicated 24-hour or 2-hour notifications.
 
-External-stage validation
--------------------------
-Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. The
-local container could install the complete package graph but could not download
-the Electron runtime from its restricted CDN environment. The workflow will stop
-before publishing if renderer startup, UI smoke, installer, portable, ZIP, or
-installer/uninstaller validation fails.
+Local environment limitation
+The Electron runtime binary could not be downloaded in the isolated local environment, so Electron UI smoke was not executed locally. The source-level UI contracts passed, and the GitHub Windows workflow requires Electron UI smoke before packaging or publishing Installer, Portable and ZIP artifacts.
+
+No external API calls
+The API tests used an isolated local fake endpoint. No AutoMarket Pro, OpenAI, DeepSeek or GitHub credential was used during validation.

@@ -1,31 +1,27 @@
 # Nexa Smart Office Bot
 
-Nexa Smart Office Bot is a local-first Windows desktop application for managing contacts, leads, appointments, tasks, reminders, alerts, AI suggestions and SQLite backups.
+Nexa Smart Office Bot is a local-first Windows desktop application for contacts, leads, appointments, tasks, reminders, business alerts, AI suggestions, connected marketplace data and protected SQLite backups.
 
 ## Main features
 
-- Contact management with search, tags and notes.
-- Lead pipeline with status, priority, estimated value and follow-up dates.
-- Local agenda with linked contacts and leads.
-- Task management, due dates and Windows reminders.
-- Actionable alerts for overdue tasks, lead follow-ups and upcoming appointments.
+- Local contacts, leads, agenda, tasks and reminders.
 - User-configured OpenAI and DeepSeek providers.
-- API keys encrypted with Electron `safeStorage`.
-- Local SQLite workspace using Node's built-in `node:sqlite` module.
-- Manual and automatic backups with restore protection.
-- GitHub Actions build for NSIS Installer, Portable EXE and Windows ZIP.
+- API keys protected with Electron `safeStorage`.
+- Local SQLite workspace with additive migrations and backup recovery.
+- Nexa Pulse notifications inside the application and through Windows.
+- Full AutoMarket Pro synchronization after the API connection test.
+- Account-aware support for Dealer, Reseller and Administrator keys.
+- Read-only connected contacts, orders, listings, messages, appointments, stores and summaries.
+- Phone normalization so common formats are treated as the same number.
+- API Sync Inspector with status, item count, required scope, HTTP status, duration, last success and last error for every resource.
+- GitHub Actions delivery for NSIS Installer, Portable EXE and Windows ZIP.
 
-## Security model
+## Version 1.2.0
 
-The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, a restrictive Content Security Policy and a narrow preload bridge. API keys are never exposed to the renderer after storage and are not included in logs, backups or builds.
+Version 1.2.0 replaces the connection-only behavior with a complete synchronization pipeline:
 
-## Build
+`ping → connection-map → account detection → allowed resources → protected local cache → dashboard and business views → per-resource diagnostics`
 
-The included GitHub Actions workflow runs validation, integration tests, Electron UI smoke, Windows packaging and artifact verification before publishing the downloadable workflow artifact.
+A failed optional resource no longer hides the data loaded successfully from other resources. Nexa shows the exact failed resource and missing scope while keeping the connected account available.
 
-## Version 1.1.0 additions
-
-- **Connected Business:** secure AutoMarket Pro API-key connection, resource discovery, cached store/dealer/admin summaries, listings, orders, agenda, message metadata, and reseller activity.
-- **Nexa Pulse:** explicit notification permission, animated AI assistant with thought-cloud alerts inside the application, compact Windows notifications, per-category controls, quiet hours, sound, tray monitoring, and optional Windows startup.
-
-See `CONNECTED_BUSINESS_SETUP.md` for connection scopes and security behavior.
+See `CONNECTED_BUSINESS_SETUP.md` and `API_SYNC_INSPECTOR.md`.
