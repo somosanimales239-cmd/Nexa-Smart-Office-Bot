@@ -328,7 +328,7 @@ class DatabaseService {
   }
 
   saveSettings(values) {
-    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end']);
+    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end', 'message_realtime_enabled', 'message_poll_seconds', 'message_ai_mode', 'message_ai_fallback', 'message_learning_enabled', 'message_send_confirmation']);
     const statement = this.db.prepare(`
       INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
@@ -361,7 +361,7 @@ class DatabaseService {
     if (type === 'lead') return this.db.prepare('SELECT * FROM leads WHERE id = ?').get(entityId) || null;
     if (type === 'task') return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(entityId) || null;
     if (type === 'appointment') return this.db.prepare('SELECT * FROM appointments WHERE id = ?').get(entityId) || null;
-    if (type === 'message') return this.findIntegrationCacheItem(['messages'], entityId);
+    if (type === 'message') return this.getMessageConversationContext(entityId, 80);
     if (type === 'order') return this.findIntegrationCacheItem(['orders','reseller-appointments'], entityId);
     return null;
   }
@@ -396,6 +396,157 @@ class DatabaseService {
         resellers: this.listIntegrationCache('resellers', '', 15)
       }
     };
+  }
+
+
+  saveMessageThreadSnapshot(thread, entries, options) {
+    const source = thread && typeof thread === 'object' ? thread : {};
+    const threadId = normalizeText(source.thread_id || source.id || (options && options.thread_id));
+    if (!threadId) throw new Error('Message thread ID is required.');
+    const rows = Array.isArray(entries) ? entries : [];
+    const timestamp = nowIso();
+    const existing = this.db.prepare('SELECT thread_id FROM message_threads WHERE thread_id=?').get(threadId);
+    const last = rows.length ? rows[rows.length - 1] : null;
+    const payloadJson = JSON.stringify(source);
+    this.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO message_threads(thread_id, subject, context_type, context_id, participant_name, participant_type,
+          can_reply, is_announcement, last_message_id, last_message_at, sync_cursor, last_synced_at, payload_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(thread_id) DO UPDATE SET subject=excluded.subject, context_type=excluded.context_type,
+          context_id=excluded.context_id, participant_name=excluded.participant_name, participant_type=excluded.participant_type,
+          can_reply=excluded.can_reply, is_announcement=excluded.is_announcement, last_message_id=excluded.last_message_id,
+          last_message_at=excluded.last_message_at, sync_cursor=excluded.sync_cursor, last_synced_at=excluded.last_synced_at,
+          payload_json=excluded.payload_json, updated_at=excluded.updated_at
+      `).run(
+        threadId,
+        normalizeText(source.subject || 'Conversation'),
+        normalizeText(source.context_type), nullable(source.context_id),
+        normalizeText(source.participant_name || source.customer_name || source.sender_name),
+        normalizeText(source.participant_type || source.sender_type),
+        source.can_reply === false || Number(source.can_reply) === 0 ? 0 : 1,
+        Number(Boolean(source.is_announcement)),
+        nullable(source.last_message_id || (last && (last.message_id || last.id))),
+        nullable(source.last_message_at || (last && (last.sent_at || last.created_at))),
+        nullable(source.next_cursor || source.sync_cursor || (options && options.cursor)),
+        timestamp, payloadJson, timestamp
+      );
+      const upsert = this.db.prepare(`
+        INSERT INTO message_entries(message_id, thread_id, sender_type, sender_id, sender_name, receiver_type,
+          direction, body, body_format, sent_at, status, is_read, payload_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(message_id) DO UPDATE SET sender_type=excluded.sender_type, sender_id=excluded.sender_id,
+          sender_name=excluded.sender_name, receiver_type=excluded.receiver_type, direction=excluded.direction,
+          body=excluded.body, body_format=excluded.body_format, sent_at=excluded.sent_at, status=excluded.status,
+          is_read=excluded.is_read, payload_json=excluded.payload_json, updated_at=excluded.updated_at
+      `);
+      rows.forEach((entry, index) => {
+        const messageId = normalizeText(entry && (entry.message_id || entry.id)) || crypto.createHash('sha256').update(threadId + ':' + index + ':' + JSON.stringify(entry || {})).digest('hex').slice(0, 32);
+        const sentAt = nullable(entry && (entry.sent_at || entry.created_at || entry.updated_at));
+        const direction = normalizeText(entry && entry.direction) || (String(entry && entry.sender_type || '').toLowerCase().includes('dealer') || String(entry && entry.sender_type || '').toLowerCase().includes('admin') ? 'outbound' : 'inbound');
+        const createdAt = sentAt || timestamp;
+        upsert.run(
+          messageId, threadId, normalizeText(entry && entry.sender_type), nullable(entry && entry.sender_id),
+          normalizeText(entry && (entry.sender_name || entry.customer_name)), normalizeText(entry && entry.receiver_type),
+          direction, normalizeText(entry && (entry.body || entry.message || entry.text || entry.content)),
+          normalizeText(entry && entry.body_format) || 'text', sentAt, normalizeText(entry && entry.status),
+          Number(Boolean(entry && entry.is_read)), JSON.stringify(entry || {}), createdAt, timestamp
+        );
+      });
+    });
+    this.log(existing ? 'synced' : 'created', 'message_thread', threadId, rows.length + ' message(s) cached');
+    return this.getMessageConversationContext(threadId, 200);
+  }
+
+  getMessageConversationContext(threadId, limit = 100) {
+    const wanted = normalizeText(threadId);
+    if (!wanted) return null;
+    const thread = this.db.prepare('SELECT * FROM message_threads WHERE thread_id=?').get(wanted)
+      || this.findIntegrationCacheItem(['messages'], wanted)
+      || { thread_id: wanted, subject: 'Conversation', can_reply: 0 };
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const messages = this.db.prepare('SELECT * FROM message_entries WHERE thread_id=? ORDER BY COALESCE(sent_at, created_at) ASC LIMIT ?').all(wanted, safeLimit);
+    const drafts = this.db.prepare('SELECT * FROM message_reply_drafts WHERE thread_id=? ORDER BY created_at DESC LIMIT 20').all(wanted);
+    const outbox = this.db.prepare('SELECT * FROM message_outbox WHERE thread_id=? ORDER BY created_at DESC LIMIT 20').all(wanted);
+    return { thread: thread, messages: messages, drafts: drafts, outbox: outbox };
+  }
+
+  saveMessageDraft(values) {
+    const draftId = normalizeText(values && values.id) || id();
+    const threadId = normalizeText(values && values.thread_id);
+    const body = normalizeText(values && values.body);
+    if (!threadId || !body) throw new Error('Thread and reply text are required.');
+    const timestamp = nowIso();
+    this.db.prepare(`
+      INSERT INTO message_reply_drafts(id, thread_id, source, provider, confidence, trigger_text, body, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET source=excluded.source, provider=excluded.provider, confidence=excluded.confidence,
+        trigger_text=excluded.trigger_text, body=excluded.body, status=excluded.status, updated_at=excluded.updated_at
+    `).run(draftId, threadId, normalizeText(values.source || 'manual'), nullable(values.provider), Number(values.confidence || 0),
+      normalizeText(values.trigger_text), body, normalizeText(values.status || 'draft'), timestamp, timestamp);
+    this.log('created', 'message_reply_draft', draftId, normalizeText(values.source || 'manual'));
+    return this.db.prepare('SELECT * FROM message_reply_drafts WHERE id=?').get(draftId);
+  }
+
+  markMessageDraftSent(draftId, remoteMessageId) {
+    if (!draftId) return null;
+    this.db.prepare("UPDATE message_reply_drafts SET status='sent', sent_message_id=?, updated_at=? WHERE id=?")
+      .run(nullable(remoteMessageId), nowIso(), normalizeText(draftId));
+    return this.db.prepare('SELECT * FROM message_reply_drafts WHERE id=?').get(normalizeText(draftId)) || null;
+  }
+
+  createMessageOutbox(values) {
+    const clientId = normalizeText(values && values.client_message_id) || id();
+    const timestamp = nowIso();
+    this.db.prepare(`
+      INSERT INTO message_outbox(client_message_id, thread_id, body, status, error, created_at, updated_at)
+      VALUES (?, ?, ?, 'pending', '', ?, ?)
+      ON CONFLICT(client_message_id) DO NOTHING
+    `).run(clientId, normalizeText(values.thread_id), normalizeText(values.body), timestamp, timestamp);
+    return this.db.prepare('SELECT * FROM message_outbox WHERE client_message_id=?').get(clientId);
+  }
+
+  updateMessageOutbox(clientId, values) {
+    const status = normalizeText(values && values.status) || 'pending';
+    const sentAt = status === 'sent' ? nowIso() : null;
+    this.db.prepare('UPDATE message_outbox SET status=?, error=?, remote_message_id=?, sent_at=COALESCE(?, sent_at), updated_at=? WHERE client_message_id=?')
+      .run(status, normalizeText(values && values.error), nullable(values && values.remote_message_id), sentAt, nowIso(), normalizeText(clientId));
+    return this.db.prepare('SELECT * FROM message_outbox WHERE client_message_id=?').get(normalizeText(clientId)) || null;
+  }
+
+  listResponseKnowledge(search = '') {
+    const q = '%' + normalizeText(search).toLowerCase() + '%';
+    return this.db.prepare(`SELECT * FROM response_knowledge
+      WHERE lower(label) LIKE ? OR lower(category) LIKE ? OR lower(triggers) LIKE ? OR lower(response) LIKE ?
+      ORDER BY enabled DESC, use_count DESC, updated_at DESC`).all(q, q, q, q);
+  }
+
+  saveResponseKnowledge(values) {
+    const knowledgeId = normalizeText(values && values.id) || id();
+    const label = normalizeText(values && values.label) || 'Approved reply';
+    const triggers = normalizeText(values && values.triggers);
+    const response = normalizeText(values && values.response);
+    if (!triggers || !response) throw new Error('Knowledge triggers and response are required.');
+    const timestamp = nowIso();
+    this.db.prepare(`
+      INSERT INTO response_knowledge(id, label, category, triggers, response, enabled, use_count, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET label=excluded.label, category=excluded.category, triggers=excluded.triggers,
+        response=excluded.response, enabled=excluded.enabled, updated_at=excluded.updated_at
+    `).run(knowledgeId, label, normalizeText(values.category || 'General'), triggers, response,
+      values.enabled === false || Number(values.enabled) === 0 ? 0 : 1, timestamp, timestamp);
+    this.log('saved', 'response_knowledge', knowledgeId, label);
+    return this.db.prepare('SELECT * FROM response_knowledge WHERE id=?').get(knowledgeId);
+  }
+
+  deleteResponseKnowledge(knowledgeId) {
+    const result = this.db.prepare('DELETE FROM response_knowledge WHERE id=?').run(normalizeText(knowledgeId));
+    if (result.changes) this.log('deleted', 'response_knowledge', normalizeText(knowledgeId));
+    return result.changes > 0;
+  }
+
+  incrementKnowledgeUse(knowledgeId) {
+    this.db.prepare('UPDATE response_knowledge SET use_count=use_count+1, updated_at=? WHERE id=?').run(nowIso(), normalizeText(knowledgeId));
   }
 
 
@@ -630,7 +781,7 @@ class DatabaseService {
 
   clearIntegrationData() {
     this.transaction(() => {
-      this.db.exec('DELETE FROM integration_cache; DELETE FROM integration_resource_status; DELETE FROM integration_snapshots; DELETE FROM integration_sync_runs;');
+      this.db.exec('DELETE FROM integration_cache; DELETE FROM integration_resource_status; DELETE FROM integration_snapshots; DELETE FROM integration_sync_runs; DELETE FROM message_entries; DELETE FROM message_threads; DELETE FROM message_reply_drafts; DELETE FROM message_outbox;');
       this.saveIntegrationStatus({
         connected: 0, account_type: null, account_id: null, store_id: null, owner_type: null, owner_id: null,
         user_id: null, api_version: null, scopes_json: '[]', connection_map_json: '{}', sync_state: 'idle',

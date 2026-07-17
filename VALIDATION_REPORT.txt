@@ -1,5 +1,35 @@
-Nexa Smart Office Bot 1.3.0 Validation Report
+Nexa Smart Office Bot 1.4.0 Validation Report
 
-Scope: complete workspace reflection, visible scrolling, pagination, visual agenda, connected contacts, connected leads, website messages and AI context.
+Scope
+- Full authorized conversation mirroring.
+- Near-real-time thread refresh.
+- Knowledge-first reply drafting.
+- OpenAI or DeepSeek fallback only when approved local knowledge does not match.
+- User-confirmed message sending with durable outbox and idempotency protection.
+- Message read-state synchronization.
+- Updated AI Suggestions conversation workflow.
 
-Checks are generated again before packaging. No decorative separator uses repeated equals signs, preventing false merge-conflict detection.
+Completed validation
+- Every JavaScript file passed Node syntax validation.
+- Delivery validator passed.
+- Internal project validator passed.
+- Nexa approved contract gate passed.
+- Implementation tests passed.
+- Acceptance tests passed.
+- Core SQLite and business integration suite passed.
+- Full connected-business synchronization suite passed.
+- Complete workspace reflection suite passed.
+- Real-time Messages suite passed 9 of 9 checks.
+- Migration 5 is idempotent and creates message thread, entry, draft, outbox and response knowledge tables.
+- Sensitive unexpected API fields are discarded.
+- Full message bodies are accepted only through the dedicated authorized thread endpoint.
+- Knowledge matching creates a local draft before any external AI request.
+- Website sending uses POST, Bearer authentication and an idempotency key.
+- The IPC send handler rejects requests without explicit user confirmation.
+- Installer, Portable and Windows ZIP targets remain configured.
+
+External dependency
+The current documented AutoMarket Pro API exposes only message thread metadata. Full conversation reading, sending and read-state updates become active after the website implements the server contract included in MESSAGING_API_SERVER_CONTRACT.md. Until then, Nexa shows the inbox metadata and an exact capability warning without breaking other synchronized resources.
+
+External-stage validation
+Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. The workflow stops before publishing Installer, Portable or ZIP if those checks fail.

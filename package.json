@@ -1,7 +1,7 @@
 {
     "name": "nexa-smart-office-bot",
-    "version": "1.3.0",
-    "description": "Local-first smart office assistant with fully reflected AutoMarket Pro contacts, leads, messages, visual agenda, 40-record pagination, secure AI context and professional notifications.",
+    "version": "1.4.0",
+    "description": "Local-first smart office assistant with full AutoMarket Pro conversation mirroring, knowledge-first response drafting, user-approved message sending, API sync, contacts, leads, agenda and professional notifications.",
     "main": "main.js",
     "author": "Nexa",
     "license": "MIT",
@@ -15,7 +15,7 @@
         "validate:delivery": "node scripts/validate-delivery.js",
         "validate:project": "node scripts/validate-project.js",
         "validate:nexa-contract": "node scripts/nexa-contract-gate.js",
-        "test": "node scripts/integration-tests.js && node scripts/integration-api-notifications.js && node scripts/integration-workspace-reflection.js",
+        "test": "node scripts/integration-tests.js && node scripts/integration-api-notifications.js && node scripts/integration-workspace-reflection.js && node scripts/integration-realtime-messages.js",
         "node scripts/integration-tests.js": "node scripts/integration-tests.js",
         "test:implementation": "node scripts/implementation-tests.js",
         "test:acceptance": "node scripts/acceptance-tests.js",

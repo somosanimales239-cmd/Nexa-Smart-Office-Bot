@@ -52,7 +52,17 @@ const state = {
   pages: {},
   agendaMode: 'month',
   agendaAnchor: new Date().toISOString(),
-  aiPrefill: null
+  aiPrefill: null,
+  messageThreadId: '',
+  messageConversation: null,
+  messageDraft: '',
+  messageDraftMeta: null,
+  messageBusy: false,
+  messageError: '',
+  messageTab: 'inbox',
+  messageKnowledge: [],
+  messagePollBusy: false,
+  messageLastPollAt: 0
 };
 
 const viewTitles = {
@@ -149,7 +159,8 @@ async function refreshAll(options) {
     api.backups.list(),
     api.integration.get(),
     api.notifications.list(150, false),
-    api.notifications.preferences()
+    api.notifications.preferences(),
+    api.messages.knowledgeList('')
   ]);
   state.meta = results[0];
   state.dashboard = results[1];
@@ -167,6 +178,7 @@ async function refreshAll(options) {
   state.notifications = results[13] && Array.isArray(results[13].items) ? results[13].items : [];
   state.unreadNotifications = results[13] ? Number(results[13].unread || 0) : 0;
   state.notificationPreferences = Array.isArray(results[14]) ? results[14] : [];
+  state.messageKnowledge = Array.isArray(results[15]) ? results[15] : [];
   document.getElementById('alert-count').textContent = String(state.alerts.length);
   document.getElementById('notification-count').textContent = String(state.unreadNotifications);
   document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
@@ -507,11 +519,74 @@ function renderTasks() {
   return sectionHeader('Tasks','Manage work, follow-ups and deadlines. Every list is limited to 40 records per page.')+toolbar('Tasks','task-create','task-search','new-task')+table;
 }
 
+function messageCapabilities() {
+  const status=state.integration&&state.integration.status?state.integration.status:{};
+  let map={};
+  try { map=JSON.parse(status.connection_map_json||'{}'); } catch(error) { map={}; }
+  let scopes=[];
+  try { scopes=JSON.parse(status.scopes_json||'[]'); } catch(error) { scopes=[]; }
+  const available=[].concat(map.available_resources||map.allowed_resources||map.resources||[]).map(function normalizeResource(item){ return typeof item==='string'?item:String(item&&item.resource||item&&item.name||''); });
+  return {
+    read:scopes.includes('messages:read')||!scopes.length,
+    write:scopes.includes('messages:write'),
+    fullThread:available.includes('message-thread')||available.includes('messages-thread')||Boolean(map.message_threads||map.capabilities&&map.capabilities.message_threads),
+    send:available.includes('message-send')||available.includes('messages-send')||Boolean(map.message_send||map.capabilities&&map.capabilities.message_send),
+    markRead:available.includes('message-read')||Boolean(map.message_read||map.capabilities&&map.capabilities.message_read)
+  };
+}
+
+function selectedMessageThread() {
+  const rows=integrationRemote('messages');
+  return rows.find(function findThread(item,index){ return remoteItemId('messages',item,index)===state.messageThreadId; })||null;
+}
+
+function latestInboundMessage() {
+  const rows=state.messageConversation&&Array.isArray(state.messageConversation.messages)?state.messageConversation.messages:[];
+  const inbound=rows.filter(function inboundOnly(row){ return String(row.direction||'').toLowerCase()!=='outbound'; });
+  return inbound.length?inbound[inbound.length-1]:rows[rows.length-1]||null;
+}
+
+function renderConversationBubbles() {
+  const conversation=state.messageConversation;
+  const messages=conversation&&Array.isArray(conversation.messages)?conversation.messages:[];
+  if(state.messageBusy&&!messages.length) return '<div class="message-loading"><span></span><b>Loading complete conversation…</b></div>';
+  if(state.messageError&&!messages.length) return '<div class="message-api-warning"><b>Full conversation is not available yet</b><p>'+esc(state.messageError)+'</p><small>The website API must expose <code>message-thread</code> with <code>messages:read</code>.</small></div>';
+  if(!messages.length) return emptyMini('Open a conversation','Select a thread on the left to load the complete history.');
+  return messages.map(function bubble(row){
+    const outbound=String(row.direction||'').toLowerCase()==='outbound';
+    const name=row.sender_name||row.sender_type||(outbound?'Business':'Customer');
+    const status=outbound&&row.status?'<span>'+esc(row.status)+'</span>':'';
+    return '<article class="conversation-bubble '+(outbound?'outbound':'inbound')+'"><div class="conversation-meta"><b>'+esc(name)+'</b><time>'+formatDate(row.sent_at||row.created_at)+'</time></div><p>'+esc(row.body||'')+'</p>'+status+'</article>';
+  }).join('');
+}
+
+function renderKnowledgeCenter() {
+  const page=paginateItems(state.messageKnowledge.filter(function filterKnowledge(row){return remoteMatches(row,state.search); }),'message-knowledge');
+  const rows=page.items.map(function knowledgeRow(row){return '<article class="knowledge-card"><div><span>'+esc(row.category||'General')+'</span><h3>'+esc(row.label||'Approved reply')+'</h3><p><b>Triggers:</b> '+esc(row.triggers)+'</p><p>'+esc(row.response)+'</p><small>Used '+esc(row.use_count||0)+' times</small></div><button class="danger-button" data-nexa-action="message-knowledge-delete" data-knowledge-id="'+esc(row.id)+'">Delete</button></article>';}).join('')||emptyMini('No approved response knowledge','Open a conversation, prepare or write a reply, then choose Teach Nexa.');
+  return '<div class="message-knowledge-layout"><article class="panel-card"><div class="panel-header"><div><h3>Knowledge-first response engine</h3><p>Nexa uses approved local answers before spending an AI request.</p></div>'+badge('Local first','success')+'</div><div class="form-grid"><label>Label<input id="knowledge-label" value="Approved customer reply"></label><label>Category<input id="knowledge-category" value="General"></label><label class="span-2">Customer words or intent<textarea id="knowledge-triggers" placeholder="Example: what are your hours, when are you open"></textarea></label><label class="span-2">Approved response<textarea id="knowledge-response" placeholder="Write the response Nexa may suggest when this intent matches."></textarea></label></div><div class="dialog-actions"><button class="primary-button" data-nexa-action="message-knowledge-save">Save knowledge</button></div></article><article class="panel-card"><div class="panel-header"><div><h3>Approved responses</h3><p>'+state.messageKnowledge.length+' local knowledge records</p></div></div><div class="knowledge-list">'+rows+'</div>'+renderPagination(page,'message-knowledge','knowledge records')+'</article></div>';
+}
+
 function renderMessages() {
+  if(state.messageTab==='knowledge'){
+    return sectionHeader('Messages','Build the local knowledge engine that handles common customer questions before AI is used.','<div class="button-row"><button class="ghost-button" data-nexa-action="message-tab-inbox">Inbox</button><button class="primary-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button></div>')+renderKnowledgeCenter();
+  }
   const rows=integrationRemote('messages').filter(function filterMessage(item){ return remoteMatches(item,state.search); }).sort(function sortMessages(a,b){ const announcement=Number(Boolean(b.is_announcement))-Number(Boolean(a.is_announcement)); if(announcement)return announcement; return (toValidDate(b.last_message_at||b.updated_at||b.created_at)||new Date(0))-(toValidDate(a.last_message_at||a.updated_at||a.created_at)||new Date(0)); });
   const page=paginateItems(rows,'messages');
-  const cards=page.items.map(function renderMessage(item,index){ const id=remoteItemId('messages',item,index+page.start); const unread=Number(item.unread_count||0); return '<article class="message-card '+(item.is_announcement?'announcement ':'')+(unread?'unread':'')+'"><div class="message-icon">'+(item.is_announcement?'!':'✉')+'</div><div class="message-copy"><div><span>'+esc(item.is_announcement?'ADMIN ANNOUNCEMENT':item.context_type||'MESSAGE THREAD')+'</span><time>'+formatDate(item.last_message_at||item.updated_at||item.created_at)+'</time></div><h3>'+esc(item.subject||'Conversation')+'</h3><p>'+esc(item.last_message_preview||item.message_preview||('Related to '+(item.context_type||'business activity')+(item.context_id?' #'+item.context_id:'')))+'</p><small>'+esc(item.sender_type||'Unknown sender')+' → '+esc(item.receiver_type||'Unknown receiver')+' · '+esc(item.message_count||0)+' messages</small></div><div class="message-actions">'+(unread?badge(unread+' unread','warning'):badge('Read','success'))+(item.is_announcement?badge('Pinned','warning'):'')+'<button class="ghost-button" data-nexa-action="connected-ai" data-related-type="message" data-resource="messages" data-item-id="'+esc(id)+'">Ask AI</button><button class="ghost-button" data-nexa-action="connected-detail" data-resource="messages" data-item-id="'+esc(id)+'">Details</button></div></article>'; }).join('')||emptyMini('No website messages loaded','Synchronize messages:read and use API Sync Inspector if the resource fails.');
-  return sectionHeader('Messages','Read website conversation metadata and announcements in one place. Nexa AI can use the selected thread context without sending anything.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync messages</button></div>')+'<div class="toolbar"><div class="search-box"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search subject, context, sender or receiver…"></div><span class="summary-pill">'+rows.length+' threads</span></div><div class="message-list">'+cards+'</div>'+renderPagination(page,'messages','message threads');
+  const selected=selectedMessageThread();
+  const capabilities=messageCapabilities();
+  const threadCards=page.items.map(function renderThread(item,index){
+    const id=remoteItemId('messages',item,index+page.start); const unread=Number(item.unread_count||0); const active=id===state.messageThreadId;
+    return '<button class="message-thread-card '+(active?'active ':'')+(item.is_announcement?'announcement ':'')+(unread?'unread':'')+'" data-nexa-action="message-thread-open" data-thread-id="'+esc(id)+'"><div class="message-thread-icon">'+(item.is_announcement?'!':'✉')+'</div><div><span>'+esc(item.is_announcement?'ADMIN ANNOUNCEMENT':item.participant_name||item.sender_type||item.context_type||'CONVERSATION')+'</span><strong>'+esc(item.subject||'Conversation')+'</strong><p>'+esc(item.last_message_preview||item.message_preview||'Open to read the conversation')+'</p><small>'+formatDate(item.last_message_at||item.updated_at||item.created_at)+' · '+esc(item.message_count||0)+' messages</small></div>'+(unread?'<em>'+esc(unread)+'</em>':'')+'</button>';
+  }).join('')||emptyMini('No website messages loaded','Synchronize messages:read and inspect the API resource status.');
+  const thread=state.messageConversation&&state.messageConversation.thread?state.messageConversation.thread:selected||{};
+  const canReply=Boolean(state.messageThreadId)&&!Boolean(thread.is_announcement)&&thread.can_reply!==false&&Number(thread.can_reply)!==0;
+  const latest=latestInboundMessage();
+  const draftMeta=state.messageDraftMeta?'<div class="draft-source">'+badge(state.messageDraftMeta.engine==='knowledge'?'Knowledge match':'AI fallback',state.messageDraftMeta.engine==='knowledge'?'success':'info')+(state.messageDraftMeta.confidence?'<span>'+Math.round(Number(state.messageDraftMeta.confidence)*100)+'% confidence</span>':'')+'</div>':'';
+  const capabilityWarning=(!capabilities.fullThread||!capabilities.send)?'<div class="message-capability-banner"><b>Website API upgrade required for full two-way chat</b><span>Needed: <code>message-thread</code> + <code>message-send</code> and the <code>messages:write</code> scope. Metadata-only messages remain readable.</span></div>':'';
+  const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle"><input id="message-teach-after-send" type="checkbox"> Teach Nexa from this approved reply</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send approved reply</button></div></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
+  const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p></div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions and user-approved sending.</p></div></div>';
+  const settings='<div class="message-live-settings"><label><input id="message-realtime-enabled" type="checkbox" '+(String(state.settings&&state.settings.message_realtime_enabled||'1')==='1'?'checked':'')+'> Live refresh</label><label>Every <select id="message-poll-seconds"><option value="3"'+(String(state.settings&&state.settings.message_poll_seconds)==='3'?' selected':'')+'>3 sec</option><option value="5"'+(String(state.settings&&state.settings.message_poll_seconds||'5')==='5'?' selected':'')+'>5 sec</option><option value="10"'+(String(state.settings&&state.settings.message_poll_seconds)==='10'?' selected':'')+'>10 sec</option><option value="15"'+(String(state.settings&&state.settings.message_poll_seconds)==='15'?' selected':'')+'>15 sec</option></select></label><button class="ghost-button" data-nexa-action="message-settings-save">Save</button><span class="live-indicator"><i></i>'+(state.messageBusy?'Synchronizing':'Ready')+'</span></div>';
+  return sectionHeader('Messages','Mirror website conversations, prepare replies locally first, use AI only when needed, and send only after user approval.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="ghost-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync inbox</button></div>')+capabilityWarning+settings+'<div class="message-workspace"><aside class="message-inbox"><div class="message-inbox-toolbar"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search conversations…"><span>'+rows.length+' threads</span></div><div class="message-thread-list">'+threadCards+'</div>'+renderPagination(page,'messages','message threads')+'</aside><section class="conversation-panel">'+conversationHeader+'<div class="conversation-scroll" id="conversation-scroll">'+renderConversationBubbles()+'</div>'+composer+'</section></div>';
 }
 
 function renderAgenda() {
@@ -543,11 +618,11 @@ function renderAI() {
   }).join('') || emptyMini('No suggestions yet', 'Generate the first suggestion when an AI provider is configured.');
   const statusBadge = configured ? badge('Configured', 'success') : badge('Not configured', 'warning');
   const providerOptions = '<option value="openai"' + (provider === 'openai' ? ' selected' : '') + '>OpenAI</option><option value="deepseek"' + (provider === 'deepseek' ? ' selected' : '') + '>DeepSeek</option>';
-  return sectionHeader('AI Suggestions', 'Use your own provider key to get practical, approval-only recommendations.') +
+  return sectionHeader('AI Suggestions', 'Use approved local knowledge first, then your selected AI provider only when the conversation needs it.') +
     '<div class="grid ai-layout">' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Generate a suggestion</h3><p>No automatic messages or record changes</p></div>' + statusBadge + '</div><div class="form-grid">' +
         '<label>Provider<select id="ai-provider" data-nexa-action="ai-provider-select">' + providerOptions + '</select></label>' +
-        '<label>Suggestion type<select id="ai-kind"><option value="daily_priorities">Daily priorities</option><option value="lead_next_step">Lead next step</option><option value="agenda_optimization">Agenda optimization</option><option value="follow_up_draft">Follow-up note draft</option><option value="stale_leads">Stale leads</option><option value="message_response_strategy">Message response strategy</option><option value="order_follow_up">Order / lead follow-up</option></select></label>' +
+        '<label>Suggestion type<select id="ai-kind"><option value="daily_priorities">Daily priorities</option><option value="lead_next_step">Lead next step</option><option value="agenda_optimization">Agenda optimization</option><option value="follow_up_draft">Follow-up note draft</option><option value="stale_leads">Stale leads</option><option value="live_message_reply">Live conversation reply</option><option value="message_response_strategy">Message response strategy</option><option value="order_follow_up">Order / lead follow-up</option></select></label>' +
         '<label>Related record type<select id="ai-related-type"><option value="">Entire workspace</option><option value="lead">Lead</option><option value="contact">Contact</option><option value="task">Task</option><option value="appointment">Appointment</option><option value="message">Website message</option><option value="order">Website order / lead</option></select></label>' +
         '<label>Related record<select id="ai-related-id"><option value="">None selected</option></select></label>' +
         '<label class="span-2">What should Nexa focus on?<textarea id="ai-focus" placeholder="Example: Help me prioritize follow-ups before Friday.">' + esc(state.aiPrefill && state.aiPrefill.focus || '') + '</textarea></label>' +
@@ -715,7 +790,7 @@ function renderConnectedBusiness() {
       '<article class="setting-block"><div class="panel-header"><div><h3>Connected identity</h3><p>Account type, ownership and granted resources</p></div></div>' +
         '<div class="connection-facts"><div><span>Account type</span><strong>' + esc(status.account_type || 'Waiting') + '</strong></div><div><span>Owner type</span><strong>' + esc(status.owner_type || '—') + '</strong></div><div><span>Account ID</span><strong>' + esc(status.account_id || status.owner_id || '—') + '</strong></div><div><span>Store ID</span><strong>' + esc(status.store_id || '—') + '</strong></div><div><span>API version</span><strong>' + esc(status.api_version || connectionMap.api_version || 'v1') + '</strong></div><div><span>Scopes</span><strong>' + esc(Array.isArray(scopes) ? scopes.length : 0) + '</strong></div></div>' +
         renderConnectionProgress(resources) +
-        '<p class="muted">Nexa never imports passwords, server secrets, raw SQLite files, API-key hashes, private message bodies or sensitive document images.</p>' +
+        '<p class="muted">Nexa never imports passwords, server secrets, raw SQLite files, API-key hashes or sensitive document images. Full message bodies are cached only when the authorized message-thread endpoint grants access, and remain local to this computer.</p>' +
       '</article>' +
     '</form>' +
     '<div class="grid connected-identity-grid"><article class="panel-card"><div class="panel-header"><div><h3>Connected profile</h3><p>Store, reseller or administrator identity</p></div></div>' + renderConnectedSummary(identityPayload) + '</article><article class="panel-card"><div class="panel-header"><div><h3>Business summary</h3><p>Current account activity totals</p></div></div>' + renderConnectedSummary(summaryPayload) + '</article></div>' +
@@ -951,6 +1026,103 @@ async function submitEntity(event) {
   await refreshAll();
 }
 
+
+async function loadMessageThread(threadId, silent) {
+  const activeComposer=document.getElementById('message-composer');
+  const userEditing=Boolean(activeComposer&&document.activeElement===activeComposer);
+  if(activeComposer)state.messageDraft=activeComposer.value;
+  const wanted=String(threadId||'').trim();
+  if(!wanted)return;
+  state.messageThreadId=wanted;
+  state.messageBusy=true;
+  state.messageError='';
+  if(!silent)renderView();
+  try {
+    const result=await api.messages.refresh(wanted,{limit:160});
+    state.messageConversation=result.conversation||null;
+    const latestDraft=state.messageConversation&&Array.isArray(state.messageConversation.drafts)?state.messageConversation.drafts[0]:null;
+    if(!silent&&latestDraft&&latestDraft.status==='draft'&&!state.messageDraft){state.messageDraft=latestDraft.body||'';state.messageDraftMeta={engine:latestDraft.source,confidence:latestDraft.confidence,draft_id:latestDraft.id};}
+  } catch(error) {
+    state.messageError=error.message;
+    try { state.messageConversation=await api.messages.thread(wanted,160); } catch(localError) { void localError; }
+    if(!silent)toast(error.message,'error');
+  } finally {
+    state.messageBusy=false;
+    if(state.view==='messages'&&!(silent&&userEditing))renderView();
+  }
+}
+
+async function prepareMessageReply() {
+  if(!state.messageThreadId)return;
+  const provider=state.settings&&state.settings.preferred_provider||'openai';
+  state.messageBusy=true;
+  state.messageError='';
+  renderView();
+  try {
+    const result=await api.messages.draft({thread_id:state.messageThreadId,provider:provider,focus:'Reply to the latest customer message using the complete conversation. Keep the reply concise and professional.'});
+    state.messageDraft=result.draft&&result.draft.body||'';
+    state.messageDraftMeta={engine:result.engine,confidence:result.confidence||0,draft_id:result.draft&&result.draft.id,provider:result.provider||null};
+    toast(result.engine==='knowledge'?'Reply prepared from approved knowledge.':'Reply prepared with '+String(result.provider||'AI')+'.');
+  } catch(error) { state.messageError=error.message; toast(error.message,'error'); }
+  finally { state.messageBusy=false; if(state.view==='messages')renderView(); }
+}
+
+async function sendMessageReply() {
+  const composer=document.getElementById('message-composer');
+  const body=String(composer&&composer.value||state.messageDraft||'').trim();
+  if(!body){toast('Write or prepare a reply first.','error');return;}
+  const confirmed=await confirmAction('Send website reply','Send this reply to the customer now? Nexa will not send anything without this confirmation.');
+  if(!confirmed)return;
+  const latest=latestInboundMessage();
+  state.messageBusy=true;renderView();
+  try {
+    const result=await api.messages.send({thread_id:state.messageThreadId,body:body,user_confirmed:true,draft_id:state.messageDraftMeta&&state.messageDraftMeta.draft_id||null,teach:Boolean(document.getElementById('message-teach-after-send')&&document.getElementById('message-teach-after-send').checked),trigger_text:latest&&latest.body||'',knowledge_label:'Approved reply for '+String(selectedMessageThread()&&selectedMessageThread().subject||'customer conversation')});
+    state.messageConversation=result.conversation||state.messageConversation;
+    state.messageDraft='';state.messageDraftMeta=null;
+    state.messageKnowledge=await api.messages.knowledgeList('');
+    toast('Reply sent after user approval.');
+  } catch(error) { toast(error.message,'error'); }
+  finally { state.messageBusy=false; if(state.view==='messages')renderView(); }
+}
+
+async function markCurrentMessageRead() {
+  if(!state.messageThreadId)return;
+  const rows=state.messageConversation&&Array.isArray(state.messageConversation.messages)?state.messageConversation.messages:[];
+  const last=rows.length?rows[rows.length-1]:null;
+  try { await api.messages.markRead(state.messageThreadId,last&&last.message_id||null); toast('Conversation marked as read.'); await api.integration.sync(); await refreshAll(); }
+  catch(error){toast(error.message,'error');}
+}
+
+async function saveMessageKnowledgeForm() {
+  const label=document.getElementById('knowledge-label');
+  const category=document.getElementById('knowledge-category');
+  const triggers=document.getElementById('knowledge-triggers');
+  const response=document.getElementById('knowledge-response');
+  try {
+    await api.messages.knowledgeSave({label:label&&label.value,category:category&&category.value,triggers:triggers&&triggers.value,response:response&&response.value,enabled:true});
+    state.messageKnowledge=await api.messages.knowledgeList('');
+    toast('Approved response knowledge saved.');renderView();
+  } catch(error){toast(error.message,'error');}
+}
+
+async function saveMessageSettings() {
+  const enabled=document.getElementById('message-realtime-enabled');
+  const seconds=document.getElementById('message-poll-seconds');
+  state.settings=await api.settings.save({message_realtime_enabled:enabled&&enabled.checked?'1':'0',message_poll_seconds:seconds&&seconds.value||'5'});
+  toast('Message assistant settings saved.');renderView();
+}
+
+async function pollActiveMessageThread() {
+  if(state.messagePollBusy||state.view!=='messages'||state.messageTab!=='inbox'||!state.messageThreadId)return;
+  if(String(state.settings&&state.settings.message_realtime_enabled||'1')!=='1')return;
+  const seconds=Math.min(Math.max(Number(state.settings&&state.settings.message_poll_seconds||5),3),60);
+  if(Date.now()-Number(state.messageLastPollAt||0)<seconds*1000)return;
+  state.messageLastPollAt=Date.now();
+  state.messagePollBusy=true;
+  try { await loadMessageThread(state.messageThreadId,true); }
+  finally { state.messagePollBusy=false; }
+}
+
 function populateAIRelated() {
   const typeElement = document.getElementById('ai-related-type');
   const select = document.getElementById('ai-related-id');
@@ -972,7 +1144,8 @@ function populateAIRelated() {
 async function generateAI() {
   const provider = document.getElementById('ai-provider').value;
   const providerState = state.settings && state.settings.secrets ? state.settings.secrets[provider] : null;
-  if (!providerState || !providerState.configured) {
+  const kind = document.getElementById('ai-kind').value;
+  if (kind !== 'live_message_reply' && (!providerState || !providerState.configured)) {
     toast('AI provider not configured', 'error');
     navigate('settings');
     return;
@@ -983,16 +1156,22 @@ async function generateAI() {
   document.getElementById('ai-generate').disabled = true;
   document.getElementById('ai-cancel').disabled = false;
   try {
-    const result = await api.ai.generate({
-      request_id: requestId,
-      provider: provider,
-      kind: document.getElementById('ai-kind').value,
-      related_type: document.getElementById('ai-related-type').value,
-      related_id: document.getElementById('ai-related-id').value,
-      focus: document.getElementById('ai-focus').value
-    });
-    state.aiResult = result.suggestion.response;
-    toast('Suggestion generated.');
+    const relatedType = document.getElementById('ai-related-type').value;
+    const relatedId = document.getElementById('ai-related-id').value;
+    let result;
+    if (kind === 'live_message_reply') {
+      if (relatedType !== 'message' || !relatedId) throw new Error('Select a website message thread for a live reply.');
+      result = await api.messages.draft({ request_id: requestId, provider: provider, thread_id: relatedId, focus: document.getElementById('ai-focus').value });
+      state.aiResult = result.draft.body;
+      state.messageThreadId = relatedId;
+      state.messageDraft = result.draft.body;
+      state.messageDraftMeta = { engine: result.engine, confidence: result.confidence || 0, draft_id: result.draft.id, provider: result.provider || null };
+      toast(result.engine === 'knowledge' ? 'Reply prepared from approved knowledge.' : 'Live reply prepared with AI.');
+    } else {
+      result = await api.ai.generate({ request_id: requestId, provider: provider, kind: kind, related_type: relatedType, related_id: relatedId, focus: document.getElementById('ai-focus').value });
+      state.aiResult = result.suggestion.response;
+      toast('Suggestion generated.');
+    }
     await refreshAll({ render: false });
   } catch (error) {
     toast(error.message, 'error');
@@ -1070,10 +1249,35 @@ function bindViewEvents() {
   document.querySelectorAll('[data-nexa-action="connected-ai"]').forEach(function bindConnectedAi(button) {
     button.addEventListener('click', function askAi() {
       const type=button.dataset.relatedType || (button.dataset.resource==='messages'?'message':'order');
-      const kind=type==='message'?'message_response_strategy':'order_follow_up';
+      const kind=type==='message'?'live_message_reply':'order_follow_up';
       setAiPrefill(type,button.dataset.itemId,kind,type==='message'?'Review this website conversation and suggest the safest useful response or next action.':'Review this website lead and recommend the next follow-up action.');
     });
   });
+  document.querySelectorAll('[data-nexa-action="message-thread-open"]').forEach(function bindMessageThread(button) {
+    button.addEventListener('click', function openMessageThread() { state.messageDraft=''; state.messageDraftMeta=null; loadMessageThread(button.dataset.threadId,false); });
+  });
+  const messageRefresh=document.querySelector('[data-nexa-action="message-thread-refresh"]');
+  if(messageRefresh)messageRefresh.addEventListener('click',function refreshMessageThread(){loadMessageThread(state.messageThreadId,false);});
+  const messagePrepare=document.querySelector('[data-nexa-action="message-prepare-reply"]');
+  if(messagePrepare)messagePrepare.addEventListener('click',prepareMessageReply);
+  const messageSend=document.querySelector('[data-nexa-action="message-send-reply"]');
+  if(messageSend)messageSend.addEventListener('click',sendMessageReply);
+  const messageMarkRead=document.querySelector('[data-nexa-action="message-mark-read"]');
+  if(messageMarkRead)messageMarkRead.addEventListener('click',markCurrentMessageRead);
+  const messageOpenAi=document.querySelector('[data-nexa-action="message-open-ai"]');
+  if(messageOpenAi)messageOpenAi.addEventListener('click',function openMessageInAi(){setAiPrefill('message',state.messageThreadId,'live_message_reply','Prepare a customer-facing reply from the complete conversation.');});
+  const messageSettingsSave=document.querySelector('[data-nexa-action="message-settings-save"]');
+  if(messageSettingsSave)messageSettingsSave.addEventListener('click',saveMessageSettings);
+  const messageComposer=document.getElementById('message-composer');
+  if(messageComposer)messageComposer.addEventListener('input',function preserveDraft(){state.messageDraft=messageComposer.value;});
+  const conversationScroll=document.getElementById('conversation-scroll');
+  if(conversationScroll&&!(messageComposer&&messageComposer.matches(':focus')))conversationScroll.scrollTop=conversationScroll.scrollHeight;
+  document.querySelectorAll('[data-nexa-action="message-tab-inbox"]').forEach(function bindInbox(button){button.addEventListener('click',function(){state.messageTab='inbox';state.search='';renderView();});});
+  document.querySelectorAll('[data-nexa-action="message-tab-knowledge"]').forEach(function bindKnowledge(button){button.addEventListener('click',function(){state.messageTab='knowledge';state.search='';renderView();});});
+  const knowledgeSave=document.querySelector('[data-nexa-action="message-knowledge-save"]');
+  if(knowledgeSave)knowledgeSave.addEventListener('click',saveMessageKnowledgeForm);
+  document.querySelectorAll('[data-nexa-action="message-knowledge-delete"]').forEach(function bindKnowledgeDelete(button){button.addEventListener('click',async function(){const confirmed=await confirmAction('Delete approved response','Remove this knowledge record from the local response engine?');if(!confirmed)return;await api.messages.knowledgeDelete(button.dataset.knowledgeId);state.messageKnowledge=await api.messages.knowledgeList('');toast('Knowledge record deleted.');renderView();});});
+  if(state.view==='messages'&&state.messageTab==='inbox'&&!state.messageThreadId){const first=integrationRemote('messages')[0];if(first)setTimeout(function autoOpenFirst(){if(state.view==='messages'&&!state.messageThreadId)loadMessageThread(remoteItemId('messages',first,0),false);},0);}
   document.querySelectorAll('[data-nexa-action="agenda-prev"],[data-nexa-action="agenda-next"],[data-nexa-action="agenda-today"],[data-nexa-action="agenda-month"],[data-nexa-action="agenda-week"]').forEach(function bindAgendaControl(button) {
     button.addEventListener('click', function controlAgenda() {
       const action=button.dataset.nexaAction; const anchor=toValidDate(state.agendaAnchor)||new Date();
@@ -1364,6 +1568,7 @@ async function initialize() {
         void error;
       }
     }, 60000);
+    setInterval(function messageRealtimeTick(){ pollActiveMessageThread().catch(function ignorePollError(){ /* displayed in Messages */ }); }, 1000);
   } catch (error) {
     content.innerHTML = '<div class="empty-state"><div><b>Application startup failed</b>' + esc(error.message) + '</div></div>';
     window.__NEXA_ERRORS__.push(error.message);

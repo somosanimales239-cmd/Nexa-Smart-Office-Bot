@@ -39,7 +39,7 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
 });
 
 const SAFE_RESOURCES = new Set([
-  'ping', 'connection-map', 'store', 'dealer-summary', 'listings', 'orders', 'agenda', 'messages', 'resellers',
+  'ping', 'connection-map', 'store', 'dealer-summary', 'listings', 'orders', 'agenda', 'messages', 'message-thread', 'message-send', 'message-read', 'resellers',
   'reseller-profile', 'reseller-summary', 'reseller-listings', 'reseller-appointments',
   'admin-summary', 'stores', 'users', 'validation', 'api-keys-status'
 ]);
@@ -47,13 +47,16 @@ const SAFE_RESOURCES = new Set([
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','allowed_resources','resources','api_version','security','rate_limit'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','allowed_resources','resources','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
   orders: ['id','order_id','listing_id','store_id','listing_title','listing_url','listing_image_url','customer_name','customer_email','customer_phone','customer_location','message','order_notes','order_type','source','status','created_at','updated_at','reseller_id','reseller_name','reseller_email','appointment_date','appointment_time','appointment_status','sale_status','sale_price','commission_percent','commission_amount','dealer_status_note'],
   agenda: ['id','contact_id','store_id','owner_id','name','email','phone','location','source_type','times_seen','first_seen_at','last_seen_at','created_from'],
-  messages: ['id','thread_id','subject','context_type','context_id','store_id','sender_type','receiver_type','last_message_at','created_at','updated_at','message_count','unread_count','is_favorite','is_pinned','is_announcement','audience','can_reply','message_preview','last_message_preview'],
+  messages: ['id','thread_id','subject','context_type','context_id','store_id','sender_type','receiver_type','participant_name','participant_type','last_message_id','last_message_at','created_at','updated_at','message_count','unread_count','is_favorite','is_pinned','is_announcement','audience','can_reply','message_preview','last_message_preview','capabilities'],
+  'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','participant_name','participant_type','customer_name','sender_type','receiver_type','last_message_id','last_message_at','message_count','unread_count','is_announcement','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
+  'message-send': ['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','direction','body','body_format','sent_at','created_at','updated_at','status','is_read'],
+  'message-read': ['thread_id','message_id','last_message_id','read_at','updated_at','status'],
   resellers: ['id','reseller_id','reseller_name','reseller_email','reseller_phone','status','assigned_listings','appointment_count','pending_appointments','completed_appointments','positive_sales','commission_percent','commission_amount','last_activity','appointments'],
   'reseller-profile': ['reseller_id','name','email','phone','location','professional_title','bio','languages','rating','status','visibility','profile_image_url'],
   'reseller-summary': ['assigned_listings','appointments_created','appointments_pending','appointments_completed','positive_sales','commission_total','unread_messages','agenda_contacts'],
@@ -67,6 +70,7 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
 });
 
 const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys']);
+const MESSAGE_ENTRY_FIELDS = Object.freeze(['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','receiver_id','direction','body','message','text','content','body_format','sent_at','created_at','updated_at','status','is_read','attachments','reply_to_message_id']);
 
 function sanitizeRecord(resource, record) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
@@ -85,7 +89,56 @@ function sanitizeRecord(resource, record) {
   return output;
 }
 
+
+function sanitizeMessageEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+  const allowed = new Set(MESSAGE_ENTRY_FIELDS);
+  const output = {};
+  Object.entries(entry).forEach(function keep(entryPair) {
+    const key = entryPair[0];
+    const value = entryPair[1];
+    if (!allowed.has(key)) return;
+    if (key === 'attachments') {
+      output.attachments = Array.isArray(value) ? value.slice(0, 20).map(function safeAttachment(item) {
+        if (!item || typeof item !== 'object') return null;
+        return {
+          id: item.id || null,
+          name: String(item.name || item.filename || '').slice(0, 255),
+          type: String(item.type || item.mime_type || '').slice(0, 120),
+          size: Number(item.size || 0),
+          url: typeof item.url === 'string' && /^https:\/\//i.test(item.url) ? item.url : null
+        };
+      }).filter(Boolean) : [];
+      return;
+    }
+    output[key] = value;
+  });
+  const body = output.body || output.message || output.text || output.content || '';
+  output.body = String(body).slice(0, 12000);
+  delete output.message;
+  delete output.text;
+  delete output.content;
+  return output;
+}
+
+function sanitizeMessageThreadPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const source = unwrapPayload(payload);
+  const threadSource = source.thread && typeof source.thread === 'object' ? source.thread : source;
+  const thread = sanitizeRecord('message-thread', threadSource);
+  const entries = Array.isArray(source.messages) ? source.messages : Array.isArray(source.items) ? source.items : Array.isArray(source.entries) ? source.entries : [];
+  return {
+    thread: thread,
+    messages: entries.map(sanitizeMessageEntry),
+    next_cursor: source.next_cursor || source.cursor || null,
+    has_more: Boolean(source.has_more),
+    count: Number(source.count !== undefined ? source.count : entries.length)
+  };
+}
+
 function sanitizeResourcePayload(resource, payload) {
+  if (resource === 'message-thread') return sanitizeMessageThreadPayload(payload);
+  if (resource === 'message-send') return sanitizeMessageEntry(unwrapPayload(payload));
   if (Array.isArray(payload)) return payload.map(function sanitizeItem(item) { return sanitizeRecord(resource, item); });
   if (!payload || typeof payload !== 'object') return payload;
   const hasContainer = LIST_CONTAINER_KEYS.some(function hasList(key) { return Array.isArray(payload[key]); });
@@ -271,6 +324,8 @@ class AutoMarketApiService {
     const apiKey = this.settingsService.getSecret('automarket');
     if (!apiKey) throw new AutoMarketApiError('AutoMarket API key is not configured.', { resource: resourceName });
 
+    const requestOptions = options && typeof options === 'object' ? options : {};
+    const method = String(requestOptions.method || 'GET').toUpperCase();
     const url = new URL(configuration.baseUrl);
     url.searchParams.set('resource', resourceName);
     Object.entries(query || {}).forEach(function appendQuery(entry) {
@@ -281,21 +336,26 @@ class AutoMarketApiService {
 
     const controller = new AbortController();
     this.activeController = controller;
-    const timeoutMs = Math.min(Math.max(Number(options && options.timeoutMs) || DEFAULT_TIMEOUT_MS, 3000), 60000);
+    const timeoutMs = Math.min(Math.max(Number(requestOptions.timeoutMs) || DEFAULT_TIMEOUT_MS, 3000), 60000);
     const timeout = setTimeout(function abortRequest() { controller.abort(); }, timeoutMs);
     const startedAt = Date.now();
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: 'Bearer ' + apiKey,
-          'X-Nexa-Api-Key': apiKey,
-          'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.2.0'
-        },
+      const headers = {
+        Accept: 'application/json',
+        Authorization: 'Bearer ' + apiKey,
+        'X-Nexa-Api-Key': apiKey,
+        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.4.0'
+      };
+      if (method !== 'GET') headers['Content-Type'] = 'application/json';
+      if (requestOptions.idempotencyKey) headers['Idempotency-Key'] = String(requestOptions.idempotencyKey);
+      const fetchOptions = {
+        method: method,
+        headers: headers,
         signal: controller.signal,
         redirect: 'error'
-      });
+      };
+      if (method !== 'GET' && requestOptions.body !== undefined) fetchOptions.body = JSON.stringify(requestOptions.body);
+      const response = await fetch(url, fetchOptions);
       const text = await response.text();
       let payload = null;
       try {
@@ -375,6 +435,40 @@ class AutoMarketApiService {
     if (Object.prototype.hasOwnProperty.call(merged, 'limit')) merged.limit = Math.min(Number(merged.limit) || configuration.maxItems, configuration.maxItems);
     return this.request(resource, merged);
   }
+
+  async fetchMessageThread(threadId, options) {
+    const wanted = String(threadId || '').trim();
+    if (!wanted) throw new AutoMarketApiError('Message thread ID is required.', { resource: 'message-thread' });
+    const query = { thread_id: wanted, limit: Math.min(Math.max(Number(options && options.limit || 100), 1), 200) };
+    if (options && options.after) query.after = String(options.after);
+    if (options && options.cursor) query.cursor = String(options.cursor);
+    return this.request('message-thread', query, { timeoutMs: 30000 });
+  }
+
+  async sendMessage(threadId, body, clientMessageId, replyToMessageId) {
+    const wanted = String(threadId || '').trim();
+    const text = String(body || '').trim();
+    if (!wanted) throw new AutoMarketApiError('Message thread ID is required.', { resource: 'message-send' });
+    if (!text) throw new AutoMarketApiError('Reply text is required.', { resource: 'message-send' });
+    if (text.length > 8000) throw new AutoMarketApiError('Reply text cannot exceed 8,000 characters.', { resource: 'message-send' });
+    const clientId = String(clientMessageId || crypto.randomUUID());
+    return this.request('message-send', {}, {
+      method: 'POST',
+      timeoutMs: 30000,
+      idempotencyKey: clientId,
+      body: { thread_id: wanted, body: text, client_message_id: clientId, reply_to_message_id: replyToMessageId || null }
+    });
+  }
+
+  async markMessageRead(threadId, lastMessageId) {
+    const wanted = String(threadId || '').trim();
+    if (!wanted) throw new AutoMarketApiError('Message thread ID is required.', { resource: 'message-read' });
+    return this.request('message-read', {}, {
+      method: 'POST',
+      timeoutMs: 20000,
+      body: { thread_id: wanted, last_message_id: lastMessageId || null }
+    });
+  }
 }
 
 module.exports = {
@@ -390,6 +484,8 @@ module.exports = {
   normalizeAccountType,
   normalizeStringArray,
   resourcePlan,
+  sanitizeMessageEntry,
+  sanitizeMessageThreadPayload,
   sanitizeRecord,
   sanitizeResourcePayload,
   stableHash,

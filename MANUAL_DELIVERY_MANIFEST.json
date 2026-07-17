@@ -1,66 +1,157 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.3.0",
-  "minimum_base_version": "1.2.0",
-  "delivery_type": "manual_delivery_update",
+  "update_version": "1.4.0",
+  "minimum_base_version": "1.3.0",
+  "delivery_type": "complete_source_replacement",
   "openai_required": false,
-  "database_migration": "No destructive migration. Existing SQLite data, API key and settings are preserved.",
+  "database_migration": "Additive migration 5. Existing SQLite data, encrypted API keys, AI provider keys and user settings are preserved.",
   "features": [
-    "visible scrollbars across all views",
-    "40 records per page",
-    "unified website contacts",
-    "orders reflected as leads",
-    "website messages center",
-    "visual month/week agenda",
-    "AI context for selected messages and orders"
+    "full authorized message conversation mirroring",
+    "near-real-time active-thread refresh",
+    "knowledge-first approved response engine",
+    "OpenAI or DeepSeek fallback when local knowledge does not match",
+    "user-confirmed website message sending",
+    "durable drafts, outbox and read state",
+    "AI Suggestions live conversation mode",
+    "website messaging API capability diagnostics"
   ],
+  "website_api_requirements": {
+    "existing": "messages metadata with messages:read",
+    "full_conversation": "message-thread with messages:read",
+    "send": "message-send with messages:write",
+    "read_state": "message-read with messages:read"
+  },
   "files": [
     {
+      "path": ".github/workflows/windows-build.yml",
+      "sha256": "5b7a959dc93a604602bd512fddfaba77e6c4e8ca368712de95eb85b055f9ccd7",
+      "size": 1451,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "API_SYNC_INSPECTOR.md",
+      "sha256": "5b4adc9c1253a69835e7bd801a683590276243953a6d5f3f475a9a34b1579460",
+      "size": 812,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "CHANGELOG.md",
-      "sha256": "3dbe3355dc0ae6ac4b5cb892471e6e9e7e3b62c74e2ca6803617aecfccd1b42e",
-      "size": 902,
+      "sha256": "c933705e6fcc2e7dd23eea81686018d1f8921c6b2363131d1a463ee1acaade9a",
+      "size": 1193,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "CONNECTED_BUSINESS_SETUP.md",
+      "sha256": "217b68fe273f85c10ad8a48a8fe47f7578967e3007dc3c67c7e60bb08c9b7c4d",
+      "size": 1965,
       "operation": "replace_or_create"
     },
     {
       "path": "INSTALLATION.md",
-      "sha256": "ffa49a8651edf5963886fff1d571cf4de7fbd939209d6f2c33a9ba6fbb08d69e",
-      "size": 461,
+      "sha256": "3ed0825c6c80d13ff74ea186dc07b964127adcc1e965cb1ad77967ca14b92e2a",
+      "size": 782,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "46ed46827aeef657d6b6a6846944d361aa3a8db13d43d34da00a4a169cb0082f",
+      "size": 1061,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "MESSAGING_API_SERVER_CONTRACT.md",
+      "sha256": "562f550e9f18fa6dc32525a5651c90e855121620718c68666649255ecc0be848",
+      "size": 3928,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "NEXA_GATE_FIX_REPORT.txt",
+      "sha256": "e95a530fb83e3acda382e74e1e8f6ddc85895b9f991f058543476518a86996c0",
+      "size": 923,
       "operation": "replace_or_create"
     },
     {
       "path": "README.md",
-      "sha256": "9fee185e6891038de7682f5989995da9e141fef53ee7b271ed738eb4ed38f810",
-      "size": 915,
+      "sha256": "0cd9524b05666316ba0e79d461a3a58043dec66c6a1bea8ff160a069488ea217",
+      "size": 1570,
       "operation": "replace_or_create"
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "b1b329a490b65cace29ffee432b70cae1f682c10dc59a4b2b6e9fabe42357549",
-      "size": 342,
+      "sha256": "9a27484dad823188c4be63457fbbcf9c42bf1ae0a01aa42e0a4fd2850c084073",
+      "size": 1969,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "build/icon.png",
+      "sha256": "923fe1df1b19eea7f89656ab4e44b40437aa25e7e8eb636bbd60729bed023d70",
+      "size": 17803,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "main.js",
+      "sha256": "a2cbb3e5e3065cf36ed58e108709bcaac00361a44b35fca7ce2d33863af9159d",
+      "size": 10105,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "9f189d0f2a1c4a1783216ebfee21e3e9dafb9c085da014fce16404d0d6e8bcb4",
-      "size": 652,
+      "sha256": "a434d564b8a03b0c6479e1e199336ea5a79e97391a754de14aff8a0e1d02ac0f",
+      "size": 693,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "eb86731b4716442883f69c8932cb6db4ac86237a30840cd6711cebe96b129464",
+      "sha256": "a7064175395b9d6f870ee5606ee04614584aea9ada30e935b9b66feff77f0cb0",
       "size": 102947,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "0b47ce7bc101e418cfdf385d5199fda21b1ae10fbccbecdc317d73a813e70b79",
-      "size": 2700,
+      "sha256": "8066acac1ed906982f95ef0781e393dea7e2c02a7d26dda693367146b6b948ac",
+      "size": 2780,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "preload.js",
+      "sha256": "85d3325c9ce8b1066a606634afb4213ae574394fe29b3bf38097f3b920a5cdc3",
+      "size": 8241,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/acceptance-tests.js",
+      "sha256": "633fad1e0db690a472ba57861fe716c536386736eaff7923c8f46027f861c623",
+      "size": 1519,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/artifact-verify.js",
+      "sha256": "138fe1fffd7eb1e7dce0d1642c76fc42a19b43696ddc2e3cc56af7c51fa9b8a0",
+      "size": 1451,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/implementation-tests.js",
       "sha256": "779594b82535ec0c0cad3406a963f530d826b4c5dd5e7707eaac9367459c9918",
       "size": 2198,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/integration-api-notifications.js",
+      "sha256": "20dac29d071cac5bcea8e5e6eac773cd35649932951b13e5f7198722fe148d0b",
+      "size": 14341,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/integration-realtime-messages.js",
+      "sha256": "a3dcabe252bf0b34b5eb381feb581de256bc38830c413c04a186a8c52de0c840",
+      "size": 10082,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/integration-tests.js",
+      "sha256": "a4d05c2c7e3a74f0f9587c3ffd86354db68d953e8c6abbd0638ae144558ca75b",
+      "size": 7307,
       "operation": "replace_or_create"
     },
     {
@@ -76,41 +167,209 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "scripts/ui-smoke.js",
+      "sha256": "c220e3f3a5cc6eccd6eed76d075840742c53a5bed6b402b6828692c34d6e4564",
+      "size": 1131,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/validate-delivery.js",
+      "sha256": "bd55a17118000c010a7e3ab9990e7410be3c70917134163ca9e6c6e16ac316ce",
+      "size": 2258,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/validate-project.js",
+      "sha256": "ba5ed29fc67811f65c653846ca5be764a5490686d1da9fe8e9b9f8276b73d69e",
+      "size": 2249,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "scripts/validate.js",
+      "sha256": "f2cf3a805f1d922be9ff6c8e42ecb9bae64807d34576c66b755edafc83272bde",
+      "size": 1180,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "src/app.js",
-      "sha256": "6d0a87f27cabfb3543b453900aca41935c05b965be0d184a4cebf79feb184aed",
-      "size": 111853,
+      "sha256": "b9d91654502cfec0c875aa5320638b06660824dde259cfab64780cad80738602",
+      "size": 131557,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/assets/nexa-ai-orb.png",
+      "sha256": "af12aa0964db54b579747934b2883911a409a47e8500df44917ca803d0a8b81f",
+      "size": 49207,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/assets/nexa-ai-orb.svg",
+      "sha256": "d9c3bc0a7ce46a3f50e851d18de25e65e6927ceafb7157a52ee01f30679f3d17",
+      "size": 1576,
       "operation": "replace_or_create"
     },
     {
       "path": "src/database/database.js",
-      "sha256": "9196e2cba2f3d38c0a15a08a2b06f8e0c10dfba28ad9f81664de6540794311d5",
-      "size": 42141,
+      "sha256": "ed834f3e7a589a6d1805deaab0323fdb01e52dbb0327646595d700d1714d1c56",
+      "size": 52618,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/database/migrations.js",
+      "sha256": "a7a625d322cd14078a9a53a8449dfa64bc561e9dcb2b1c8ba7292e1cdd006e4c",
+      "size": 18551,
       "operation": "replace_or_create"
     },
     {
       "path": "src/index.html",
-      "sha256": "d09ac4f514657dd3e459e562ee0bd6d349b78faaff90d7cebad96f967a6f53a1",
+      "sha256": "f168f6c29ec1053ce49efc8cda41cdb62e0d192de3be9627df4c3bf9bded3f68",
       "size": 8236,
       "operation": "replace_or_create"
     },
     {
+      "path": "src/ipc/agenda-ipc.js",
+      "sha256": "72adbfc24abfc433e852d7392fd8beb73753f59a9bc4f0d04f5a5f8996410475",
+      "size": 1861,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/ai-ipc.js",
+      "sha256": "4334808c9bc94db86e2823d37ab30d3838891cd523916ceffad51652bb16201c",
+      "size": 2152,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/foundation-ipc.js",
+      "sha256": "e5c7665658185bfdd0458771409024c395d5b0598f680a931abdb7b8d16463dd",
+      "size": 3259,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/integrations-ipc.js",
+      "sha256": "0bcfee932c1e9efa8d89cddd4a26bf6b2a24c74ccf37aab7ad4879338a156b4b",
+      "size": 6467,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/ipc-utils.js",
+      "sha256": "22b166722ced16c401536ca217788a12535ec7b971314007b488963d004e44ad",
+      "size": 576,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/messages-ipc.js",
+      "sha256": "415de4208cd3f311dc6ffa6c453c24eb1a2595dee406f141aaa103d4187cf0e7",
+      "size": 6007,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/notifications-ipc.js",
+      "sha256": "0e6bdb9a513f246e83945d4ada2f9aac0d9ea482267d7e9d6d40d74ad4c8bd5e",
+      "size": 3109,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/ipc/records-ipc.js",
+      "sha256": "335569ae10a99395e0b9929b59bd31148950b63862ec0eb2a31f07f0cd44693f",
+      "size": 2145,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/agenda.js",
+      "sha256": "1ced23b6ab738f4bc32a4c47faa6faaac8a3fd3c3bc576823e956f48ada2b27d",
+      "size": 1002,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/ai.js",
+      "sha256": "acb734bcc2d1ffee6e9c9653e59e7506e8be1851cdbf22c4746359a2c5036a4b",
+      "size": 1012,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/contacts.js",
+      "sha256": "47c233346d163698e3021654f6857e4f0ffc7e26be574814c46704e65df5d812",
+      "size": 928,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/leads.js",
+      "sha256": "2e154c7ad7bcffa226e68338273580f931d8b0ab715f2ffbe26356d1c4db058e",
+      "size": 1048,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/notifications.js",
+      "sha256": "b4b710c0399d878e9657450585c6ce0bbf710995c4dcfdb01eebba7f707b682a",
+      "size": 475,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/modules/tasks.js",
+      "sha256": "ec824455f5b2b5f09085c908c8f4bbdcd8589f997eba1332aa0e844f81e355f8",
+      "size": 880,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "src/services/ai-service.js",
-      "sha256": "194e751122226bd773259172a58a14ef6c3bb5617aa112c61957d759d56a2787",
-      "size": 3953,
+      "sha256": "26215c8f0652e3b1c3ab79da8397306616eaaf1c6ee2aa89983275f495dab2f6",
+      "size": 8304,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automarket-api-service.js",
-      "sha256": "9f2a087cfb2dcd43bc9ffc9570be154f99a3c7c42a1dcc3adcf5100d2e240fa5",
-      "size": 19772,
+      "sha256": "7d6c90aa97e9924f783e01285da68107bc50123b47fc26bc5a9f3fb5a8cae327",
+      "size": 25380,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/backup-service.js",
+      "sha256": "37e8cbd0d10bced626121e7bc38565d03f140557f17c4d5cd00656a64a7c711b",
+      "size": 2038,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/deepseek-provider.js",
+      "sha256": "773ce58979b34b3d058e50489d4b16cc89b31e4b20514f6d28f845e718331a9e",
+      "size": 4033,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/message-response-engine.js",
+      "sha256": "72a40155964a7e9f714a85293d08c0a9251dc9a8394de0f2f2df71a6f40a7d4b",
+      "size": 3488,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/notification-service.js",
+      "sha256": "6268938314937b5af075d4638305f9169cedbeee68aa74d76b822f34b2b47584",
+      "size": 26392,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/openai-provider.js",
+      "sha256": "ea9769f7c7879ae4fe4294b7c4045c96b25dae2f98397593f1ea7b480b46db17",
+      "size": 3963,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/secret-store.js",
+      "sha256": "a6f4fed72eaddd1c68e1b7896052236f3f1a9bc97f9102289db518e927bf9cce",
+      "size": 1976,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/settings-service.js",
+      "sha256": "c2e8699c9880e9c6b3a9976a3d18a78452fd3634cbf1a0b5d385a5cd9bef864c",
+      "size": 3842,
       "operation": "replace_or_create"
     },
     {
       "path": "src/styles.css",
-      "sha256": "0db55768fb42514e79b67f1c706824231ae02ccf3ca50445db1c7bc7cec531dd",
-      "size": 36923,
+      "sha256": "c2c0c7db6bbfe267adb6570d3fdd78f9fce100f1a9410602f4fe91fb3171b81a",
+      "size": 45260,
       "operation": "replace_or_create"
     }
   ],
-  "notes": "Single combined update ZIP. Apply once over the existing 1.2.0 workspace."
+  "notes": "One ZIP. Apply once over the existing 1.3.0 workspace. No storage/database.sqlite, API keys, node_modules or compiled artifacts are included."
 }

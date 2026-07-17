@@ -16,6 +16,7 @@ const { registerAgendaIpc } = require('./src/ipc/agenda-ipc');
 const { registerAiIpc } = require('./src/ipc/ai-ipc');
 const { registerIntegrationsIpc } = require('./src/ipc/integrations-ipc');
 const { registerNotificationsIpc } = require('./src/ipc/notifications-ipc');
+const { registerMessagesIpc } = require('./src/ipc/messages-ipc');
 
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -28,7 +29,7 @@ const Tray = electron.Tray;
 const Menu = electron.Menu;
 const nativeImage = electron.nativeImage;
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.4.0';
 const NOTIFICATION_IMPLEMENTATION_MARKER = 'notification marker: new Notification(...)';
 const webPreferences = {
   preload: path.join(__dirname, 'preload.js'),
@@ -192,6 +193,7 @@ function registerAllIpc() {
   registerAiIpc(ipcMain, services);
   registerIntegrationsIpc(ipcMain, services);
   registerNotificationsIpc(ipcMain, services);
+  registerMessagesIpc(ipcMain, services);
 }
 
 function maybeAutomaticBackup() {

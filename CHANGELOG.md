@@ -1,13 +1,18 @@
 # Changelog
 
-## 1.3.0
+## 1.4.0
 
-- Added visible vertical and horizontal scrollbars throughout the application.
-- Added sticky table headers and scroll-safe dialogs.
-- Added 40-record pagination to contacts, leads, tasks, messages, agenda, activity, notifications, API inspector, AI history and connected resource cards.
-- Unified AutoMarket Pro agenda contacts directly with the Contacts workspace, including phone/email deduplication.
-- Unified orders and reseller appointments directly with the Leads workspace and exposed full connected details.
-- Added a dedicated Messages area for website threads and admin announcements.
-- Added AI context actions for selected website messages and orders.
-- Rebuilt Agenda as a professional month/week visual planner containing local tasks, appointments, reminders and connected appointments.
-- Added connected-record detail dialog and preserved read-only website data.
+- Rebuilt Messages as a split inbox and full-conversation workspace.
+- Added authorized full-thread loading through the `message-thread` API resource.
+- Added near-real-time refresh intervals of 3, 5, 10 or 15 seconds while a conversation is open.
+- Added inbound and outbound message bubbles, sender identity, timestamps and delivery status.
+- Added a durable local cache for message threads, entries, reply drafts and outbox attempts.
+- Added a Knowledge Engine that checks approved local answers before using OpenAI or DeepSeek.
+- Added confidence-based matching and usage counts for reusable response knowledge.
+- Added AI fallback with the complete bounded conversation and safe connected-business context.
+- Added user-confirmed sending through `message-send` with idempotency protection.
+- Added `message-read` support.
+- Added an optional “Teach Nexa from this approved reply” workflow.
+- Added a website capability banner when the connected API still exposes metadata only.
+- Updated AI Suggestions with a Live conversation reply mode.
+- Preserved all v1.3.0 scrolling, 40-record pagination, visual agenda, contacts, leads and connected workspace behavior.

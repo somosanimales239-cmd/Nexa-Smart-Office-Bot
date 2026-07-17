@@ -94,6 +94,16 @@ contextBridge.exposeInMainWorld('nexa', Object.freeze({
     resource: function resource(name, query) { return invoke('integration:resource', { resource: name, query: query || {} }); },
     disconnect: function disconnect() { return invoke('integration:disconnect'); }
   }),
+  messages: Object.freeze({
+    thread: function thread(threadId, limit) { return invoke('messages:thread', { thread_id: threadId, limit: limit || 120 }); },
+    refresh: function refresh(threadId, options) { return invoke('messages:refresh', Object.assign({ thread_id: threadId }, options || {})); },
+    draft: function draft(data) { return invoke('messages:draft', data || {}); },
+    send: function send(data) { return invoke('messages:send', data || {}); },
+    markRead: function markRead(threadId, lastMessageId) { return invoke('messages:mark-read', { thread_id: threadId, last_message_id: lastMessageId || null }); },
+    knowledgeList: function knowledgeList(search) { return invoke('messages:knowledge-list', { search: search || '' }); },
+    knowledgeSave: function knowledgeSave(data) { return invoke('messages:knowledge-save', data || {}); },
+    knowledgeDelete: function knowledgeDelete(id) { return invoke('messages:knowledge-delete', { id: id }); }
+  }),
   notifications: Object.freeze({
     list: function list(limit, unreadOnly) { return invoke('notifications:list', { limit: limit || 100, unread_only: unreadOnly === true }); },
     preferences: function preferences() { return invoke('notifications:preferences'); },

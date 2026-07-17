@@ -3,7 +3,7 @@
 const NEXA_SCHEMA_MIGRATION_CONTRACT = 'migration marker: NEXA_SCHEMA_MIGRATION_V1';
 
 const NEXA_SCHEMA_MIGRATION_V1 = 'NEXA_SCHEMA_MIGRATION_V1';
-const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, integration_resource_status, integration_cache, integration_sync_runs, notification_preferences, notification_events';
+const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, integration_resource_status, integration_cache, integration_sync_runs, notification_preferences, notification_events, message_threads, message_entries, message_reply_drafts, message_outbox, response_knowledge';
 
 const nowIso = function nowIso() {
   return new Date().toISOString();
@@ -163,7 +163,92 @@ function applyMigrations(database) {
           "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_max_items', '100', datetime('now'));"
         ].join(' '));
       }
+    },
+    {
+      id: 5,
+      name: 'NEXA_REALTIME_MESSAGES_AND_KNOWLEDGE_V1',
+      sql: [
+        `CREATE TABLE IF NOT EXISTS message_threads (
+          thread_id TEXT PRIMARY KEY,
+          subject TEXT NOT NULL DEFAULT '',
+          context_type TEXT NOT NULL DEFAULT '',
+          context_id TEXT,
+          participant_name TEXT NOT NULL DEFAULT '',
+          participant_type TEXT NOT NULL DEFAULT '',
+          can_reply INTEGER NOT NULL DEFAULT 0,
+          is_announcement INTEGER NOT NULL DEFAULT 0,
+          last_message_id TEXT,
+          last_message_at TEXT,
+          sync_cursor TEXT,
+          last_synced_at TEXT,
+          payload_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL
+        );`,
+        `CREATE TABLE IF NOT EXISTS message_entries (
+          message_id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          sender_type TEXT NOT NULL DEFAULT '',
+          sender_id TEXT,
+          sender_name TEXT NOT NULL DEFAULT '',
+          receiver_type TEXT NOT NULL DEFAULT '',
+          direction TEXT NOT NULL DEFAULT 'unknown',
+          body TEXT NOT NULL DEFAULT '',
+          body_format TEXT NOT NULL DEFAULT 'text',
+          sent_at TEXT,
+          status TEXT NOT NULL DEFAULT '',
+          is_read INTEGER NOT NULL DEFAULT 0,
+          payload_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY(thread_id) REFERENCES message_threads(thread_id) ON DELETE CASCADE
+        );`,
+        'CREATE INDEX IF NOT EXISTS idx_message_entries_thread_sent ON message_entries(thread_id, sent_at, created_at);',
+        `CREATE TABLE IF NOT EXISTS message_reply_drafts (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          source TEXT NOT NULL,
+          provider TEXT,
+          confidence REAL NOT NULL DEFAULT 0,
+          trigger_text TEXT NOT NULL DEFAULT '',
+          body TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'draft',
+          sent_message_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );`,
+        'CREATE INDEX IF NOT EXISTS idx_message_reply_drafts_thread ON message_reply_drafts(thread_id, created_at DESC);',
+        `CREATE TABLE IF NOT EXISTS message_outbox (
+          client_message_id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          body TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          error TEXT NOT NULL DEFAULT '',
+          remote_message_id TEXT,
+          created_at TEXT NOT NULL,
+          sent_at TEXT,
+          updated_at TEXT NOT NULL
+        );`,
+        `CREATE TABLE IF NOT EXISTS response_knowledge (
+          id TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'General',
+          triggers TEXT NOT NULL,
+          response TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          use_count INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );`,
+        'CREATE INDEX IF NOT EXISTS idx_response_knowledge_enabled ON response_knowledge(enabled, category, updated_at DESC);',
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_realtime_enabled', '1', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_poll_seconds', '5', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_ai_mode', 'knowledge_first', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_ai_fallback', '1', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_learning_enabled', '0', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_send_confirmation', '1', datetime('now'));"
+      ].join(' ')
     }
+
   ];
 
   migrations.forEach(function applyMigration(migration) {
