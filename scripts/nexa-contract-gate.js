@@ -20,7 +20,13 @@ const requirements = [
   ['src/modules/notifications.js', 'notification marker: new Notification(...)'],
   ['main.js', "ipcMain.handle('app:health'"],
   ['preload.js', "ipcRenderer.invoke('app:health'"],
-  ['.github/workflows/windows-build.yml', 'run: node scripts/integration-tests.js']
+  ['.github/workflows/windows-build.yml', 'run: node scripts/integration-tests.js'],
+  ['src/services/automarket-api-service.js', 'NEXA_AUTOMARKET_API_V1'],
+  ['src/services/notification-service.js', 'NEXA_SMART_NOTIFICATIONS_V1'],
+  ['src/ipc/integrations-ipc.js', 'integration:test'],
+  ['src/ipc/notifications-ipc.js', 'notifications:permission'],
+  ['src/index.html', 'data-testid="connected-business"'],
+  ['src/index.html', 'data-testid="smart-notifications"']
 ];
 
 const failures = [];

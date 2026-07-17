@@ -8,10 +8,14 @@ const { DatabaseService } = require('./src/database/database');
 const { SettingsService } = require('./src/services/settings-service');
 const { BackupService } = require('./src/services/backup-service');
 const { AIService } = require('./src/services/ai-service');
+const { AutoMarketApiService } = require('./src/services/automarket-api-service');
+const { NotificationService } = require('./src/services/notification-service');
 const { registerFoundationIpc } = require('./src/ipc/foundation-ipc');
 const { registerRecordsIpc } = require('./src/ipc/records-ipc');
 const { registerAgendaIpc } = require('./src/ipc/agenda-ipc');
 const { registerAiIpc } = require('./src/ipc/ai-ipc');
+const { registerIntegrationsIpc } = require('./src/ipc/integrations-ipc');
+const { registerNotificationsIpc } = require('./src/ipc/notifications-ipc');
 
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -20,8 +24,11 @@ const dialog = electron.dialog;
 const Notification = electron.Notification;
 const safeStorage = electron.safeStorage;
 const shell = electron.shell;
+const Tray = electron.Tray;
+const Menu = electron.Menu;
+const nativeImage = electron.nativeImage;
 
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 const NOTIFICATION_IMPLEMENTATION_MARKER = 'notification marker: new Notification(...)';
 const webPreferences = {
   preload: path.join(__dirname, 'preload.js'),
@@ -39,7 +46,10 @@ let database = null;
 let settingsService = null;
 let backupService = null;
 let aiService = null;
-let notificationTimer = null;
+let apiService = null;
+let notificationService = null;
+let tray = null;
+let isQuitting = false;
 
 if (process.env.NEXA_UI_SMOKE === '1') {
   app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-smart-office-smoke-')));
@@ -53,7 +63,7 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 700,
-    show: process.env.NEXA_UI_SMOKE !== '1',
+    show: process.env.NEXA_UI_SMOKE !== '1' && !process.argv.includes('--hidden'),
     backgroundColor: '#0b1020',
     center: true,
     autoHideMenuBar: true,
@@ -72,7 +82,44 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.on('close', function keepNotificationsRunning(event) {
+    if (isQuitting || process.env.NEXA_UI_SMOKE === '1') return;
+    const settings = database ? database.getSettings() : {};
+    if (settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1') {
+      event.preventDefault();
+      mainWindow.hide();
+      if (tray) tray.displayBalloon({
+        title: 'Nexa Smart Office Bot is still running',
+        content: 'Smart notifications remain active in the system tray.',
+        iconType: 'info'
+      });
+    }
+  });
   if (process.env.NEXA_UI_SMOKE === '1') runSmokeWhenReady(mainWindow);
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  if (tray || process.env.NEXA_UI_SMOKE === '1') return;
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png')).resize({ width: 20, height: 20 });
+  tray = new Tray(icon);
+  tray.setToolTip('Nexa Smart Office Bot');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Nexa Smart Office Bot', click: showMainWindow },
+    { label: 'Open Smart Notifications', click: function openNotifications() {
+      showMainWindow();
+      if (mainWindow) mainWindow.webContents.send('notification:open-center');
+    } },
+    { type: 'separator' },
+    { label: 'Quit', click: function quitFromTray() { isQuitting = true; app.quit(); } }
+  ]));
+  tray.on('double-click', showMainWindow);
 }
 
 async function runSmokeWhenReady(windowInstance) {
@@ -90,7 +137,7 @@ async function runSmokeWhenReady(windowInstance) {
       result = await windowInstance.webContents.executeJavaScript([
         '(function () {',
         '  var ready = document.body.dataset.ready === "true";',
-        '  var required = ["dashboard", "sidebar", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "activity", "settings", "about"];',
+        '  var required = ["dashboard", "sidebar", "connected-business", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "smart-notifications", "activity", "settings", "about"];',
         '  var missing = required.filter(function (id) { return !document.querySelector("[data-testid=\\\"" + id + "\\\"]"); });',
         '  return { ready: ready, missing: missing, title: document.title, errors: window.__NEXA_ERRORS__ || [] };',
         '}())'
@@ -116,7 +163,9 @@ function registerDirectHealthIpc() {
         databaseReady: Boolean(database),
         settingsReady: Boolean(settingsService),
         backupReady: Boolean(backupService),
-        aiReady: Boolean(aiService)
+        aiReady: Boolean(aiService),
+        apiReady: Boolean(apiService),
+        notificationsReady: Boolean(notificationService)
       }
     };
   });
@@ -131,6 +180,9 @@ function registerAllIpc() {
     settingsService: settingsService,
     backupService: backupService,
     aiService: aiService,
+    apiService: apiService,
+    notificationService: notificationService,
+    nativeImage: nativeImage,
     appVersion: APP_VERSION,
     getMainWindow: function getMainWindow() { return mainWindow; }
   };
@@ -138,24 +190,8 @@ function registerAllIpc() {
   registerRecordsIpc(ipcMain, database);
   registerAgendaIpc(ipcMain, database);
   registerAiIpc(ipcMain, services);
-}
-
-function startNotificationLoop() {
-  const check = function checkNotifications() {
-    try {
-      const settings = database.getSettings();
-      if (settings.notifications_enabled !== '1' || !Notification.isSupported()) return;
-      database.dueNotifications().forEach(function showNotification(item) {
-        const notification = new Notification({ title: item.title, body: item.body, silent: false });
-        notification.show();
-        database.markNotificationSent(item.entity_type, item.id);
-      });
-    } catch (error) {
-      console.error('[notifications]', error);
-    }
-  };
-  check();
-  notificationTimer = setInterval(check, 60000);
+  registerIntegrationsIpc(ipcMain, services);
+  registerNotificationsIpc(ipcMain, services);
 }
 
 function maybeAutomaticBackup() {
@@ -176,9 +212,7 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', function focusExistingWindow() {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    showMainWindow();
   });
 
   app.whenReady().then(function startApplication() {
@@ -188,10 +222,22 @@ if (!gotLock) {
     settingsService = new SettingsService(database, path.join(userData, 'secure', 'secrets.json'), safeStorage);
     backupService = new BackupService(database, path.join(userData, 'backups'));
     aiService = new AIService(database, settingsService);
+    apiService = new AutoMarketApiService(settingsService);
+    notificationService = new NotificationService({
+      database: database,
+      settingsService: settingsService,
+      apiService: apiService,
+      Notification: Notification,
+      nativeImage: nativeImage,
+      app: app,
+      getMainWindow: function getMainWindow() { return mainWindow; },
+      iconPath: path.join(__dirname, 'src', 'assets', 'nexa-ai-orb.png')
+    });
     registerDirectHealthIpc();
     registerAllIpc();
     createWindow();
-    startNotificationLoop();
+    createTray();
+    notificationService.start();
     maybeAutomaticBackup();
 
     app.on('activate', function activateApplication() {
@@ -200,9 +246,15 @@ if (!gotLock) {
   });
 }
 
+app.on('before-quit', function beforeQuit() {
+  isQuitting = true;
+  if (notificationService) notificationService.stop();
+});
+
 app.on('window-all-closed', function closeApplication() {
-  if (notificationTimer) clearInterval(notificationTimer);
-  if (process.platform !== 'darwin') app.quit();
+  const settings = database ? database.getSettings() : {};
+  const keepRunning = settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1';
+  if (process.platform !== 'darwin' && !keepRunning) app.quit();
 });
 
 module.exports = {

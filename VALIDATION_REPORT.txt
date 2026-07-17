@@ -1,54 +1,45 @@
-NEXA SMART OFFICE BOT 1.0.1 — VALIDATION REPORT
-Generated: 2026-07-16
-Delivery mode: Full source replacement through Nexa Manual Delivery
+Nexa Smart Office Bot 1.1.0 validation report
+------------------------------------------------
 
-PURPOSE
-This release corrects the exact Nexa Local Build Validation blockers reported for workspace v1.0.2.
+Scope
+-----
+Connected Business API-key integration, AutoMarket Pro resource discovery/cache,
+permission-controlled Nexa Pulse notifications, Windows native alerts, animated
+in-app notification assistant, quiet hours, system tray, and Windows startup.
 
-CORRECTED CONTRACT GATE ITEMS
-PASS Exact marker: migration marker: NEXA_SCHEMA_MIGRATION_V1
-PASS Exact marker: backup marker: NEXA_BACKUP_REDACTED_SETTINGS_V1
-PASS Exact marker: confirmation marker: data-testid="confirm-delete-dialog"
-PASS Exact marker: empty-state markers: contacts-empty, leads-empty, tasks-empty
-PASS Exact marker: error marker: AI provider not configured
-PASS Exact marker: timeout marker: AI_REQUEST_TIMEOUT_MS
-PASS Exact marker: confirmation marker: data-testid="ai-save-confirmation"
-PASS Exact marker: notification marker: new Notification(...)
-PASS Active Electron graph contains a direct ipcMain.handle('app:health', ...) registration
-PASS Active preload contains ipcRenderer.invoke('app:health', ...)
-PASS Main and preload share the app:health channel
-PASS Windows workflow runs npm test
-PASS Windows workflow directly runs node scripts/integration-tests.js
+Completed validation
+--------------------
+- All project JavaScript files passed `node --check`.
+- `npm run validate`: PASS.
+- Delivery validator: PASS.
+- Internal project validator: PASS.
+- Nexa contract gate: PASS.
+- Core SQLite/CRUD/backup integration tests: 27 PASS.
+- Connected-business/API/notification tests: 7 PASS.
+- Implementation tests: PASS.
+- Acceptance tests: PASS.
+- `npm ci --ignore-scripts` installed 284 locked packages successfully.
+- Package lock was sanitized of 284 environment-specific internal registry URLs.
+- No API key, production database, customer data, node_modules, or build artifact is included.
 
-LOCAL SOURCE VALIDATION
-PASS node scripts/validate.js
-PASS node scripts/validate-project.js
-PASS node scripts/validate-delivery.js
-PASS node scripts/nexa-contract-gate.js
-PASS node scripts/implementation-tests.js
-PASS node scripts/acceptance-tests.js
-PASS JavaScript syntax checks for every project JavaScript file
-PASS npm ci --ignore-scripts from package-lock.json (284 packages resolved)
+Tested behaviors
+----------------
+- Migration 3 is idempotent.
+- New integration and notification tables are created.
+- Website URLs normalize to `/api/v1/index.php`.
+- Bearer authentication is used without exposing the key publicly.
+- `ping` and `connection-map` discovery works against a controlled API fixture.
+- First synchronization creates a baseline without historical notification spam.
+- A later new order creates one deduplicated notification.
+- Notification permission is explicit.
+- A native notification is delivered by the controlled Notification fixture.
+- Integration status, snapshots, preferences, read state, dismissal, and dedupe persist.
+- Installer, Portable, and ZIP targets remain declared.
 
-REAL INTEGRATION TESTS
-23/23 passed:
-- database creation
-- idempotent migrations
-- contacts CRUD and search
-- leads and relationship persistence
-- task creation/completion
-- appointments and linked names
-- dashboard summary
-- overdue/follow-up alerts
-- reminders and due notifications
-- settings allowlist
-- AI suggestion storage and OpenAI text extraction
-- backup creation/history
-- activity logging
-- delete behavior
-
-NOT EXECUTED LOCALLY
-Electron UI smoke and Windows packaging were not executed in this container because the Electron binary CDN was unavailable. The Windows GitHub workflow treats UI smoke, build and artifact verification as mandatory gates and will not upload artifacts if any of them fail.
-
-EXPECTED NEXA RESULT BEFORE PUSH
-The reported SBO-01, SBO-02 and SBO-03 completeness errors should be cleared. The implementation-evidence metadata messages are warnings and do not block readiness when the active workspace passes its declared paths, markers, tests and structural checks.
+External-stage validation
+-------------------------
+Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. The
+local container could install the complete package graph but could not download
+the Electron runtime from its restricted CDN environment. The workflow will stop
+before publishing if renderer startup, UI smoke, installer, portable, ZIP, or
+installer/uninstaller validation fails.

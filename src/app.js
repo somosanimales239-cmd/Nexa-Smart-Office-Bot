@@ -40,6 +40,11 @@ const state = {
   suggestions: [],
   settings: null,
   backups: [],
+  integration: null,
+  notifications: [],
+  notificationPreferences: [],
+  unreadNotifications: 0,
+  activePulseEvent: null,
   search: '',
   activeAIRequest: null,
   aiResult: ''
@@ -47,12 +52,14 @@ const state = {
 
 const viewTitles = {
   dashboard: 'Dashboard',
+  connected: 'Connected Business',
   contacts: 'Contacts',
   leads: 'Leads',
   agenda: 'Agenda',
   tasks: 'Tasks',
   ai: 'AI Suggestions',
   alerts: 'Alerts',
+  notifications: 'Nexa Pulse',
   activity: 'Activity',
   settings: 'Settings',
   about: 'About'
@@ -132,7 +139,10 @@ async function refreshAll(options) {
     api.activity.list(150),
     api.ai.list(50),
     api.settings.get(),
-    api.backups.list()
+    api.backups.list(),
+    api.integration.get(),
+    api.notifications.list(150, false),
+    api.notifications.preferences()
   ]);
   state.meta = results[0];
   state.dashboard = results[1];
@@ -146,7 +156,14 @@ async function refreshAll(options) {
   state.suggestions = results[9];
   state.settings = results[10];
   state.backups = results[11];
+  state.integration = results[12];
+  state.notifications = results[13] && Array.isArray(results[13].items) ? results[13].items : [];
+  state.unreadNotifications = results[13] ? Number(results[13].unread || 0) : 0;
+  state.notificationPreferences = Array.isArray(results[14]) ? results[14] : [];
   document.getElementById('alert-count').textContent = String(state.alerts.length);
+  document.getElementById('notification-count').textContent = String(state.unreadNotifications);
+  document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
+  document.getElementById('notification-bell').classList.toggle('has-unread', state.unreadNotifications > 0);
   document.getElementById('sidebar-version').textContent = 'v' + state.meta.version;
   updateProviderPill();
   if (shouldRender) renderView();
@@ -193,12 +210,14 @@ function renderView() {
   try {
     const renderers = {
       dashboard: renderDashboard,
+      connected: renderConnectedBusiness,
       contacts: renderContacts,
       leads: renderLeads,
       agenda: renderAgenda,
       tasks: renderTasks,
       ai: renderAI,
       alerts: renderAlerts,
+      notifications: renderSmartNotifications,
       activity: renderActivity,
       settings: renderSettings,
       about: renderAbout
@@ -326,6 +345,165 @@ function renderAlerts() {
     return '<div class="list-item"><div class="list-item-main"><strong>' + esc(reminder.title) + '</strong><span>' + formatDate(reminder.remind_at) + ' · ' + (enabled ? 'Enabled' : 'Paused') + '</span></div><button class="ghost-button" data-nexa-action="reminder-toggle" data-record-id="' + esc(reminder.id) + '">' + (enabled ? 'Pause' : 'Enable') + '</button></div>';
   }).join('') || emptyMini('No custom reminders', 'Create a reminder for an important follow-up.');
   return sectionHeader('Alerts', 'Overdue tasks, due follow-ups and upcoming appointments.', '<button class="primary-button" data-nexa-action="reminder-create">+ Reminder</button>') + '<div class="grid">' + alertCards + '</div><article class="panel-card"><div class="panel-header"><div><h3>Custom reminders</h3><p>Local reminders that work without AI</p></div><button class="ghost-button" data-nexa-action="alert-refresh">Refresh</button></div><div class="list">' + reminderRows + '</div></article>';
+}
+
+
+function integrationSnapshot(resource) {
+  const integration = state.integration || {};
+  const snapshots = Array.isArray(integration.snapshots) ? integration.snapshots : [];
+  const row = snapshots.find(function findSnapshot(item) { return item.resource === resource; });
+  if (!row || !row.payload_json) return null;
+  try { return JSON.parse(row.payload_json); } catch (error) { return null; }
+}
+
+function dataList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  const keys = ['items', 'records', 'rows', 'listings', 'orders', 'contacts', 'messages', 'resellers', 'data'];
+  for (const key of keys) if (Array.isArray(payload[key])) return payload[key];
+  return [];
+}
+
+function valueLabel(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function renderConnectedSummary(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return emptyMini('No summary cached', 'Press Sync now after connecting your API key.');
+  const entries = Object.entries(payload).filter(function filterSummary(entry) {
+    return ['string', 'number', 'boolean'].includes(typeof entry[1]);
+  }).slice(0, 12);
+  if (!entries.length) return emptyMini('No summary fields', 'The connected endpoint did not return summary values.');
+  return '<div class="connected-metrics">' + entries.map(function renderMetric(entry) {
+    return '<div class="connected-metric"><span>' + esc(entry[0].replaceAll('_', ' ')) + '</span><strong>' + esc(valueLabel(entry[1])) + '</strong></div>';
+  }).join('') + '</div>';
+}
+
+function renderConnectedRows(resource, payload) {
+  const items = dataList(payload).slice(0, 8);
+  if (!items.length) return emptyMini('No ' + resource + ' cached', 'The first synchronization creates a safe baseline. New changes will generate alerts.');
+  return '<div class="connected-record-list">' + items.map(function renderRemoteItem(item) {
+    const title = item.title || item.name || item.customer_name || item.store_name || item.subject || item.email || item.phone || resource;
+    const subtitle = item.status || item.company || item.created_at || item.date || item.updated_at || '';
+    return '<div class="connected-record"><div><strong>' + esc(title) + '</strong><span>' + esc(valueLabel(subtitle)) + '</span></div>' + (item.status ? badge(item.status) : '') + '</div>';
+  }).join('') + '</div>';
+}
+
+function renderConnectedBusiness() {
+  const integration = state.integration || {};
+  const settings = integration.settings || state.settings || {};
+  const secrets = settings.secrets || {};
+  const status = integration.status || {};
+  const connected = Number(status.connected || 0) === 1;
+  const keyState = secrets.automarket || { configured: false, masked: '' };
+  const summary = integrationSnapshot('dealer-summary') || integrationSnapshot('admin-summary');
+  const store = integrationSnapshot('store');
+  const connectionMap = status.connection_map_json ? (function parseMap() { try { return JSON.parse(status.connection_map_json); } catch (error) { return {}; } }()) : {};
+  const mapResources = connectionMap.resources || connectionMap.available_resources || connectionMap.endpoints || [];
+  const resourceCount = Array.isArray(mapResources) ? mapResources.length : Object.keys(mapResources || {}).length;
+  return sectionHeader('Connected Business', 'Connect AutoMarket Pro with a scoped API key. Passwords and full private messages are never requested.', '<button class="primary-button" id="integration-sync-top" data-nexa-action="integration-sync">Sync now</button>') +
+    '<div class="connection-hero ' + (connected ? 'connected' : '') + '">' +
+      '<div class="connection-orb"><img src="assets/nexa-ai-orb.svg" alt="Nexa connected assistant"><span></span></div>' +
+      '<div><p class="eyebrow">SECURE WEBSITE CONNECTION</p><h2>' + (connected ? 'Your business is connected' : 'Connect your AutoMarket Pro website') + '</h2><p>' + (connected ? 'Nexa can read the resources allowed by this API key and create controlled notifications.' : 'Create a key in AutoMarket Pro, paste it once, and Nexa stores it with Windows secure storage.') + '</p></div>' +
+      '<div class="connection-status">' + badge(connected ? 'Connected' : 'Not connected', connected ? 'success' : 'warning') + '<span>Last sync: ' + formatDate(status.last_sync_at) + '</span></div>' +
+    '</div>' +
+    '<form id="integration-form" class="grid connection-grid" data-nexa-action="integration-save">' +
+      '<article class="setting-block"><div class="panel-header"><div><h3>API connection</h3><p>Authorization: Bearer API key</p></div></div>' +
+        '<label>Website URL<input name="automarket_base_url" type="url" placeholder="https://yourdomain.com" value="' + esc(settings.automarket_base_url || '') + '"></label>' +
+        '<label>API key<input name="automarket_api_key" type="password" autocomplete="off" placeholder="Paste a new key to connect or rotate"></label>' +
+        '<div class="key-state"><span>Stored key: <b>' + esc(keyState.configured ? keyState.masked : 'Not configured') + '</b></span><span>Encrypted by Windows</span></div>' +
+        '<label>Automatic sync<select name="automarket_sync_enabled"><option value="1"' + (settings.automarket_sync_enabled === '1' ? ' selected' : '') + '>Enabled</option><option value="0"' + (settings.automarket_sync_enabled !== '1' ? ' selected' : '') + '>Disabled</option></select></label>' +
+        '<label>Check for updates every<select name="automarket_poll_minutes">' + [1,5,15,30,60].map(function option(minutes) { return '<option value="' + minutes + '"' + (String(settings.automarket_poll_minutes || '5') === String(minutes) ? ' selected' : '') + '>' + minutes + ' minute' + (minutes === 1 ? '' : 's') + '</option>'; }).join('') + '</select></label>' +
+        '<div class="button-row"><button class="primary-button" type="submit" data-nexa-action="integration-save">Save connection</button><button class="secondary-button" type="button" id="integration-test" data-nexa-action="integration-test">Test connection</button><button class="danger-button" type="button" id="integration-disconnect" data-nexa-action="integration-disconnect">Disconnect</button></div>' +
+      '</article>' +
+      '<article class="setting-block"><div class="panel-header"><div><h3>Connection map</h3><p>Discovered capabilities and last health result</p></div></div>' +
+        '<div class="connection-facts"><div><span>Status</span><strong>' + (connected ? 'Available' : 'Waiting') + '</strong></div><div><span>Resources discovered</span><strong>' + resourceCount + '</strong></div><div><span>Last error</span><strong>' + esc(status.last_error || 'None') + '</strong></div><div><span>Scope isolation</span><strong>API-key controlled</strong></div></div>' +
+        '<p class="muted">Nexa only reads resources granted to the key. Passwords, validation documents, raw credit applications, private message bodies and API secrets are not imported.</p>' +
+      '</article>' +
+    '</form>' +
+    '<div class="grid connected-data-grid">' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Business summary</h3><p>Dealer or admin counts</p></div></div>' + renderConnectedSummary(summary) + '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Store profile</h3><p>Connected public store information</p></div></div>' + renderConnectedSummary(store) + '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Orders</h3><p>Recent order and appointment activity</p></div></div>' + renderConnectedRows('orders', integrationSnapshot('orders')) + '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Messages</h3><p>Thread metadata and unread counts only</p></div></div>' + renderConnectedRows('messages', integrationSnapshot('messages')) + '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Listings</h3><p>Active inventory and image URLs</p></div></div>' + renderConnectedRows('listings', integrationSnapshot('listings')) + '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Agenda & resellers</h3><p>Contacts and reseller appointment activity</p></div></div>' + renderConnectedRows('agenda', integrationSnapshot('agenda')) + renderConnectedRows('resellers', integrationSnapshot('resellers')) + '</article>' +
+    '</div>';
+}
+
+const notificationTypeLabels = {
+  local_task_due: ['Task reminders', 'Local tasks that reached their reminder time'],
+  local_appointment_due: ['Appointment reminders', 'Local appointments that reached their reminder time'],
+  local_reminder: ['Custom reminders', 'Manual reminders created inside Nexa'],
+  remote_orders: ['Orders', 'New order and reseller appointment activity from AutoMarket Pro'],
+  remote_messages: ['Message activity', 'New thread metadata or unread-count changes'],
+  remote_resellers: ['Reseller activity', 'New reseller appointments or records'],
+  remote_agenda: ['Connected agenda', 'New or changed agenda contacts'],
+  remote_listings: ['Listings', 'New or changed inventory records'],
+  remote_connection: ['Connection health', 'Disconnected API, permissions or recovery'],
+  remote_business_update: ['Business summaries', 'Changes in dealer or admin totals'],
+  system_test: ['System notices', 'Permission tests and important Nexa status']
+};
+
+function renderSmartNotifications() {
+  const settings = state.settings || {};
+  const consent = settings.notifications_user_consent === '1';
+  const events = state.notifications || [];
+  const cards = events.map(function renderNotificationEvent(event) {
+    const unreadClass = event.read_at ? '' : ' unread';
+    return '<article class="pulse-event ' + esc(event.severity || 'info') + unreadClass + '" data-notification-id="' + esc(event.id) + '">' +
+      '<div class="pulse-event-icon"><img src="assets/nexa-ai-orb.svg" alt=""></div>' +
+      '<div class="pulse-event-copy"><div><span>' + esc(String(event.type || '').replaceAll('_', ' ')) + '</span><time>' + formatDate(event.created_at) + '</time></div><strong>' + esc(event.title) + '</strong><p>' + esc(event.body) + '</p></div>' +
+      '<div class="pulse-event-actions"><button class="ghost-button" data-nexa-action="notification-read" data-notification-id="' + esc(event.id) + '">' + (event.read_at ? 'Read' : 'Mark read') + '</button><button class="icon-button" data-nexa-action="notification-dismiss" data-notification-id="' + esc(event.id) + '" aria-label="Dismiss">×</button></div>' +
+    '</article>';
+  }).join('') || emptyMini('Nexa Pulse is quiet', 'New reminders and connected-business updates will appear here.');
+  const preferences = state.notificationPreferences.map(function renderPreference(preference) {
+    const label = notificationTypeLabels[preference.type] || [preference.type.replaceAll('_', ' '), 'Notification category'];
+    return '<div class="preference-row" data-preference-type="' + esc(preference.type) + '"><div><strong>' + esc(label[0]) + '</strong><span>' + esc(label[1]) + '</span></div>' +
+      '<label class="switch-label"><input type="checkbox" data-pref="enabled"' + (preference.enabled ? ' checked' : '') + '><span>Enabled</span></label>' +
+      '<label class="switch-label"><input type="checkbox" data-pref="in_app_enabled"' + (preference.in_app_enabled ? ' checked' : '') + '><span>In app</span></label>' +
+      '<label class="switch-label"><input type="checkbox" data-pref="desktop_enabled"' + (preference.desktop_enabled ? ' checked' : '') + '><span>Windows</span></label></div>';
+  }).join('');
+  return sectionHeader('Nexa Pulse', 'A permission-controlled notification assistant for local work and your connected business.', '<button class="secondary-button" id="notifications-mark-all" data-nexa-action="notification-read-all">Mark all read</button>') +
+    '<div class="pulse-hero">' +
+      '<div class="pulse-ai-stage"><div class="pulse-halo"></div><img src="assets/nexa-ai-orb.svg" alt="Nexa AI assistant"><span class="pulse-thought t1"></span><span class="pulse-thought t2"></span><span class="pulse-thought t3"></span></div>' +
+      '<div class="pulse-thought-cloud"><p class="eyebrow">YOUR NOTIFICATION ASSISTANT</p><h2>' + (consent ? 'I am watching the work you approved.' : 'Would you like me to notify you?') + '</h2><p>' + (consent ? 'Choose exactly what appears inside Nexa and what may appear as a small Windows notification.' : 'Nexa will not show desktop notifications until you explicitly grant permission. You can change every category later.') + '</p><div class="button-row"><button class="primary-button" id="notification-permission" data-nexa-action="notification-permission">' + (consent ? 'Permission granted' : 'Enable notifications') + '</button><button class="secondary-button" id="notification-test" data-nexa-action="notification-test">Send test</button></div></div>' +
+      '<div class="pulse-unread"><span>Unread</span><strong>' + state.unreadNotifications + '</strong><small>notifications</small></div>' +
+    '</div>' +
+    '<div class="grid pulse-layout">' +
+      '<article class="panel-card pulse-feed"><div class="panel-header"><div><h3>Notification center</h3><p>Larger, detailed alerts inside the application</p></div></div><div class="pulse-events">' + cards + '</div></article>' +
+      '<form id="notification-preferences-form" class="panel-card pulse-preferences" data-nexa-action="notification-preferences-save"><div class="panel-header"><div><h3>What should Nexa tell you?</h3><p>Each category can be in-app, Windows, both or disabled.</p></div></div><div class="preference-list">' + preferences + '</div>' +
+        '<div class="preference-behavior"><label>Sound<select name="notifications_sound"><option value="1"' + (settings.notifications_sound !== '0' ? ' selected' : '') + '>On</option><option value="0"' + (settings.notifications_sound === '0' ? ' selected' : '') + '>Silent</option></select></label>' +
+        '<label>Closing the window<select name="notifications_minimize_to_tray"><option value="1"' + (settings.notifications_minimize_to_tray !== '0' ? ' selected' : '') + '>Keep monitoring in tray</option><option value="0"' + (settings.notifications_minimize_to_tray === '0' ? ' selected' : '') + '>Exit application</option></select></label>' +
+        '<label>Start with Windows<select name="notifications_start_with_windows"><option value="1"' + (settings.notifications_start_with_windows === '1' ? ' selected' : '') + '>Enabled</option><option value="0"' + (settings.notifications_start_with_windows !== '1' ? ' selected' : '') + '>Disabled</option></select></label>' +
+        '<label>Quiet hours start<input name="notifications_quiet_start" type="time" value="' + esc(settings.notifications_quiet_start || '22:00') + '"></label>' +
+        '<label>Quiet hours end<input name="notifications_quiet_end" type="time" value="' + esc(settings.notifications_quiet_end || '07:00') + '"></label></div>' +
+        '<button class="primary-button" type="submit" data-nexa-action="notification-preferences-save">Save notification choices</button></form>' +
+    '</div>';
+}
+
+function showPulseToast(event) {
+  if (!event) return;
+  state.activePulseEvent = event;
+  const panel = document.getElementById('nexa-pulse-toast');
+  document.getElementById('pulse-toast-title').textContent = event.title || 'Nexa Pulse';
+  document.getElementById('pulse-toast-body').textContent = event.body || '';
+  panel.hidden = false;
+  panel.classList.remove('leaving');
+  panel.classList.add('visible');
+  clearTimeout(showPulseToast.timer);
+  showPulseToast.timer = setTimeout(hidePulseToast, 12000);
+}
+
+function hidePulseToast() {
+  const panel = document.getElementById('nexa-pulse-toast');
+  if (!panel || panel.hidden) return;
+  panel.classList.add('leaving');
+  setTimeout(function finishHide() { panel.hidden = true; panel.classList.remove('visible', 'leaving'); }, 260);
 }
 
 function renderActivity() {
@@ -638,6 +816,115 @@ function bindViewEvents() {
       });
     });
   }
+
+  const integrationForm = document.getElementById('integration-form');
+  if (integrationForm) {
+    integrationForm.addEventListener('submit', async function saveIntegration(event) {
+      event.preventDefault();
+      const button = integrationForm.querySelector('[type="submit"]');
+      try {
+        button.disabled = true;
+        const data = Object.fromEntries(new FormData(integrationForm).entries());
+        await api.integration.save(data);
+        toast('Connected business settings saved.');
+        await refreshAll();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    const testButton = document.getElementById('integration-test');
+    if (testButton) testButton.addEventListener('click', async function testIntegration() {
+      try {
+        testButton.disabled = true;
+        const data = Object.fromEntries(new FormData(integrationForm).entries());
+        await api.integration.save(data);
+        await api.integration.test();
+        toast('AutoMarket Pro connection successful.');
+        await refreshAll();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        testButton.disabled = false;
+      }
+    });
+    const disconnectButton = document.getElementById('integration-disconnect');
+    if (disconnectButton) disconnectButton.addEventListener('click', async function disconnectIntegration() {
+      const confirmed = await confirmAction('Disconnect website', 'Remove the encrypted API key and stop automatic synchronization? Cached summaries and notification history will remain local.');
+      if (!confirmed) return;
+      await api.integration.disconnect();
+      toast('Connected business disconnected.');
+      await refreshAll();
+    });
+  }
+
+  const syncButtons = [document.getElementById('integration-sync-top')].filter(Boolean);
+  syncButtons.forEach(function bindSync(button) {
+    button.addEventListener('click', async function syncConnectedBusiness() {
+      try {
+        button.disabled = true;
+        button.textContent = 'Synchronizing…';
+        const result = await api.integration.sync();
+        toast('Connected business synchronized: ' + String((result.resources || []).length) + ' resources checked.');
+        await refreshAll();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Sync now';
+      }
+    });
+  });
+
+  const notificationForm = document.getElementById('notification-preferences-form');
+  if (notificationForm) {
+    notificationForm.addEventListener('submit', async function saveNotificationPreferences(event) {
+      event.preventDefault();
+      const preferences = Array.from(notificationForm.querySelectorAll('[data-preference-type]')).map(function mapPreference(row) {
+        const value = function checked(name) { const input = row.querySelector('[data-pref="' + name + '"]'); return input && input.checked ? 1 : 0; };
+        return { type: row.dataset.preferenceType, enabled: value('enabled'), in_app_enabled: value('in_app_enabled'), desktop_enabled: value('desktop_enabled') };
+      });
+      const formValues = Object.fromEntries(new FormData(notificationForm).entries());
+      await api.notifications.savePreferences(preferences, formValues);
+      toast('Notification choices saved.');
+      await refreshAll();
+    });
+    const permissionButton = document.getElementById('notification-permission');
+    if (permissionButton) permissionButton.addEventListener('click', async function requestPermission() {
+      try {
+        permissionButton.disabled = true;
+        await api.notifications.requestPermission();
+        toast('Windows notification permission recorded.');
+        await refreshAll();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        permissionButton.disabled = false;
+      }
+    });
+    const testNotificationButton = document.getElementById('notification-test');
+    if (testNotificationButton) testNotificationButton.addEventListener('click', async function testNotification() {
+      try { await api.notifications.test(); toast('Test notification created.'); } catch (error) { toast(error.message, 'error'); }
+    });
+    const markAllButton = document.getElementById('notifications-mark-all');
+    if (markAllButton) markAllButton.addEventListener('click', async function markAllRead() {
+      await api.notifications.readAll();
+      await refreshAll();
+    });
+    document.querySelectorAll('[data-nexa-action="notification-read"]').forEach(function bindNotificationRead(button) {
+      button.addEventListener('click', async function readNotification() {
+        await api.notifications.read(button.dataset.notificationId);
+        await refreshAll();
+      });
+    });
+    document.querySelectorAll('[data-nexa-action="notification-dismiss"][data-notification-id]').forEach(function bindNotificationDismiss(button) {
+      button.addEventListener('click', async function dismissNotification() {
+        await api.notifications.dismiss(button.dataset.notificationId);
+        await refreshAll();
+      });
+    });
+  }
 }
 
 document.querySelectorAll('.nav-item').forEach(function bindNavigation(button) {
@@ -645,6 +932,9 @@ document.querySelectorAll('.nav-item').forEach(function bindNavigation(button) {
 });
 document.getElementById('refresh-button').addEventListener('click', async function refreshWorkspace() { setLoading(); await refreshAll(); toast('Workspace refreshed.'); });
 document.getElementById('quick-add-button').addEventListener('click', function quickAddTask() { openEntity('task'); });
+document.getElementById('notification-bell').addEventListener('click', function openNotificationCenter() { navigate('notifications'); });
+document.getElementById('pulse-toast-open').addEventListener('click', async function openPulseNotification() { if (state.activePulseEvent && state.activePulseEvent.id) await api.notifications.read(state.activePulseEvent.id); hidePulseToast(); navigate('notifications'); await refreshAll(); });
+document.getElementById('pulse-toast-dismiss').addEventListener('click', async function dismissPulseNotification() { if (state.activePulseEvent && state.activePulseEvent.id) await api.notifications.dismiss(state.activePulseEvent.id); hidePulseToast(); await refreshAll({ render: state.view === 'notifications' }); });
 document.querySelectorAll('[data-close-dialog]').forEach(function bindCloseDialog(button) {
   button.addEventListener('click', function closeDialog() { entityDialog.close(); });
 });
@@ -654,14 +944,38 @@ entityForm.addEventListener('submit', function submitForm(event) {
 
 async function initialize() {
   try {
+    api.notifications.onNew(function receiveNotification(event) {
+      state.notifications.unshift(event);
+      state.unreadNotifications += 1;
+      document.getElementById('notification-count').textContent = String(state.unreadNotifications);
+      document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
+      document.getElementById('notification-bell').classList.add('has-unread');
+      showPulseToast(event);
+      if (state.view === 'notifications') renderView();
+    });
+    api.notifications.onOpen(function openNotificationFromSystem(event) {
+      if (event && event.openCenter) {
+        navigate('notifications');
+        return;
+      }
+      state.activePulseEvent = event || null;
+      navigate('notifications');
+      refreshAll();
+    });
     setLoading();
     await refreshAll();
     document.body.dataset.ready = 'true';
     setInterval(async function periodicRefresh() {
       try {
         state.alerts = await api.alerts.list();
+        const notificationResult = await api.notifications.list(150, false);
+        state.notifications = notificationResult.items || [];
+        state.unreadNotifications = Number(notificationResult.unread || 0);
         document.getElementById('alert-count').textContent = String(state.alerts.length);
-        if (state.view === 'alerts' || state.view === 'dashboard') {
+        document.getElementById('notification-count').textContent = String(state.unreadNotifications);
+        document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
+        document.getElementById('notification-bell').classList.toggle('has-unread', state.unreadNotifications > 0);
+        if (state.view === 'alerts' || state.view === 'dashboard' || state.view === 'notifications') {
           state.dashboard = await api.dashboard.summary();
           renderView();
         }

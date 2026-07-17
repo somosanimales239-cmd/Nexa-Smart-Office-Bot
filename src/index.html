@@ -16,19 +16,21 @@
       </div>
       <nav class="nav-list" aria-label="Main navigation">
         <button class="nav-item active" data-view="dashboard" data-testid="dashboard" data-nexa-action="navigate-dashboard"><span>⌂</span>Dashboard</button>
+        <button class="nav-item" data-view="connected" data-testid="connected-business" data-nexa-action="navigate-connected"><span>↗</span>Connected Business</button>
         <button class="nav-item" data-view="contacts" data-testid="contacts" data-nexa-action="navigate-contacts"><span>◎</span>Contacts</button>
         <button class="nav-item" data-view="leads" data-testid="leads" data-nexa-action="navigate-leads"><span>◈</span>Leads</button>
         <button class="nav-item" data-view="agenda" data-testid="agenda" data-nexa-action="navigate-agenda"><span>□</span>Agenda</button>
         <button class="nav-item" data-view="tasks" data-testid="tasks" data-nexa-action="navigate-tasks"><span>✓</span>Tasks</button>
         <button class="nav-item" data-view="ai" data-testid="ai" data-nexa-action="navigate-ai"><span>✦</span>AI Suggestions</button>
         <button class="nav-item" data-view="alerts" data-testid="alerts" data-nexa-action="navigate-alerts"><span>!</span>Alerts <em id="alert-count">0</em></button>
+        <button class="nav-item" data-view="notifications" data-testid="smart-notifications" data-nexa-action="navigate-notifications"><span>☁</span>Nexa Pulse <em id="notification-count">0</em></button>
         <button class="nav-item" data-view="activity" data-testid="activity" data-nexa-action="navigate-activity"><span>≡</span>Activity</button>
         <button class="nav-item" data-view="settings" data-testid="settings" data-nexa-action="navigate-settings"><span>⚙</span>Settings</button>
         <button class="nav-item" data-view="about" data-testid="about" data-nexa-action="navigate-about"><span>i</span>About</button>
       </nav>
       <div class="sidebar-footer">
         <div class="system-dot"></div>
-        <div><strong>Local workspace</strong><span id="sidebar-version">v1.0.0</span></div>
+        <div><strong>Local workspace</strong><span id="sidebar-version">v1.1.0</span></div>
       </div>
     </aside>
 
@@ -39,6 +41,7 @@
           <h1 id="page-title">Dashboard</h1>
         </div>
         <div class="top-actions">
+          <button class="notification-bell" id="notification-bell" data-nexa-action="navigate-notifications" aria-label="Open smart notifications"><span>☁</span><b id="notification-bell-count">0</b></button>
           <div class="provider-pill" id="provider-pill"><span></span><b>AI not configured</b></div>
           <button class="icon-button" id="refresh-button" data-nexa-action="alert-refresh" title="Refresh" aria-label="Refresh">↻</button>
           <button class="primary-button" id="quick-add-button" data-testid="quick-add" data-nexa-action="task-create">+ Quick add</button>
@@ -85,6 +88,26 @@
       </div>
     </form>
   </dialog>
+
+
+
+  <aside id="nexa-pulse-toast" class="nexa-pulse-toast" hidden aria-live="assertive">
+    <div class="pulse-avatar-wrap">
+      <img src="assets/nexa-ai-orb.svg" alt="Nexa AI assistant" class="pulse-avatar">
+      <span class="thought-dot thought-dot-one"></span>
+      <span class="thought-dot thought-dot-two"></span>
+      <span class="thought-dot thought-dot-three"></span>
+    </div>
+    <div class="pulse-toast-copy">
+      <p class="eyebrow">NEXA PULSE</p>
+      <strong id="pulse-toast-title">Smart notification</strong>
+      <span id="pulse-toast-body"></span>
+      <div class="pulse-toast-actions">
+        <button id="pulse-toast-open" class="ghost-button" data-nexa-action="notification-open">Open</button>
+        <button id="pulse-toast-dismiss" class="icon-button" data-nexa-action="notification-dismiss" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+  </aside>
 
   <div id="toast-region" class="toast-region" aria-live="assertive"></div>
   <script src="modules/contacts.js"></script>

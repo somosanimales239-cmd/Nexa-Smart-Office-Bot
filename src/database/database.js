@@ -304,7 +304,7 @@ class DatabaseService {
   }
 
   saveSettings(values) {
-    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention']);
+    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end']);
     const statement = this.db.prepare(`
       INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
@@ -348,6 +348,125 @@ class DatabaseService {
       tasks: this.db.prepare("SELECT id, title, due_at, priority, status, description FROM tasks WHERE status='Pending' ORDER BY due_at LIMIT 20").all(),
       appointments: this.db.prepare("SELECT id, title, start_at, status, description FROM appointments WHERE status='Scheduled' AND start_at >= ? ORDER BY start_at LIMIT 20").all(nowIso())
     };
+  }
+
+
+
+  getIntegrationStatus() {
+    return this.db.prepare("SELECT * FROM integration_status WHERE integration_id='automarket'").get() || {
+      integration_id: 'automarket', connected: 0, account_type: null, account_id: null, store_id: null,
+      scopes_json: '[]', connection_map_json: '{}', last_sync_at: null, last_error: '', updated_at: null
+    };
+  }
+
+  saveIntegrationStatus(values) {
+    const current = this.getIntegrationStatus();
+    const next = Object.assign({}, current, values || {});
+    this.db.prepare(`
+      INSERT INTO integration_status(integration_id, connected, account_type, account_id, store_id, scopes_json, connection_map_json, last_sync_at, last_error, updated_at)
+      VALUES ('automarket', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(integration_id) DO UPDATE SET
+        connected=excluded.connected, account_type=excluded.account_type, account_id=excluded.account_id,
+        store_id=excluded.store_id, scopes_json=excluded.scopes_json, connection_map_json=excluded.connection_map_json,
+        last_sync_at=excluded.last_sync_at, last_error=excluded.last_error, updated_at=excluded.updated_at
+    `).run(Number(next.connected) ? 1 : 0, nullable(next.account_type), nullable(next.account_id), nullable(next.store_id),
+      normalizeText(next.scopes_json || '[]'), normalizeText(next.connection_map_json || '{}'), nullable(next.last_sync_at),
+      normalizeText(next.last_error), nowIso());
+    return this.getIntegrationStatus();
+  }
+
+  getIntegrationSnapshot(resource) {
+    return this.db.prepare('SELECT * FROM integration_snapshots WHERE resource = ?').get(normalizeText(resource)) || null;
+  }
+
+  listIntegrationSnapshots() {
+    return this.db.prepare('SELECT * FROM integration_snapshots ORDER BY resource').all();
+  }
+
+  saveIntegrationSnapshot(values) {
+    this.db.prepare(`
+      INSERT INTO integration_snapshots(resource, payload_hash, item_count, payload_json, last_checked_at, last_changed_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(resource) DO UPDATE SET payload_hash=excluded.payload_hash, item_count=excluded.item_count,
+        payload_json=excluded.payload_json, last_checked_at=excluded.last_checked_at, last_changed_at=excluded.last_changed_at
+    `).run(normalizeText(values.resource), normalizeText(values.payload_hash), Number(values.item_count || 0),
+      normalizeText(values.payload_json || 'null'), normalizeText(values.last_checked_at || nowIso()),
+      normalizeText(values.last_changed_at || nowIso()));
+    return this.getIntegrationSnapshot(values.resource);
+  }
+
+  createNotificationEvent(values) {
+    const eventId = normalizeText(values.id) || id();
+    try {
+      this.db.prepare(`
+        INSERT INTO notification_events(id, source, type, severity, title, body, entity_type, entity_id, action_url, metadata_json, dedupe_key, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(eventId, normalizeText(values.source || 'local'), normalizeText(values.type || 'general'),
+        normalizeText(values.severity || 'info'), normalizeText(values.title || 'Nexa Smart Office Bot'),
+        normalizeText(values.body || ''), nullable(values.entity_type), nullable(values.entity_id), nullable(values.action_url),
+        normalizeText(values.metadata_json || '{}'), normalizeText(values.dedupe_key || eventId), nowIso());
+    } catch (error) {
+      if (String(error.message || '').toLowerCase().includes('unique')) return null;
+      throw error;
+    }
+    this.log('created', 'notification', eventId, values.type || 'general');
+    return this.db.prepare('SELECT * FROM notification_events WHERE id = ?').get(eventId);
+  }
+
+  listNotificationEvents(limit = 100, unreadOnly = false) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    if (unreadOnly) return this.db.prepare('SELECT * FROM notification_events WHERE read_at IS NULL AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+    return this.db.prepare('SELECT * FROM notification_events WHERE dismissed_at IS NULL ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+  }
+
+  listUndeliveredNotifications(limit = 20) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    return this.db.prepare('SELECT * FROM notification_events WHERE delivered_at IS NULL AND dismissed_at IS NULL ORDER BY created_at ASC LIMIT ?').all(safeLimit);
+  }
+
+  countUnreadNotifications() {
+    const row = this.db.prepare('SELECT COUNT(*) AS total FROM notification_events WHERE read_at IS NULL AND dismissed_at IS NULL').get();
+    return Number(row && row.total || 0);
+  }
+
+  markNotificationRead(eventId) {
+    this.db.prepare('UPDATE notification_events SET read_at=COALESCE(read_at, ?) WHERE id=?').run(nowIso(), eventId);
+  }
+
+  markAllNotificationsRead() {
+    this.db.prepare('UPDATE notification_events SET read_at=COALESCE(read_at, ?) WHERE dismissed_at IS NULL').run(nowIso());
+  }
+
+  markNotificationDelivered(eventId, channel) {
+    this.db.prepare('UPDATE notification_events SET delivered_at=COALESCE(delivered_at, ?), delivery_channel=? WHERE id=?').run(nowIso(), normalizeText(channel), eventId);
+  }
+
+  dismissNotification(eventId) {
+    this.db.prepare('UPDATE notification_events SET dismissed_at=COALESCE(dismissed_at, ?), read_at=COALESCE(read_at, ?) WHERE id=?').run(nowIso(), nowIso(), eventId);
+  }
+
+  listNotificationPreferences() {
+    return this.db.prepare('SELECT * FROM notification_preferences ORDER BY type').all();
+  }
+
+  getNotificationPreference(type) {
+    return this.db.prepare('SELECT * FROM notification_preferences WHERE type=?').get(normalizeText(type)) || null;
+  }
+
+  saveNotificationPreferences(preferences) {
+    const statement = this.db.prepare(`
+      INSERT INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(type) DO UPDATE SET enabled=excluded.enabled, desktop_enabled=excluded.desktop_enabled,
+        in_app_enabled=excluded.in_app_enabled, updated_at=excluded.updated_at
+    `);
+    this.transaction(() => {
+      (preferences || []).forEach(function savePreference(preference) {
+        statement.run(normalizeText(preference.type), Number(preference.enabled) ? 1 : 0,
+          Number(preference.desktop_enabled) ? 1 : 0, Number(preference.in_app_enabled) ? 1 : 0, nowIso());
+      });
+    });
+    return this.listNotificationPreferences();
   }
 
   createBackup(backupPath) {

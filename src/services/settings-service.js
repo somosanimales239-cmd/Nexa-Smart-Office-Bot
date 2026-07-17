@@ -68,7 +68,8 @@ class SettingsService {
       secrets: {
         secureStorageAvailable: this.secureStorageAvailable(),
         openai: secrets.openai ? { configured: true, masked: '••••' + String(secrets.openai.last4 || ''), updated_at: secrets.openai.updated_at } : { configured: false, masked: '' },
-        deepseek: secrets.deepseek ? { configured: true, masked: '••••' + String(secrets.deepseek.last4 || ''), updated_at: secrets.deepseek.updated_at } : { configured: false, masked: '' }
+        deepseek: secrets.deepseek ? { configured: true, masked: '••••' + String(secrets.deepseek.last4 || ''), updated_at: secrets.deepseek.updated_at } : { configured: false, masked: '' },
+        automarket: secrets.automarket ? { configured: true, masked: '••••' + String(secrets.automarket.last4 || ''), updated_at: secrets.automarket.updated_at } : { configured: false, masked: '' }
       }
     });
   }
@@ -77,16 +78,19 @@ class SettingsService {
     const input = Object.assign({}, payload || {});
     const openaiKey = typeof input.openai_key === 'string' ? input.openai_key : '';
     const deepseekKey = typeof input.deepseek_key === 'string' ? input.deepseek_key : '';
+    const automarketKey = typeof input.automarket_api_key === 'string' ? input.automarket_api_key : '';
     delete input.openai_key;
     delete input.deepseek_key;
+    delete input.automarket_api_key;
     this.database.saveSettings(input);
     if (openaiKey.trim()) this.saveSecret('openai', openaiKey);
     if (deepseekKey.trim()) this.saveSecret('deepseek', deepseekKey);
+    if (automarketKey.trim()) this.saveSecret('automarket', automarketKey);
     return this.getPublicSettings();
   }
 
   removeSecret(provider) {
-    if (provider !== 'openai' && provider !== 'deepseek') throw new Error('Invalid provider.');
+    if (!['openai', 'deepseek', 'automarket'].includes(provider)) throw new Error('Invalid provider.');
     this.saveSecret(provider, '');
     return this.getPublicSettings();
   }

@@ -83,5 +83,40 @@ contextBridge.exposeInMainWorld('nexa', Object.freeze({
     create: function create() { return invoke('backup:create'); },
     restore: function restore(filePath) { return invoke('backup:restore', { file_path: filePath }); },
     openFolder: function openFolder() { return invoke('backup:open-folder'); }
+  }),
+  integration: Object.freeze({
+    get: function get() { return invoke('integration:get'); },
+    save: function save(data) { return invoke('integration:save', data); },
+    test: function test() { return invoke('integration:test'); },
+    sync: function sync() { return invoke('integration:sync'); },
+    resource: function resource(name, query) { return invoke('integration:resource', { resource: name, query: query || {} }); },
+    disconnect: function disconnect() { return invoke('integration:disconnect'); }
+  }),
+  notifications: Object.freeze({
+    list: function list(limit, unreadOnly) { return invoke('notifications:list', { limit: limit || 100, unread_only: unreadOnly === true }); },
+    preferences: function preferences() { return invoke('notifications:preferences'); },
+    savePreferences: function savePreferences(preferences, settings) { return invoke('notifications:save-preferences', { preferences: preferences || [], settings: settings || {} }); },
+    requestPermission: function requestPermission() { return invoke('notifications:permission'); },
+    test: function test() { return invoke('notifications:test'); },
+    read: function read(id) { return invoke('notifications:read', { id: id }); },
+    readAll: function readAll() { return invoke('notifications:read-all'); },
+    dismiss: function dismiss(id) { return invoke('notifications:dismiss', { id: id }); },
+    onNew: function onNew(callback) {
+      if (typeof callback !== 'function') return function noop() {};
+      const listener = function listener(event, payload) { callback(payload); };
+      ipcRenderer.on('notification:new', listener);
+      return function unsubscribe() { ipcRenderer.removeListener('notification:new', listener); };
+    },
+    onOpen: function onOpen(callback) {
+      if (typeof callback !== 'function') return function noop() {};
+      const eventListener = function eventListener(event, payload) { callback(payload); };
+      const centerListener = function centerListener() { callback({ openCenter: true }); };
+      ipcRenderer.on('notification:open', eventListener);
+      ipcRenderer.on('notification:open-center', centerListener);
+      return function unsubscribe() {
+        ipcRenderer.removeListener('notification:open', eventListener);
+        ipcRenderer.removeListener('notification:open-center', centerListener);
+      };
+    }
   })
 }));

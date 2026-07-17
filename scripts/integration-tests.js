@@ -27,7 +27,7 @@ try {
   db = new DatabaseService(dbPath);
 
   test('database file is created', () => assert.equal(fs.existsSync(dbPath), true));
-  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 2); });
+  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 3); });
 
   let contact;
   test('contact can be created', () => { contact = db.saveContact({ name:'Ana Rivera', company:'Rivera LLC', email:'ana@example.com', phone:'555-0101', tags:'VIP' }); assert.equal(contact.name,'Ana Rivera'); });
@@ -50,6 +50,31 @@ try {
   test('alerts include overdue task and lead follow-up', () => { const types=db.listAlerts().map((x)=>x.type); assert(types.includes('Overdue task')); assert(types.includes('Lead follow-up')); });
   test('custom reminder can be created and toggled', () => { const reminder=db.saveReminder({ title:'Call customer', remind_at:new Date(Date.now()-1000).toISOString() }); assert.equal(reminder.title,'Call customer'); assert.equal(db.toggleReminder(reminder.id).enabled,0); assert.equal(db.toggleReminder(reminder.id).enabled,1); });
   test('due notifications are found and marked', () => { const due=db.dueNotifications(); assert(due.length >= 3); db.markNotificationSent(due[0].entity_type,due[0].id); assert(db.dueNotifications().length < due.length); });
+
+
+  test('connected business tables are created', () => {
+    const names = db.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((row)=>row.name);
+    ['integration_status','integration_snapshots','notification_preferences','notification_events'].forEach((name)=>assert(names.includes(name)));
+  });
+  test('integration status and snapshots persist', () => {
+    db.saveIntegrationStatus({ connected:1, account_type:'dealer', store_id:'store-1', scopes_json:'["store:read"]', last_sync_at:new Date().toISOString() });
+    assert.equal(db.getIntegrationStatus().connected,1);
+    db.saveIntegrationSnapshot({ resource:'orders', payload_hash:'abc', item_count:2, payload_json:'[{"id":1},{"id":2}]', last_checked_at:new Date().toISOString(), last_changed_at:new Date().toISOString() });
+    assert.equal(db.getIntegrationSnapshot('orders').item_count,2);
+  });
+  test('notification preferences and events persist', () => {
+    db.saveNotificationPreferences([{ type:'remote_orders', enabled:1, desktop_enabled:1, in_app_enabled:1 }]);
+    assert.equal(db.getNotificationPreference('remote_orders').desktop_enabled,1);
+    const event=db.createNotificationEvent({ source:'automarket', type:'remote_orders', severity:'warning', title:'New order', body:'Order #100', dedupe_key:'order:100' });
+    assert(event && event.id);
+    assert.equal(db.countUnreadNotifications(),1);
+    db.markNotificationRead(event.id);
+    assert.equal(db.countUnreadNotifications(),0);
+  });
+  test('duplicate notification dedupe key is ignored', () => {
+    const duplicate=db.createNotificationEvent({ source:'automarket', type:'remote_orders', title:'Duplicate', dedupe_key:'order:100' });
+    assert.equal(duplicate,null);
+  });
 
   test('settings update only allowed keys', () => { const settings=db.saveSettings({ preferred_provider:'deepseek', evil:'ignored' }); assert.equal(settings.preferred_provider,'deepseek'); assert.equal(settings.evil,undefined); });
   test('AI suggestion is stored', () => { db.saveSuggestion({ provider:'deepseek', kind:'lead_next_step', related_type:'lead', related_id:lead.id, prompt:'p', response:'r' }); assert.equal(db.listSuggestions()[0].response,'r'); });

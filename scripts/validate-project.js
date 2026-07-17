@@ -9,8 +9,8 @@ const sources = [
   'main.js', 'preload.js', 'src/index.html', 'src/app.js',
   'src/database/migrations.js', 'src/services/settings-service.js',
   'src/services/backup-service.js', 'src/services/openai-provider.js',
-  'src/services/deepseek-provider.js', 'src/ipc/foundation-ipc.js',
-  'src/ipc/records-ipc.js', 'src/ipc/agenda-ipc.js', 'src/ipc/ai-ipc.js',
+  'src/services/deepseek-provider.js', 'src/services/automarket-api-service.js', 'src/services/notification-service.js', 'src/ipc/foundation-ipc.js',
+  'src/ipc/records-ipc.js', 'src/ipc/agenda-ipc.js', 'src/ipc/ai-ipc.js', 'src/ipc/integrations-ipc.js', 'src/ipc/notifications-ipc.js',
   'src/modules/contacts.js', 'src/modules/leads.js', 'src/modules/tasks.js',
   'src/modules/agenda.js', 'src/modules/notifications.js', 'src/modules/ai.js'
 ];
@@ -31,7 +31,14 @@ const requiredMarkers = [
   'NEXA_UI_CONTRACT_V1',
   'data-nexa-action',
   'confirm-delete-dialog',
-  'ai-save-confirmation'
+  'ai-save-confirmation',
+  'NEXA_AUTOMARKET_API_V1',
+  'NEXA_SMART_NOTIFICATIONS_V1',
+  'NEXA_CONNECTED_BUSINESS_AND_NOTIFICATIONS_V1',
+  'integration:test',
+  'notifications:permission',
+  'connected-business',
+  'smart-notifications'
 ];
 const failures = requiredMarkers.filter(function missingMarker(marker) {
   return !combined.includes(marker);

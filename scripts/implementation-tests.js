@@ -15,7 +15,9 @@ assert.equal(main.includes('contextIsolation: true'), true);
 assert.equal(main.includes('nodeIntegration: false'), true);
 assert.equal(preload.includes("contacts:create"), true);
 assert.equal(preload.includes("ai:generate"), true);
-['dashboard', 'sidebar', 'contacts', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
+assert.equal(preload.includes("integration:test"), true);
+assert.equal(preload.includes("notifications:permission"), true);
+['dashboard', 'sidebar', 'connected-business', 'contacts', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'smart-notifications', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
   assert.equal(html.includes('data-testid="' + id + '"'), true);
 });
 console.log('Implementation tests passed.');

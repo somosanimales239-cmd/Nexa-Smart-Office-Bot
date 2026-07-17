@@ -22,3 +22,10 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, `sand
 ## Build
 
 The included GitHub Actions workflow runs validation, integration tests, Electron UI smoke, Windows packaging and artifact verification before publishing the downloadable workflow artifact.
+
+## Version 1.1.0 additions
+
+- **Connected Business:** secure AutoMarket Pro API-key connection, resource discovery, cached store/dealer/admin summaries, listings, orders, agenda, message metadata, and reseller activity.
+- **Nexa Pulse:** explicit notification permission, animated AI assistant with thought-cloud alerts inside the application, compact Windows notifications, per-category controls, quiet hours, sound, tray monitoring, and optional Windows startup.
+
+See `CONNECTED_BUSINESS_SETUP.md` for connection scopes and security behavior.

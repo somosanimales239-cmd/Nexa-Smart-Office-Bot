@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Nexa AI assistant">
+  <defs>
+    <radialGradient id="orb" cx="38%" cy="28%" r="72%">
+      <stop offset="0" stop-color="#dffcff"/>
+      <stop offset=".22" stop-color="#7ee7ff"/>
+      <stop offset=".58" stop-color="#7a74ff"/>
+      <stop offset="1" stop-color="#281d65"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#6df8dd"/><stop offset=".5" stop-color="#8aa0ff"/><stop offset="1" stop-color="#f58cff"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <circle cx="120" cy="120" r="98" fill="#0d1530" stroke="#273c69" stroke-width="4"/>
+  <circle cx="120" cy="120" r="77" fill="url(#orb)" filter="url(#glow)"/>
+  <ellipse cx="92" cy="100" rx="12" ry="18" fill="#0b1230"/>
+  <ellipse cx="148" cy="100" rx="12" ry="18" fill="#0b1230"/>
+  <circle cx="88" cy="94" r="4" fill="#fff"/>
+  <circle cx="144" cy="94" r="4" fill="#fff"/>
+  <path d="M82 145c20 19 56 19 76 0" fill="none" stroke="#0b1230" stroke-width="9" stroke-linecap="round"/>
+  <path d="M38 91c-18 11-20 42-4 57M202 91c18 11 20 42 4 57" fill="none" stroke="url(#ring)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M120 14v18M120 208v18M14 120h18M208 120h18" stroke="url(#ring)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="120" cy="14" r="8" fill="#6df8dd"/><circle cx="120" cy="226" r="8" fill="#f58cff"/>
+</svg>

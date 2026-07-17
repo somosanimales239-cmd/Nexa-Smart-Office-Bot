@@ -3,7 +3,7 @@
 const NEXA_SCHEMA_MIGRATION_CONTRACT = 'migration marker: NEXA_SCHEMA_MIGRATION_V1';
 
 const NEXA_SCHEMA_MIGRATION_V1 = 'NEXA_SCHEMA_MIGRATION_V1';
-const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations';
+const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, notification_preferences, notification_events';
 
 const nowIso = function nowIso() {
   return new Date().toISOString();
@@ -53,6 +53,39 @@ function applyMigrations(database) {
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_enabled', '1', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automatic_backups', '1', datetime('now'));",
         "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('backup_retention', '10', datetime('now'));"
+      ].join(' ')
+    },
+    {
+      id: 3,
+      name: 'NEXA_CONNECTED_BUSINESS_AND_NOTIFICATIONS_V1',
+      sql: [
+        `CREATE TABLE IF NOT EXISTS integration_status (integration_id TEXT PRIMARY KEY, connected INTEGER NOT NULL DEFAULT 0, account_type TEXT, account_id TEXT, store_id TEXT, scopes_json TEXT NOT NULL DEFAULT '[]', connection_map_json TEXT NOT NULL DEFAULT '{}', last_sync_at TEXT, last_error TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);`,
+        `CREATE TABLE IF NOT EXISTS integration_snapshots (resource TEXT PRIMARY KEY, payload_hash TEXT NOT NULL, item_count INTEGER NOT NULL DEFAULT 0, payload_json TEXT NOT NULL DEFAULT 'null', last_checked_at TEXT NOT NULL, last_changed_at TEXT NOT NULL);`,
+        'CREATE TABLE IF NOT EXISTS notification_preferences (type TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, desktop_enabled INTEGER NOT NULL DEFAULT 1, in_app_enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL);',
+        `CREATE TABLE IF NOT EXISTS notification_events (id TEXT PRIMARY KEY, source TEXT NOT NULL, type TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'info', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', entity_type TEXT, entity_id TEXT, action_url TEXT, metadata_json TEXT NOT NULL DEFAULT '{}', dedupe_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, read_at TEXT, delivered_at TEXT, delivery_channel TEXT, dismissed_at TEXT);`,
+        'CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_events(created_at DESC);',
+        'CREATE INDEX IF NOT EXISTS idx_notification_events_unread ON notification_events(read_at, dismissed_at, created_at DESC);',
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_base_url', '', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_sync_enabled', '0', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('automarket_poll_minutes', '5', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_user_consent', '0', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_consent_at', '', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_sound', '1', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_minimize_to_tray', '1', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_start_with_windows', '0', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_quiet_start', '22:00', datetime('now'));",
+        "INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('notifications_quiet_end', '07:00', datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('local_task_due',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('local_appointment_due',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('local_reminder',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_orders',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_messages',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_resellers',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_agenda',1,0,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_listings',1,0,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_connection',1,1,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('remote_business_update',1,0,1,datetime('now'));",
+        "INSERT OR IGNORE INTO notification_preferences(type, enabled, desktop_enabled, in_app_enabled, updated_at) VALUES ('system_test',1,1,1,datetime('now'));"
       ].join(' ')
     }
   ];
