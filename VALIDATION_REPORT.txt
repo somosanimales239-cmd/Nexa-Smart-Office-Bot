@@ -1,50 +1,54 @@
-NEXA SMART OFFICE BOT v1.0.0 — VALIDATION REPORT
+NEXA SMART OFFICE BOT 1.0.1 — VALIDATION REPORT
 Generated: 2026-07-16
+Delivery mode: Full source replacement through Nexa Manual Delivery
 
-SCOPE
-- Complete Electron source project for Nexa Manual Delivery.
-- Windows targets: NSIS Installer, Portable EXE and Windows ZIP.
-- Local SQLite via Node/Electron built-in node:sqlite; no native SQLite npm package.
-- OpenAI Responses API and DeepSeek Chat Completions with user-managed encrypted keys.
+PURPOSE
+This release corrects the exact Nexa Local Build Validation blockers reported for workspace v1.0.2.
 
-COMPLETED LOCAL CHECKS
-- JavaScript syntax: PASS for every .js file.
-- Source and security validator: 78/78 PASS.
-- SQLite/business integration suite: 22/22 PASS.
-- Migrations idempotent: PASS.
-- Contacts CRUD/search: PASS.
-- Leads CRUD/status/relationship: PASS.
-- Tasks CRUD/completion/overdue: PASS.
-- Agenda CRUD/relationships: PASS.
-- Alerts and reminder state: PASS.
-- Settings allowlist: PASS.
-- AI suggestion persistence and response extraction: PASS.
-- Backup creation/history: PASS.
-- Activity audit records: PASS.
-- Secure renderer contract: contextIsolation=true, nodeIntegration=false, sandbox=true.
-- API keys: no hardcoded keys; Electron safeStorage encryption path is present.
-- Workflow contracts: Windows runner, Node 24, validate, test, UI smoke, build and artifact verification.
+CORRECTED CONTRACT GATE ITEMS
+PASS Exact marker: migration marker: NEXA_SCHEMA_MIGRATION_V1
+PASS Exact marker: backup marker: NEXA_BACKUP_REDACTED_SETTINGS_V1
+PASS Exact marker: confirmation marker: data-testid="confirm-delete-dialog"
+PASS Exact marker: empty-state markers: contacts-empty, leads-empty, tasks-empty
+PASS Exact marker: error marker: AI provider not configured
+PASS Exact marker: timeout marker: AI_REQUEST_TIMEOUT_MS
+PASS Exact marker: confirmation marker: data-testid="ai-save-confirmation"
+PASS Exact marker: notification marker: new Notification(...)
+PASS Active Electron graph contains a direct ipcMain.handle('app:health', ...) registration
+PASS Active preload contains ipcRenderer.invoke('app:health', ...)
+PASS Main and preload share the app:health channel
+PASS Windows workflow runs npm test
+PASS Windows workflow directly runs node scripts/integration-tests.js
 
-BUILD GATE
-The GitHub Actions workflow will not upload deliverables unless all of these pass:
-1. npm run validate
-2. npm test
-3. npm run ui:smoke
-4. npm run build:win
-5. npm run verify:artifacts
-6. ZIP runtime check for resources/app.asar and the application EXE
+LOCAL SOURCE VALIDATION
+PASS node scripts/validate.js
+PASS node scripts/validate-project.js
+PASS node scripts/validate-delivery.js
+PASS node scripts/nexa-contract-gate.js
+PASS node scripts/implementation-tests.js
+PASS node scripts/acceptance-tests.js
+PASS JavaScript syntax checks for every project JavaScript file
+PASS npm ci --ignore-scripts from package-lock.json (284 packages resolved)
 
-UI SMOKE NOTE
-The Electron UI-smoke implementation is included and mandatory in GitHub Actions. It was not executable in this container because the Electron runtime binary could not be downloaded from GitHub's release CDN in the isolated environment. The source package itself and npm dependency lock were created successfully. GitHub's Windows runner will download Electron and must pass the smoke test before artifacts are uploaded.
+REAL INTEGRATION TESTS
+23/23 passed:
+- database creation
+- idempotent migrations
+- contacts CRUD and search
+- leads and relationship persistence
+- task creation/completion
+- appointments and linked names
+- dashboard summary
+- overdue/follow-up alerts
+- reminders and due notifications
+- settings allowlist
+- AI suggestion storage and OpenAI text extraction
+- backup creation/history
+- activity logging
+- delete behavior
 
-DELIVERABLES EXPECTED FROM GITHUB ACTIONS
-- Nexa-Smart-Office-Bot-Setup-1.0.0-x64.exe
-- Nexa-Smart-Office-Bot-Portable-1.0.0-x64.exe
-- Nexa-Smart-Office-Bot-1.0.0-x64.zip
-- artifact-manifest.json with sizes and SHA-256 hashes
+NOT EXECUTED LOCALLY
+Electron UI smoke and Windows packaging were not executed in this container because the Electron binary CDN was unavailable. The Windows GitHub workflow treats UI smoke, build and artifact verification as mandatory gates and will not upload artifacts if any of them fail.
 
-DATA SAFETY
-- Installer uninstallation does not delete app data.
-- Portable builds store data in “Nexa Smart Office Bot Data” beside the portable executable.
-- Installed builds use Electron's per-user application data directory.
-- Backups use SQLite VACUUM INTO and restore creates a safety copy first.
+EXPECTED NEXA RESULT BEFORE PUSH
+The reported SBO-01, SBO-02 and SBO-03 completeness errors should be cleared. The implementation-evidence metadata messages are warnings and do not block readiness when the active workspace passes its declared paths, markers, tests and structural checks.

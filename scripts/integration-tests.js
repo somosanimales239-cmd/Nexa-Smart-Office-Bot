@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { DatabaseService } = require('../src/database/database');
-const { extractOpenAIText } = require('../src/services/ai-service');
+const { extractOpenAIText } = require('../src/services/openai-provider');
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-smart-office-'));
 const dbPath = path.join(tempDir, 'test.sqlite');
@@ -48,7 +48,8 @@ try {
 
   test('dashboard summary reflects records', () => { const summary=db.dashboardSummary(); assert.equal(summary.contacts,1); assert.equal(summary.activeLeads,1); assert.equal(summary.pendingTasks,1); });
   test('alerts include overdue task and lead follow-up', () => { const types=db.listAlerts().map((x)=>x.type); assert(types.includes('Overdue task')); assert(types.includes('Lead follow-up')); });
-  test('due notifications are found and marked', () => { const due=db.dueNotifications(); assert(due.length >= 2); db.markNotificationSent(due[0].entity_type,due[0].id); assert(db.dueNotifications().length < due.length); });
+  test('custom reminder can be created and toggled', () => { const reminder=db.saveReminder({ title:'Call customer', remind_at:new Date(Date.now()-1000).toISOString() }); assert.equal(reminder.title,'Call customer'); assert.equal(db.toggleReminder(reminder.id).enabled,0); assert.equal(db.toggleReminder(reminder.id).enabled,1); });
+  test('due notifications are found and marked', () => { const due=db.dueNotifications(); assert(due.length >= 3); db.markNotificationSent(due[0].entity_type,due[0].id); assert(db.dueNotifications().length < due.length); });
 
   test('settings update only allowed keys', () => { const settings=db.saveSettings({ preferred_provider:'deepseek', evil:'ignored' }); assert.equal(settings.preferred_provider,'deepseek'); assert.equal(settings.evil,undefined); });
   test('AI suggestion is stored', () => { db.saveSuggestion({ provider:'deepseek', kind:'lead_next_step', related_type:'lead', related_id:lead.id, prompt:'p', response:'r' }); assert.equal(db.listSuggestions()[0].response,'r'); });

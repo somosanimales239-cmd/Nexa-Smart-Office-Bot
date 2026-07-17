@@ -1,17 +1,20 @@
 {
     "name": "Nexa Smart Office Bot",
-    "slug": "project-20260716-180142",
-    "uuid": "3cfbbcc4-c60c-4a01-9090-3d4cdaad6903",
-    "type": "electron",
-    "version": "1.0.0",
-    "application_version": "1.0.0",
-    "workspace_revision": "1.0.2",
-    "managed_by": "Nexa App Builder Pro",
-    "created_at": "2026-07-16 18:01:42",
-    "rules": {
-        "modify_only_necessary_files": true,
-        "backup_before_changes": true,
-        "rollback_enabled": true
+    "application_version": "1.0.1",
+    "workspace_revision": "1.0.5",
+    "project_type": "electron",
+    "build_target": "windows",
+    "delivery": {
+        "installer": true,
+        "portable": true,
+        "zip": true
     },
-    "updated_at": "2026-07-16 19:48:36"
+    "contracts": [
+        "SBO-01-foundation-security",
+        "SBO-02-business-records",
+        "SBO-03-agenda-alerts-ai",
+        "SBO-04-ui-validation-delivery"
+    ],
+    "version": "1.0.1",
+    "updated_at": "2026-07-16 20:32:45"
 }

@@ -9,22 +9,22 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" data-testid="sidebar">
       <div class="brand">
         <div class="brand-mark">N</div>
         <div><strong>Nexa</strong><span>Smart Office Bot</span></div>
       </div>
       <nav class="nav-list" aria-label="Main navigation">
-        <button class="nav-item active" data-view="dashboard" data-testid="nav-dashboard"><span>⌂</span>Dashboard</button>
-        <button class="nav-item" data-view="contacts" data-testid="nav-contacts"><span>◎</span>Contacts</button>
-        <button class="nav-item" data-view="leads" data-testid="nav-leads"><span>◈</span>Leads</button>
-        <button class="nav-item" data-view="agenda" data-testid="nav-agenda"><span>□</span>Agenda</button>
-        <button class="nav-item" data-view="tasks" data-testid="nav-tasks"><span>✓</span>Tasks</button>
-        <button class="nav-item" data-view="ai" data-testid="nav-ai"><span>✦</span>AI Suggestions</button>
-        <button class="nav-item" data-view="alerts" data-testid="nav-alerts"><span>!</span>Alerts <em id="alert-count">0</em></button>
-        <button class="nav-item" data-view="activity" data-testid="nav-activity"><span>≡</span>Activity</button>
-        <button class="nav-item" data-view="settings" data-testid="nav-settings"><span>⚙</span>Settings</button>
-        <button class="nav-item" data-view="about" data-testid="nav-about"><span>i</span>About</button>
+        <button class="nav-item active" data-view="dashboard" data-testid="dashboard" data-nexa-action="navigate-dashboard"><span>⌂</span>Dashboard</button>
+        <button class="nav-item" data-view="contacts" data-testid="contacts" data-nexa-action="navigate-contacts"><span>◎</span>Contacts</button>
+        <button class="nav-item" data-view="leads" data-testid="leads" data-nexa-action="navigate-leads"><span>◈</span>Leads</button>
+        <button class="nav-item" data-view="agenda" data-testid="agenda" data-nexa-action="navigate-agenda"><span>□</span>Agenda</button>
+        <button class="nav-item" data-view="tasks" data-testid="tasks" data-nexa-action="navigate-tasks"><span>✓</span>Tasks</button>
+        <button class="nav-item" data-view="ai" data-testid="ai" data-nexa-action="navigate-ai"><span>✦</span>AI Suggestions</button>
+        <button class="nav-item" data-view="alerts" data-testid="alerts" data-nexa-action="navigate-alerts"><span>!</span>Alerts <em id="alert-count">0</em></button>
+        <button class="nav-item" data-view="activity" data-testid="activity" data-nexa-action="navigate-activity"><span>≡</span>Activity</button>
+        <button class="nav-item" data-view="settings" data-testid="settings" data-nexa-action="navigate-settings"><span>⚙</span>Settings</button>
+        <button class="nav-item" data-view="about" data-testid="about" data-nexa-action="navigate-about"><span>i</span>About</button>
       </nav>
       <div class="sidebar-footer">
         <div class="system-dot"></div>
@@ -40,8 +40,8 @@
         </div>
         <div class="top-actions">
           <div class="provider-pill" id="provider-pill"><span></span><b>AI not configured</b></div>
-          <button class="icon-button" id="refresh-button" title="Refresh" aria-label="Refresh">↻</button>
-          <button class="primary-button" id="quick-add-button" data-testid="quick-add">+ Quick add</button>
+          <button class="icon-button" id="refresh-button" data-nexa-action="alert-refresh" title="Refresh" aria-label="Refresh">↻</button>
+          <button class="primary-button" id="quick-add-button" data-testid="quick-add" data-nexa-action="task-create">+ Quick add</button>
         </div>
       </header>
       <section id="app-content" class="content" data-testid="app-content" aria-live="polite"></section>
@@ -49,31 +49,50 @@
   </div>
 
   <dialog id="entity-dialog" class="dialog">
-    <form method="dialog" id="entity-form">
+    <form method="dialog" id="entity-form" data-nexa-action="entity-save">
       <div class="dialog-header">
         <div><p class="eyebrow" id="dialog-eyebrow">RECORD</p><h2 id="dialog-title">Edit record</h2></div>
-        <button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button>
+        <button type="button" class="icon-button" data-close-dialog data-nexa-action="dialog-close" aria-label="Close">×</button>
       </div>
       <div id="dialog-fields" class="form-grid"></div>
       <div class="dialog-actions">
-        <button type="button" class="secondary-button" data-close-dialog>Cancel</button>
-        <button type="submit" class="primary-button" data-testid="save-record">Save</button>
+        <button type="button" class="secondary-button" data-close-dialog data-nexa-action="dialog-cancel">Cancel</button>
+        <button type="submit" class="primary-button" data-testid="save-record" data-nexa-action="entity-save">Save</button>
       </div>
     </form>
   </dialog>
 
-  <dialog id="confirm-dialog" class="dialog confirm-dialog">
+  <dialog id="confirm-dialog" class="dialog confirm-dialog" data-testid="confirm-delete-dialog">
     <form method="dialog">
       <div class="dialog-header"><div><p class="eyebrow">CONFIRMATION</p><h2 id="confirm-title">Confirm action</h2></div></div>
       <p id="confirm-message" class="muted"></p>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary-button">Cancel</button>
-        <button value="confirm" class="danger-button">Confirm</button>
+        <button value="cancel" class="secondary-button" data-nexa-action="confirm-cancel">Cancel</button>
+        <button value="confirm" class="danger-button" data-nexa-action="confirm-delete">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <dialog id="ai-save-dialog" class="dialog confirm-dialog" data-testid="ai-save-confirmation">
+    <form method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">SAVE SUGGESTION</p><h2>Choose an action</h2></div></div>
+      <p class="muted">The AI suggestion will only be saved after your confirmation.</p>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button" data-nexa-action="ai-save-cancel">Cancel</button>
+        <button value="note" class="secondary-button" data-nexa-action="ai-save-note">Save as note</button>
+        <button value="task" class="primary-button" data-nexa-action="ai-save-task">Save as task</button>
       </div>
     </form>
   </dialog>
 
   <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+  <script src="modules/contacts.js"></script>
+  <script src="modules/leads.js"></script>
+  <script src="modules/tasks.js"></script>
+  <script src="modules/agenda.js"></script>
+  <script src="modules/notifications.js"></script>
+  <script src="modules/ai.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

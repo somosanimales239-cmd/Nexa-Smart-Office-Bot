@@ -1,0 +1,21 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
+
+assert.equal(packageJson.build.asar, true);
+assert.equal(main.includes('contextIsolation: true'), true);
+assert.equal(main.includes('nodeIntegration: false'), true);
+assert.equal(preload.includes("contacts:create"), true);
+assert.equal(preload.includes("ai:generate"), true);
+['dashboard', 'sidebar', 'contacts', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
+  assert.equal(html.includes('data-testid="' + id + '"'), true);
+});
+console.log('Implementation tests passed.');

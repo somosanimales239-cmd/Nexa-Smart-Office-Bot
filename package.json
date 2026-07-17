@@ -1,63 +1,82 @@
 {
-  "name": "nexa-smart-office-bot",
-  "version": "1.0.0",
-  "description": "Local-first smart office assistant for contacts, leads, agenda, tasks, alerts, OpenAI and DeepSeek suggestions.",
-  "main": "main.js",
-  "author": "Nexa",
-  "license": "MIT",
-  "private": true,
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "scripts": {
-    "start": "electron .",
-    "validate": "node scripts/validate.js",
-    "test": "node scripts/integration-tests.js",
-    "ui:smoke": "node scripts/ui-smoke.js",
-    "prebuild:win": "npm run validate && npm test && npm run ui:smoke",
-    "build:win": "electron-builder --win nsis portable zip --x64 --publish never",
-    "verify:artifacts": "node scripts/artifact-verify.js"
-  },
-  "devDependencies": {
-    "electron": "43.1.1",
-    "electron-builder": "26.15.3"
-  },
-  "build": {
-    "appId": "com.nexa.smartofficebot",
-    "productName": "Nexa Smart Office Bot",
-    "asar": true,
-    "compression": "normal",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
+    "name": "nexa-smart-office-bot",
+    "version": "1.0.1",
+    "description": "Local-first smart office assistant for contacts, leads, agenda, tasks, alerts, OpenAI and DeepSeek suggestions.",
+    "main": "main.js",
+    "author": "Nexa",
+    "license": "MIT",
+    "private": true,
+    "engines": {
+        "node": ">=24.0.0"
     },
-    "files": [
-      "main.js",
-      "preload.js",
-      "src/**/*",
-      "package.json",
-      "!src/**/*.map"
-    ],
-    "win": {
-      "icon": "build/icon.png",
-      "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] },
-        { "target": "zip", "arch": ["x64"] }
-      ],
-      "artifactName": "Nexa-Smart-Office-Bot-${version}-${arch}.${ext}"
+    "scripts": {
+        "start": "electron .",
+        "validate": "node scripts/validate.js",
+        "validate:delivery": "node scripts/validate-delivery.js",
+        "validate:project": "node scripts/validate-project.js",
+        "validate:nexa-contract": "node scripts/nexa-contract-gate.js",
+        "test": "node scripts/integration-tests.js",
+        "node scripts/integration-tests.js": "node scripts/integration-tests.js",
+        "test:implementation": "node scripts/implementation-tests.js",
+        "test:acceptance": "node scripts/acceptance-tests.js",
+        "ui:smoke": "node scripts/ui-smoke.js",
+        "prebuild:win": "npm run validate && npm test && npm run test:implementation && npm run test:acceptance && npm run ui:smoke",
+        "build:win": "electron-builder --win nsis portable zip --x64 --publish never",
+        "verify:artifacts": "node scripts/artifact-verify.js"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Nexa Smart Office Bot",
-      "deleteAppDataOnUninstall": false,
-      "artifactName": "Nexa-Smart-Office-Bot-Setup-${version}-${arch}.${ext}"
+    "devDependencies": {
+        "electron": "43.1.1",
+        "electron-builder": "26.15.3"
     },
-    "portable": {
-      "artifactName": "Nexa-Smart-Office-Bot-Portable-${version}-${arch}.${ext}"
+    "build": {
+        "appId": "com.nexa.smartofficebot",
+        "productName": "Nexa Smart Office Bot",
+        "asar": true,
+        "compression": "normal",
+        "directories": {
+            "output": "release",
+            "buildResources": "build"
+        },
+        "files": [
+            "main.js",
+            "preload.js",
+            "src/**/*",
+            "package.json",
+            "package-lock.json",
+            "!src/**/*.map"
+        ],
+        "win": {
+            "icon": "build/icon.png",
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "portable",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "artifactName": "Nexa-Smart-Office-Bot-${version}-${arch}.${ext}"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Nexa Smart Office Bot",
+            "deleteAppDataOnUninstall": false,
+            "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+            "perMachine": false,
+            "allowElevation": true,
+            "uninstallDisplayName": "Nexa Smart Office Bot"
+        },
+        "portable": {
+            "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+        }
     }
-  }
 }

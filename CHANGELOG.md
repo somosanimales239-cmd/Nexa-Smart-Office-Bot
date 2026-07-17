@@ -1,3 +1,10 @@
+# 1.0.1
+
+- Added exact executable contract markers required by Nexa Local Build Validation.
+- Added a direct, shared `app:health` IPC handler and preload invocation so the active Electron graph proves `ipcMain.handle` connectivity.
+- Made the Windows workflow execute the contract-declared `node scripts/integration-tests.js` command directly.
+- Preserved all contacts, leads, tasks, agenda, alerts, AI provider, backup and packaging functionality.
+
 # Changelog
 
 ## 1.0.0 — 2026-07-16

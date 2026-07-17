@@ -1,4 +1,4 @@
-name: Build Nexa Smart Office Bot
+name: Nexa Windows Build
 
 on:
   workflow_dispatch:
@@ -8,62 +8,48 @@ on:
 permissions:
   contents: read
 
-jobs:
-  windows-build:
-    runs-on: windows-latest
-    timeout-minutes: 35
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+env:
+  NEXA_BUILD_ONCE_GATE_V1: enabled
 
-      - name: Setup Node.js 24
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-
+          node-version: 24
+          cache: npm
       - name: Install dependencies
-        shell: pwsh
-        run: npm ci --no-audit --no-fund
-
-      - name: Validate source contracts
+        run: npm ci
+      - name: Validate source
         run: npm run validate
-
-      - name: Run integration tests
+      - name: Nexa approved contract gate
+        run: npm run validate:nexa-contract
+      - name: Integration tests through package script
         run: npm test
-
-      - name: Run Electron UI smoke
+      - name: Contract-declared integration command
+        run: node scripts/integration-tests.js
+      - name: Implementation tests
+        run: npm run test:implementation
+      - name: Acceptance tests
+        run: npm run test:acceptance
+      - name: Electron UI smoke
         run: npm run ui:smoke
-
-      - name: Build Installer, Portable and ZIP
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Installer Portable and ZIP
         run: npm run build:win
-
-      - name: Verify artifact names and sizes
+      - name: Verify artifacts
         run: npm run verify:artifacts
-
-      - name: Verify packaged ZIP runtime
-        shell: pwsh
-        run: |
-          $zip = Get-ChildItem dist -Filter *.zip | Select-Object -First 1
-          if (-not $zip) { throw 'Windows ZIP was not generated.' }
-          $extract = Join-Path $env:RUNNER_TEMP 'nexa-zip-check'
-          Expand-Archive -Path $zip.FullName -DestinationPath $extract -Force
-          $asar = Get-ChildItem $extract -Recurse -Filter app.asar | Select-Object -First 1
-          if (-not $asar) { throw 'resources/app.asar is missing from the Windows ZIP.' }
-          $exe = Get-ChildItem $extract -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'Uninstall' } | Select-Object -First 1
-          if (-not $exe) { throw 'Application executable is missing from the Windows ZIP.' }
-          Write-Host "Verified app.asar: $($asar.FullName)"
-          Write-Host "Verified executable: $($exe.FullName)"
-
-      - name: Upload verified Windows deliverables
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Nexa-Smart-Office-Bot-v1.0.0-Windows
+          name: Nexa-Smart-Office-Bot-Windows
           path: |
-            dist/*Setup*.exe
-            dist/*Portable*.exe
+            dist/*.exe
             dist/*.zip
-            dist/artifact-manifest.json
+            dist/ARTIFACTS.json
           if-no-files-found: error
           retention-days: 30

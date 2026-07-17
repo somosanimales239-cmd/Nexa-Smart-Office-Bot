@@ -4,6 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { applyMigrations } = require('./migrations');
 
 const nowIso = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
@@ -46,138 +47,7 @@ class DatabaseService {
   }
 
   migrate() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        applied_at TEXT NOT NULL
-      );
-    `);
-    const applied = new Set(this.db.prepare('SELECT id FROM migrations').all().map((row) => row.id));
-    const migrations = [
-      [1, 'initial-schema', `
-        CREATE TABLE IF NOT EXISTS contacts (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          company TEXT,
-          phone TEXT,
-          email TEXT,
-          tags TEXT NOT NULL DEFAULT '',
-          notes TEXT NOT NULL DEFAULT '',
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
-        CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
-
-        CREATE TABLE IF NOT EXISTS leads (
-          id TEXT PRIMARY KEY,
-          contact_id TEXT,
-          name TEXT NOT NULL,
-          company TEXT,
-          phone TEXT,
-          email TEXT,
-          source TEXT,
-          status TEXT NOT NULL DEFAULT 'New',
-          priority TEXT NOT NULL DEFAULT 'Medium',
-          estimated_value REAL NOT NULL DEFAULT 0,
-          next_follow_up TEXT,
-          notes TEXT NOT NULL DEFAULT '',
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE SET NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-        CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads(next_follow_up);
-
-        CREATE TABLE IF NOT EXISTS tasks (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          description TEXT NOT NULL DEFAULT '',
-          due_at TEXT,
-          priority TEXT NOT NULL DEFAULT 'Medium',
-          status TEXT NOT NULL DEFAULT 'Pending',
-          related_type TEXT,
-          related_id TEXT,
-          reminder_at TEXT,
-          notification_sent_at TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_tasks_status_due ON tasks(status, due_at);
-
-        CREATE TABLE IF NOT EXISTS appointments (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          description TEXT NOT NULL DEFAULT '',
-          start_at TEXT NOT NULL,
-          end_at TEXT,
-          status TEXT NOT NULL DEFAULT 'Scheduled',
-          contact_id TEXT,
-          lead_id TEXT,
-          reminder_at TEXT,
-          notification_sent_at TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
-          FOREIGN KEY(lead_id) REFERENCES leads(id) ON DELETE SET NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(start_at);
-
-        CREATE TABLE IF NOT EXISTS ai_suggestions (
-          id TEXT PRIMARY KEY,
-          provider TEXT NOT NULL,
-          kind TEXT NOT NULL,
-          related_type TEXT,
-          related_id TEXT,
-          prompt TEXT NOT NULL,
-          response TEXT NOT NULL,
-          created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS settings (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS activity_logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          action TEXT NOT NULL,
-          entity_type TEXT NOT NULL,
-          entity_id TEXT,
-          details TEXT NOT NULL DEFAULT '',
-          created_at TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_logs(created_at DESC);
-
-        CREATE TABLE IF NOT EXISTS backup_history (
-          id TEXT PRIMARY KEY,
-          file_path TEXT NOT NULL,
-          file_size INTEGER NOT NULL,
-          created_at TEXT NOT NULL
-        );
-      `],
-      [2, 'settings-defaults', `
-        INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES
-          ('preferred_provider', 'openai', datetime('now')),
-          ('openai_model', 'gpt-5.6-luna', datetime('now')),
-          ('deepseek_model', 'deepseek-v4-flash', datetime('now')),
-          ('deepseek_base_url', 'https://api.deepseek.com', datetime('now')),
-          ('notifications_enabled', '1', datetime('now')),
-          ('automatic_backups', '1', datetime('now')),
-          ('backup_retention', '10', datetime('now'));
-      `]
-    ];
-
-    for (const [migrationId, name, sql] of migrations) {
-      if (applied.has(migrationId)) continue;
-      this.transaction(() => {
-        this.db.exec(sql);
-        this.db.prepare('INSERT INTO migrations(id, name, applied_at) VALUES (?, ?, ?)')
-          .run(migrationId, name, nowIso());
-      });
-    }
+    applyMigrations(this.db);
   }
 
   log(action, entityType, entityId = null, details = '') {
@@ -345,6 +215,32 @@ class DatabaseService {
     return result.changes > 0;
   }
 
+  listReminders() {
+    return this.db.prepare('SELECT * FROM reminders ORDER BY remind_at ASC').all();
+  }
+
+  saveReminder(data) {
+    const recordId = normalizeText(data.id) || id();
+    const title = normalizeText(data.title);
+    const remindAt = normalizeText(data.remind_at);
+    if (!title || !remindAt) throw new Error('Reminder title and date are required.');
+    const timestamp = nowIso();
+    const existing = this.db.prepare('SELECT id, created_at FROM reminders WHERE id = ?').get(recordId);
+    this.db.prepare('INSERT INTO reminders(id, entity_type, entity_id, title, remind_at, enabled, notification_sent_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET entity_type=excluded.entity_type, entity_id=excluded.entity_id, title=excluded.title, remind_at=excluded.remind_at, enabled=excluded.enabled, notification_sent_at=NULL, updated_at=excluded.updated_at')
+      .run(recordId, normalizeText(data.entity_type) || 'general', nullable(data.entity_id), title, remindAt, data.enabled === false || data.enabled === 0 ? 0 : 1, null, existing?.created_at || timestamp, timestamp);
+    this.log(existing ? 'updated' : 'created', 'reminder', recordId, title);
+    return this.db.prepare('SELECT * FROM reminders WHERE id = ?').get(recordId);
+  }
+
+  toggleReminder(recordId) {
+    const row = this.db.prepare('SELECT enabled FROM reminders WHERE id = ?').get(recordId);
+    if (!row) throw new Error('Reminder not found.');
+    const enabled = Number(row.enabled) === 1 ? 0 : 1;
+    this.db.prepare('UPDATE reminders SET enabled = ?, notification_sent_at = NULL, updated_at = ? WHERE id = ?').run(enabled, nowIso(), recordId);
+    this.log('toggled', 'reminder', recordId, enabled ? 'enabled' : 'disabled');
+    return this.db.prepare('SELECT * FROM reminders WHERE id = ?').get(recordId);
+  }
+
   dashboardSummary() {
     const scalar = (sql, ...params) => Number(this.db.prepare(sql).get(...params).value || 0);
     const now = nowIso();
@@ -383,15 +279,18 @@ class DatabaseService {
     const now = nowIso();
     const taskRows = this.db.prepare("SELECT id, title, reminder_at FROM tasks WHERE status='Pending' AND reminder_at IS NOT NULL AND reminder_at <= ? AND notification_sent_at IS NULL").all(now);
     const appointmentRows = this.db.prepare("SELECT id, title, reminder_at FROM appointments WHERE status='Scheduled' AND reminder_at IS NOT NULL AND reminder_at <= ? AND notification_sent_at IS NULL").all(now);
+    const reminderRows = this.db.prepare('SELECT id, title, remind_at AS reminder_at FROM reminders WHERE enabled=1 AND remind_at <= ? AND notification_sent_at IS NULL').all(now);
     return [
       ...taskRows.map((row) => ({ ...row, entity_type: 'task', body: 'Task reminder' })),
-      ...appointmentRows.map((row) => ({ ...row, entity_type: 'appointment', body: 'Appointment reminder' }))
+      ...appointmentRows.map((row) => ({ ...row, entity_type: 'appointment', body: 'Appointment reminder' })),
+      ...reminderRows.map((row) => ({ ...row, entity_type: 'reminder', body: 'Reminder' }))
     ];
   }
 
   markNotificationSent(entityType, recordId) {
     if (entityType === 'task') this.db.prepare('UPDATE tasks SET notification_sent_at=? WHERE id=?').run(nowIso(), recordId);
     if (entityType === 'appointment') this.db.prepare('UPDATE appointments SET notification_sent_at=? WHERE id=?').run(nowIso(), recordId);
+    if (entityType === 'reminder') this.db.prepare('UPDATE reminders SET notification_sent_at=? WHERE id=?').run(nowIso(), recordId);
   }
 
   listActivity(limit = 100) {

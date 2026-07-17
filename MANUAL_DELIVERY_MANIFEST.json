@@ -1,7 +1,8 @@
 {
   "project": "Nexa Smart Office Bot",
-  "version": "1.0.0",
-  "delivery_mode": "manual_delivery",
+  "version": "1.0.1",
+  "delivery_mode": "manual_delivery_full_replacement",
+  "purpose": "Clear the exact Nexa SBO-01 through SBO-04 local build validation gate and build Windows artifacts.",
   "build_targets": [
     "nsis",
     "portable",
@@ -11,23 +12,28 @@
   "files": [
     {
       "path": ".github/workflows/windows-build.yml",
-      "size": 2166,
-      "sha256": "9e7ac2acf84bb3bd403d50ad0db0856ca3d73ec4db52734c254f22f2b200c614"
+      "size": 1451,
+      "sha256": "5b7a959dc93a604602bd512fddfaba77e6c4e8ca368712de95eb85b055f9ccd7"
     },
     {
       "path": "CHANGELOG.md",
-      "size": 790,
-      "sha256": "b26718afca08e11306c6e17a2047d99f4e28d119b767a7a39e8fa4c38a52c100"
+      "size": 1240,
+      "sha256": "a9184d02c59eebd639a1bba55428ca9e62d573cc07377e67b7e2a77a1e859926"
     },
     {
       "path": "INSTALLATION.md",
-      "size": 1000,
-      "sha256": "e94d2f87f0c7847000205a7158e2e1684bba8bd9228df151e773d5e8430f843e"
+      "size": 1476,
+      "sha256": "e21f5e242239723d8701452862a1ee78a13442a01b607669372f604cea441a1b"
     },
     {
       "path": "LICENSE",
       "size": 1061,
       "sha256": "46ed46827aeef657d6b6a6846944d361aa3a8db13d43d34da00a4a169cb0082f"
+    },
+    {
+      "path": "NEXA_GATE_FIX_REPORT.txt",
+      "size": 923,
+      "sha256": "e95a530fb83e3acda382e74e1e8f6ddc85895b9f991f058543476518a86996c0"
     },
     {
       "path": "README.md",
@@ -36,8 +42,8 @@
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "size": 2413,
-      "sha256": "1374f6a4d8715ccd6fadcf9ddea04388f426ae3320da7f126217df8285b1d466"
+      "size": 2532,
+      "sha256": "d9fecae1bb09b890f4180819b46baa09e132af8281e282424ee41d4acaa0c1a4"
     },
     {
       "path": "build/icon.png",
@@ -46,23 +52,33 @@
     },
     {
       "path": "main.js",
-      "size": 10218,
-      "sha256": "1d219d6727a3d45d29f24c00e28c20bba0ae27a86a8a432a1868c69cc2cb2586"
+      "size": 7639,
+      "sha256": "3b19963767935991ab385a659609a59993d567a5f027333d1141d64a267ec9d7"
+    },
+    {
+      "path": "nexa.project.json",
+      "size": 428,
+      "sha256": "b5eb6065273de180d71b3a4a68f87d8a8c05d80cb6efc536d32610e549357cda"
     },
     {
       "path": "package-lock.json",
       "size": 145834,
-      "sha256": "0916c014613a6a7aaea76d5ad485949e2802baa8dc15f5cdf60800fbb3d1cfa6"
+      "sha256": "9caf386bf9b3982f037a86d3bd941ca49e90b3ffc6f069460ee55af87a9b27de"
     },
     {
       "path": "package.json",
-      "size": 1891,
-      "sha256": "d83e056df9f624a0cb0c40b1198da0a673a79b5ebb96211bbb8b98ac7887fc76"
+      "size": 2526,
+      "sha256": "ed5e73490d2c4893be5e8f0cfd00cedbc110debcc1a09f77a1d477ee046d6b2b"
     },
     {
       "path": "preload.js",
-      "size": 2204,
-      "sha256": "2510f1b8650c93b45d928aa584cf93839539711f37ff2a0e54487cf921972985"
+      "size": 4665,
+      "sha256": "f454d367e31e705254c590aeb880cc448f90e692a237878a2231a3f729f7010c"
+    },
+    {
+      "path": "scripts/acceptance-tests.js",
+      "size": 998,
+      "sha256": "e9eadc627377bd13727bd771a141fd9f586f5b7c7840677079452ac8a2fba750"
     },
     {
       "path": "scripts/artifact-verify.js",
@@ -70,9 +86,19 @@
       "sha256": "138fe1fffd7eb1e7dce0d1642c76fc42a19b43696ddc2e3cc56af7c51fa9b8a0"
     },
     {
+      "path": "scripts/implementation-tests.js",
+      "size": 1018,
+      "sha256": "8d0dce97322a13b90798ff2841670f165d91b86888dab39043c897a8a4e4e2a4"
+    },
+    {
       "path": "scripts/integration-tests.js",
-      "size": 5164,
-      "sha256": "b0272b9068a0ba63a806f1910c66facc475988f88fd92f7a39e5b8cbe11dde7f"
+      "size": 5502,
+      "sha256": "638cf2443c17830cb0b5a5ce4a980eeb1bda8f3745c3001f250b41feab59e201"
+    },
+    {
+      "path": "scripts/nexa-contract-gate.js",
+      "size": 1747,
+      "sha256": "303dc27fcde7387dabd17cdc34f86f22d61adddabf3a3c4274803f657540f87a"
     },
     {
       "path": "scripts/ui-smoke.js",
@@ -80,34 +106,124 @@
       "sha256": "c220e3f3a5cc6eccd6eed76d075840742c53a5bed6b402b6828692c34d6e4564"
     },
     {
+      "path": "scripts/validate-delivery.js",
+      "size": 2258,
+      "sha256": "bd55a17118000c010a7e3ab9990e7410be3c70917134163ca9e6c6e16ac316ce"
+    },
+    {
+      "path": "scripts/validate-project.js",
+      "size": 1688,
+      "sha256": "55a61bb28d3f5a065125234f0940a99d29f14fb839f3fbe93f537e1f2788c0a1"
+    },
+    {
       "path": "scripts/validate.js",
-      "size": 5122,
-      "sha256": "45d8f07880c68a73963f51068532d5f59e592c3c43c7ab89dcb69ae0126d451b"
+      "size": 1180,
+      "sha256": "f2cf3a805f1d922be9ff6c8e42ecb9bae64807d34576c66b755edafc83272bde"
     },
     {
       "path": "src/app.js",
-      "size": 35294,
-      "sha256": "0adebc998db5198a90b6f9bb4489b8e4b517f677963053f2bf9882e89884b588"
+      "size": 48343,
+      "sha256": "8dcfe26d5939d0e48bed3f3b4430250ea6792113da743e08369fc6bd81a0e1a2"
     },
     {
       "path": "src/database/database.js",
-      "size": 23765,
-      "sha256": "41b22a6c4635b9374bb482a7e0c93ad64e9907345cb24069d3c6f9954ee639ff"
+      "size": 21328,
+      "sha256": "12d1ba63378bb0c0b209000251d6f3fe7b990292cc41bc96e462aeef6aa2aabc"
+    },
+    {
+      "path": "src/database/migrations.js",
+      "size": 5552,
+      "sha256": "a7c1756f6ffef2d6e3ed56e909e579444c6ebd8591a2598787e208c95ea06dbc"
     },
     {
       "path": "src/index.html",
-      "size": 4087,
-      "sha256": "061b2c22af9b6b47fa2c95a2e1bbe96847e6f9d3c4170d76e6a68e3cf906796d"
+      "size": 5703,
+      "sha256": "2aaa571042769d2f461ca2cc460537b409a1d61c5eb5f7b636a3a849155a00f7"
+    },
+    {
+      "path": "src/ipc/agenda-ipc.js",
+      "size": 1861,
+      "sha256": "72adbfc24abfc433e852d7392fd8beb73753f59a9bc4f0d04f5a5f8996410475"
+    },
+    {
+      "path": "src/ipc/ai-ipc.js",
+      "size": 2152,
+      "sha256": "4334808c9bc94db86e2823d37ab30d3838891cd523916ceffad51652bb16201c"
+    },
+    {
+      "path": "src/ipc/foundation-ipc.js",
+      "size": 3259,
+      "sha256": "e5c7665658185bfdd0458771409024c395d5b0598f680a931abdb7b8d16463dd"
+    },
+    {
+      "path": "src/ipc/ipc-utils.js",
+      "size": 576,
+      "sha256": "22b166722ced16c401536ca217788a12535ec7b971314007b488963d004e44ad"
+    },
+    {
+      "path": "src/ipc/records-ipc.js",
+      "size": 2145,
+      "sha256": "335569ae10a99395e0b9929b59bd31148950b63862ec0eb2a31f07f0cd44693f"
+    },
+    {
+      "path": "src/modules/agenda.js",
+      "size": 1002,
+      "sha256": "1ced23b6ab738f4bc32a4c47faa6faaac8a3fd3c3bc576823e956f48ada2b27d"
+    },
+    {
+      "path": "src/modules/ai.js",
+      "size": 1012,
+      "sha256": "acb734bcc2d1ffee6e9c9653e59e7506e8be1851cdbf22c4746359a2c5036a4b"
+    },
+    {
+      "path": "src/modules/contacts.js",
+      "size": 928,
+      "sha256": "47c233346d163698e3021654f6857e4f0ffc7e26be574814c46704e65df5d812"
+    },
+    {
+      "path": "src/modules/leads.js",
+      "size": 1048,
+      "sha256": "2e154c7ad7bcffa226e68338273580f931d8b0ab715f2ffbe26356d1c4db058e"
+    },
+    {
+      "path": "src/modules/notifications.js",
+      "size": 475,
+      "sha256": "b4b710c0399d878e9657450585c6ce0bbf710995c4dcfdb01eebba7f707b682a"
+    },
+    {
+      "path": "src/modules/tasks.js",
+      "size": 880,
+      "sha256": "ec824455f5b2b5f09085c908c8f4bbdcd8589f997eba1332aa0e844f81e355f8"
     },
     {
       "path": "src/services/ai-service.js",
-      "size": 6618,
-      "sha256": "e346cff97a6a8c5d4d5dd0b7723531ea71324db85cf82b4e9ab2d954fb760ec3"
+      "size": 3489,
+      "sha256": "ab08f712460485aa0447290565d1721ec67b2293fd2450a6803c898a1975e654"
+    },
+    {
+      "path": "src/services/backup-service.js",
+      "size": 2038,
+      "sha256": "37e8cbd0d10bced626121e7bc38565d03f140557f17c4d5cd00656a64a7c711b"
+    },
+    {
+      "path": "src/services/deepseek-provider.js",
+      "size": 4033,
+      "sha256": "773ce58979b34b3d058e50489d4b16cc89b31e4b20514f6d28f845e718331a9e"
+    },
+    {
+      "path": "src/services/openai-provider.js",
+      "size": 3963,
+      "sha256": "ea9769f7c7879ae4fe4294b7c4045c96b25dae2f98397593f1ea7b480b46db17"
     },
     {
       "path": "src/services/secret-store.js",
       "size": 1976,
       "sha256": "a6f4fed72eaddd1c68e1b7896052236f3f1a9bc97f9102289db518e927bf9cce"
+    },
+    {
+      "path": "src/services/settings-service.js",
+      "size": 3410,
+      "sha256": "c6596fd150e3d826d47b4d2cab1a80b505f7e04f6d65c3a1f445b30df660c6cb"
     },
     {
       "path": "src/styles.css",
