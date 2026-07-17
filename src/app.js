@@ -2,7 +2,7 @@
 
 const NEXA_UI_CONTRACT_V1 = 'NEXA_UI_CONTRACT_V1';
 const UI_TESTID_CONTRACT = 'data-testid values for dashboard, sidebar, contacts, leads, agenda, tasks, ai, alerts, activity, settings, about';
-const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, smart-notifications';
+const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, messages, smart-notifications';
 const ACTION_CONTRACT = 'data-nexa-action on every actionable button/form';
 
 window.__NEXA_ERRORS__ = [];
@@ -48,7 +48,11 @@ const state = {
   activePulseEvent: null,
   search: '',
   activeAIRequest: null,
-  aiResult: ''
+  aiResult: '',
+  pages: {},
+  agendaMode: 'month',
+  agendaAnchor: new Date().toISOString(),
+  aiPrefill: null
 };
 
 const viewTitles = {
@@ -57,6 +61,7 @@ const viewTitles = {
   'sync-inspector': 'API Sync Inspector',
   contacts: 'Contacts',
   leads: 'Leads',
+  messages: 'Messages',
   agenda: 'Agenda',
   tasks: 'Tasks',
   ai: 'AI Suggestions',
@@ -166,6 +171,9 @@ async function refreshAll(options) {
   document.getElementById('notification-count').textContent = String(state.unreadNotifications);
   document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
   document.getElementById('notification-bell').classList.toggle('has-unread', state.unreadNotifications > 0);
+  const messageCount = integrationRemote('messages').reduce(function countUnread(total, item) { return total + Number(item.unread_count || 0); }, 0);
+  const messageCountElement = document.getElementById('message-count');
+  if (messageCountElement) messageCountElement.textContent = String(messageCount);
   document.getElementById('sidebar-version').textContent = 'v' + state.meta.version;
   updateProviderPill();
   if (shouldRender) renderView();
@@ -183,6 +191,7 @@ function updateProviderPill() {
 function navigate(view) {
   state.view = view;
   state.search = '';
+  state.pages = {};
   pageTitle.textContent = viewTitles[view] || view;
   document.querySelectorAll('.nav-item').forEach(function updateNavigation(button) {
     button.classList.toggle('active', button.dataset.view === view);
@@ -208,6 +217,129 @@ function toolbar(label, createAction, searchAction, testId) {
   return '<div class="toolbar"><div class="search-box"><input id="view-search" data-nexa-action="' + esc(searchAction) + '" type="search" value="' + esc(state.search) + '" placeholder="Search ' + esc(label.toLowerCase()) + '…"></div><button class="primary-button" data-nexa-action="' + esc(createAction) + '" data-testid="' + esc(testId) + '">+ New ' + esc(singular) + '</button></div>';
 }
 
+
+const PAGE_SIZE = 40;
+
+function pageKey(name) {
+  return String(name || state.view || 'default');
+}
+
+function paginateItems(items, key) {
+  const source = Array.isArray(items) ? items : [];
+  const name = pageKey(key);
+  const totalPages = Math.max(1, Math.ceil(source.length / PAGE_SIZE));
+  const current = Math.min(Math.max(Number(state.pages[name] || 1), 1), totalPages);
+  state.pages[name] = current;
+  const start = (current - 1) * PAGE_SIZE;
+  return { items: source.slice(start, start + PAGE_SIZE), current: current, totalPages: totalPages, total: source.length, start: start };
+}
+
+function renderPagination(result, key, label) {
+  if (!result || result.total <= PAGE_SIZE) return '';
+  const start = result.start + 1;
+  const end = Math.min(result.start + PAGE_SIZE, result.total);
+  return '<div class="pagination" data-pagination="' + esc(key) + '"><span>Showing ' + start + '–' + end + ' of ' + result.total + ' ' + esc(label || 'records') + '</span><div><button class="ghost-button" data-page-key="' + esc(key) + '" data-page="1"' + (result.current <= 1 ? ' disabled' : '') + '>First</button><button class="ghost-button" data-page-key="' + esc(key) + '" data-page="' + (result.current - 1) + '"' + (result.current <= 1 ? ' disabled' : '') + '>Previous</button><strong>Page ' + result.current + ' of ' + result.totalPages + '</strong><button class="ghost-button" data-page-key="' + esc(key) + '" data-page="' + (result.current + 1) + '"' + (result.current >= result.totalPages ? ' disabled' : '') + '>Next</button><button class="ghost-button" data-page-key="' + esc(key) + '" data-page="' + result.totalPages + '"' + (result.current >= result.totalPages ? ' disabled' : '') + '>Last</button></div></div>';
+}
+
+function normalizedPhone(value) {
+  const digits = String(value || '').replace(/\D+/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+function normalizedEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function remoteItemId(resource, item, index) {
+  const keys = {
+    agenda: ['contact_id','id'], orders: ['order_id','appointment_id','id'], messages: ['thread_id','id'],
+    'reseller-appointments': ['appointment_id','id'], listings: ['listing_id','id'], 'reseller-listings': ['assignment_id','listing_id','id'],
+    resellers: ['reseller_id','id'], stores: ['store_id','id'], users: ['user_id','account_id','id'], validation: ['validation_id','id']
+  };
+  const candidates = keys[resource] || ['id','uuid'];
+  for (const key of candidates) if (item && item[key] !== undefined && item[key] !== null && String(item[key]) !== '') return String(item[key]);
+  return String(item && item.__item_id || resource + ':' + String(index || 0));
+}
+
+function remoteItem(resource, itemId) {
+  const rows = integrationRemote(resource);
+  return rows.find(function findItem(item, index) { return remoteItemId(resource, item, index) === String(itemId); }) || null;
+}
+
+function openConnectedDetail(resource, itemId) {
+  const item = remoteItem(resource, itemId);
+  if (!item) { toast('Connected record is no longer available. Synchronize again.', 'error'); return; }
+  const dialog = document.getElementById('connected-detail-dialog');
+  document.getElementById('connected-detail-eyebrow').textContent = String(resource || 'connected').replaceAll('-', ' ').toUpperCase();
+  document.getElementById('connected-detail-title').textContent = remoteTitle(resource, item);
+  const preferred = ['customer_name','listing_title','subject','name','email','phone','customer_phone','customer_email','customer_location','message','order_notes','status','appointment_status','sale_status','appointment_date','appointment_time','created_at','updated_at','last_message_at','message_count','unread_count','context_type','context_id','sender_type','receiver_type','source','order_type','commission_amount','dealer_status_note'];
+  const entries = Object.entries(item).filter(function visible(entry) { return !entry[0].startsWith('__') && entry[1] !== null && entry[1] !== undefined && entry[1] !== ''; });
+  entries.sort(function prioritize(a, b) { const ai=preferred.indexOf(a[0]); const bi=preferred.indexOf(b[0]); return (ai<0?999:ai)-(bi<0?999:bi); });
+  document.getElementById('connected-detail-body').innerHTML = '<div class="connected-detail-grid">' + entries.map(function field(entry) {
+    const value = Array.isArray(entry[1]) || typeof entry[1] === 'object' ? JSON.stringify(entry[1], null, 2) : valueLabel(entry[1]);
+    return '<div class="connected-detail-field ' + (String(value).length > 90 ? 'wide' : '') + '"><span>' + esc(entry[0].replaceAll('_',' ')) + '</span><strong>' + esc(value) + '</strong></div>';
+  }).join('') + '</div>';
+  dialog.showModal();
+}
+
+function setAiPrefill(type, id, kind, focus) {
+  state.aiPrefill = { type: type, id: String(id || ''), kind: kind || 'daily_priorities', focus: focus || '' };
+  navigate('ai');
+}
+
+function toValidDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function remoteAppointmentDate(item) {
+  if (!item) return null;
+  const combined = [item.appointment_date || '', item.appointment_time || ''].join(' ').trim();
+  return toValidDate(combined) || toValidDate(item.start_at) || toValidDate(item.updated_at) || toValidDate(item.created_at);
+}
+
+function agendaEvents() {
+  const events = [];
+  state.appointments.forEach(function appointment(item) {
+    const date = toValidDate(item.start_at); if (!date) return;
+    events.push({ id:item.id, kind:'appointment', source:'Local appointment', title:item.title, detail:item.contact_name || item.lead_name || item.description || '', status:item.status, date:date, local:true, item:item });
+  });
+  state.tasks.forEach(function task(item) {
+    const date = toValidDate(item.due_at); if (!date) return;
+    events.push({ id:item.id, kind:'task', source:'Local task', title:item.title, detail:item.description || '', status:item.status, date:date, local:true, item:item });
+  });
+  state.reminders.forEach(function reminder(item) {
+    const date = toValidDate(item.remind_at); if (!date) return;
+    events.push({ id:item.id, kind:'reminder', source:'Local reminder', title:item.title, detail:item.entity_type || '', status:Number(item.enabled)===1?'Enabled':'Paused', date:date, local:true, item:item });
+  });
+  ['orders','reseller-appointments'].forEach(function resource(resource) {
+    integrationRemote(resource).forEach(function connected(item,index) {
+      const date = remoteAppointmentDate(item); if (!date || !(item.appointment_date || item.appointment_time || String(item.order_type || '').toLowerCase().includes('appointment') || resource === 'reseller-appointments')) return;
+      events.push({ id:remoteItemId(resource,item,index), kind:'connected', resource:resource, source:resource==='orders'?'Website order':'Reseller appointment', title:item.customer_name || item.listing_title || 'Connected appointment', detail:item.listing_title || item.store_name || item.dealer_name || '', status:item.appointment_status || item.status || item.sale_status || 'Pending', date:date, local:false, item:item });
+    });
+  });
+  return events.sort(function sortEvents(a,b){ return a.date-b.date; });
+}
+
+function dateKey(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset()*60000);
+  return d.toISOString().slice(0,10);
+}
+
+function startOfWeek(date) {
+  const d = new Date(date); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d;
+}
+
+function addDays(date, days) { const d=new Date(date); d.setDate(d.getDate()+days); return d; }
+
+function eventChip(event) {
+  const action = event.local ? (event.kind === 'task' ? 'task-edit' : event.kind === 'appointment' ? 'appointment-edit' : '') : 'connected-detail';
+  const attrs = event.local ? ' data-record-id="' + esc(event.id) + '"' : ' data-resource="' + esc(event.resource) + '" data-item-id="' + esc(event.id) + '"';
+  return '<button class="calendar-event ' + esc(event.kind) + '" data-nexa-action="' + esc(action || 'agenda-noop') + '"' + attrs + ' title="' + esc(event.title + ' · ' + event.source) + '"><span></span>' + esc(event.title) + '</button>';
+}
+
 function renderView() {
   try {
     const renderers = {
@@ -216,6 +348,7 @@ function renderView() {
       'sync-inspector': renderApiSyncInspector,
       contacts: renderContacts,
       leads: renderLeads,
+      messages: renderMessages,
       agenda: renderAgenda,
       tasks: renderTasks,
       ai: renderAI,
@@ -323,86 +456,89 @@ function renderDashboard() {
 }
 
 function renderContacts() {
-  const rows = state.contacts.filter(function filterContact(contact) {
-    return modules.contacts ? modules.contacts.matches(contact, state.search) : true;
+  const local = state.contacts.map(function mapLocal(contact) {
+    return { key:'local:'+contact.id, local:true, id:contact.id, name:contact.name, company:contact.company, phone:contact.phone, email:contact.email, location:'', tags:contact.tags, source:'Local', item:contact };
   });
-  const body = rows.map(function renderContact(contact) {
-    return '<tr><td><b>' + esc(contact.name) + '</b></td><td>' + esc(contact.company || '—') + '</td><td>' + esc(contact.phone || '—') + '</td><td>' + esc(contact.email || '—') + '</td><td>' + esc(contact.tags || '—') + '</td><td><div class="row-actions"><button data-nexa-action="contact-edit" data-record-id="' + esc(contact.id) + '">Edit</button><button data-nexa-action="contact-delete" data-record-id="' + esc(contact.id) + '">Delete</button></div></td></tr>';
+  const map = new Map();
+  local.forEach(function addLocal(row) {
+    const identity = normalizedPhone(row.phone) || normalizedEmail(row.email) || row.key;
+    map.set(identity || row.key, row);
+  });
+  integrationRemote('agenda').forEach(function addRemote(contact,index) {
+    const identity = normalizedPhone(contact.phone) || normalizedEmail(contact.email) || ('name:'+String(contact.name||'').toLowerCase());
+    const existing = map.get(identity);
+    if (existing) {
+      existing.source = 'Local + Website'; existing.remote = contact; existing.location = existing.location || contact.location || ''; existing.times_seen = contact.times_seen || 1;
+    } else {
+      map.set(identity || ('remote:'+index), { key:'remote:'+remoteItemId('agenda',contact,index), local:false, id:remoteItemId('agenda',contact,index), name:contact.name || 'Unnamed contact', company:contact.source_type || contact.created_from || '', phone:contact.phone, email:contact.email, location:contact.location, tags:'', times_seen:contact.times_seen || 1, source:'Website', item:contact });
+    }
+  });
+  const query=String(state.search||'').toLowerCase();
+  const rows=Array.from(map.values()).filter(function filter(row){ return remoteMatches(row,query); }).sort(function sort(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+  const page=paginateItems(rows,'contacts');
+  const body=page.items.map(function renderContact(row){
+    const actions=row.local?'<button data-nexa-action="contact-edit" data-record-id="'+esc(row.id)+'">Edit</button><button data-nexa-action="contact-delete" data-record-id="'+esc(row.id)+'">Delete</button>':'<button data-nexa-action="connected-detail" data-resource="agenda" data-item-id="'+esc(row.id)+'">View</button>';
+    return '<tr><td><b>'+esc(row.name)+'</b><br><span class="muted">'+esc(row.company||'')+'</span></td><td>'+esc(row.phone||'—')+'</td><td>'+esc(row.email||'—')+'</td><td>'+esc(row.location||'—')+'</td><td>'+badge(row.source,row.local&&row.remote?'success':row.local?'info':'warning')+'</td><td>'+esc(row.times_seen||'—')+'</td><td><div class="row-actions">'+actions+'</div></td></tr>';
   }).join('');
-  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Tags</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No local contacts found', 'Create your first contact or change the search.', 'contacts-empty');
-  const remoteRows = integrationRemote('agenda').filter(function filterRemote(item) { return remoteMatches(item, state.search); });
-  const remoteBody = remoteRows.map(function renderRemoteContact(contact) {
-    return '<tr><td><b>' + esc(contact.name || 'Unnamed contact') + '</b><br><span class="muted">' + esc(contact.source_type || contact.created_from || 'Connected agenda') + '</span></td><td>' + esc(contact.phone || '—') + '</td><td>' + esc(contact.email || '—') + '</td><td>' + esc(contact.location || '—') + '</td><td>' + esc(contact.times_seen || 1) + '</td><td>' + badge('Connected', 'info') + '</td></tr>';
-  }).join('');
-  const remoteTable = remoteBody
-    ? '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected contacts</h3><p>AutoMarket Pro agenda · duplicate phone formats are normalized</p></div>' + remoteStatusBadge('agenda') + '</div>' + remoteReadOnlyNote() + '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Location</th><th>Seen</th><th></th></tr></thead><tbody>' + remoteBody + '</tbody></table></div></article>'
-    : '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected contacts</h3><p>AutoMarket Pro agenda</p></div>' + remoteStatusBadge('agenda') + '</div>' + emptyMini('No connected contacts loaded', 'Open API Sync Inspector to see whether agenda loaded or failed.') + '</article>';
-  return sectionHeader('Contacts', 'Manage local contacts and read connected AutoMarket Pro agenda contacts.') + toolbar('Contacts', 'contact-create', 'contact-search', 'new-contact') + table + remoteTable;
+  const table=body?'<div class="table-wrap tall-table"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Location</th><th>Source</th><th>Seen</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>'+renderPagination(page,'contacts','contacts'):emptyMini('No contacts found','Create a local contact or synchronize the website.','contacts-empty');
+  return sectionHeader('Contacts','Local contacts and AutoMarket Pro agenda contacts are unified in one searchable workspace.','<div class="button-row"><span class="summary-pill">'+rows.length+' total</span><button class="primary-button" data-nexa-action="contact-create">+ New contact</button></div>')+toolbar('Contacts','contact-create','contact-search','new-contact')+table;
 }
 
 function renderLeads() {
-  const rows = state.leads.filter(function filterLead(lead) {
-    return modules.leads ? modules.leads.matches(lead, state.search) : true;
-  });
-  const body = rows.map(function renderLead(lead) {
-    return '<tr><td><b>' + esc(lead.name) + '</b><br><span class="muted">' + esc(lead.company || lead.contact_name || '') + '</span></td><td>' + badge(lead.status) + '</td><td>' + badge(lead.priority) + '</td><td>' + money(lead.estimated_value) + '</td><td>' + formatDate(lead.next_follow_up) + '</td><td><div class="row-actions"><button data-nexa-action="ai-generate" data-ai-lead="' + esc(lead.id) + '">Suggest</button><button data-nexa-action="lead-edit" data-record-id="' + esc(lead.id) + '">Edit</button><button data-nexa-action="lead-delete" data-record-id="' + esc(lead.id) + '">Delete</button></div></td></tr>';
+  const unified=[];
+  state.leads.forEach(function localLead(lead){ unified.push({id:lead.id,local:true,resource:'lead',name:lead.name,listing:lead.company||lead.contact_name||'',phone:lead.phone,email:lead.email,status:lead.status,priority:lead.priority,value:lead.estimated_value,date:lead.next_follow_up||lead.updated_at,source:lead.source||'Local',item:lead}); });
+  integrationRemote('orders').forEach(function orderLead(order,index){ unified.push({id:remoteItemId('orders',order,index),local:false,resource:'orders',name:order.customer_name||'Website lead',listing:order.listing_title||order.order_type||'',phone:order.customer_phone,email:order.customer_email,status:order.status||order.appointment_status||'new',priority:String(order.status||'').toLowerCase().includes('unreview')?'High':'Medium',value:order.sale_price||0,date:order.appointment_date||order.updated_at||order.created_at,source:order.source||'Orders',item:order}); });
+  integrationRemote('reseller-appointments').forEach(function resellerLead(order,index){ unified.push({id:remoteItemId('reseller-appointments',order,index),local:false,resource:'reseller-appointments',name:order.customer_name||'Reseller lead',listing:order.listing_title||order.store_name||'',phone:order.customer_phone,email:order.customer_email,status:order.appointment_status||order.sale_status||'pending',priority:'Medium',value:order.sale_price||order.commission_amount||0,date:order.appointment_date||order.updated_at||order.created_at,source:'Reseller',item:order}); });
+  const rows=unified.filter(function filter(row){ return remoteMatches(row,state.search); }).sort(function sort(a,b){ return (toValidDate(b.date)||new Date(0))-(toValidDate(a.date)||new Date(0)); });
+  const page=paginateItems(rows,'leads');
+  const body=page.items.map(function renderLead(row){
+    const actions=row.local?'<button data-nexa-action="ai-generate" data-ai-lead="'+esc(row.id)+'">Suggest</button><button data-nexa-action="lead-edit" data-record-id="'+esc(row.id)+'">Edit</button><button data-nexa-action="lead-delete" data-record-id="'+esc(row.id)+'">Delete</button>':'<button data-nexa-action="connected-ai" data-related-type="order" data-resource="'+esc(row.resource)+'" data-item-id="'+esc(row.id)+'">Ask AI</button><button data-nexa-action="connected-detail" data-resource="'+esc(row.resource)+'" data-item-id="'+esc(row.id)+'">Details</button>';
+    return '<tr><td><b>'+esc(row.name)+'</b><br><span class="muted">'+esc(row.listing||'')+'</span></td><td>'+esc(row.phone||'—')+'<br><span class="muted">'+esc(row.email||'—')+'</span></td><td>'+badge(row.status)+'</td><td>'+badge(row.priority)+'</td><td>'+money(row.value)+'</td><td>'+formatDate(row.date)+'</td><td>'+badge(row.source,'info')+'</td><td><div class="row-actions">'+actions+'</div></td></tr>';
   }).join('');
-  const table = body ? '<div class="table-wrap"><table><thead><tr><th>Lead</th><th>Status</th><th>Priority</th><th>Value</th><th>Next follow-up</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No local leads found', 'Create a lead to begin tracking your pipeline.', 'leads-empty');
-  const connectedLeads = integrationRemote('orders').concat(integrationRemote('reseller-appointments')).filter(function filterRemote(item) { return remoteMatches(item, state.search); });
-  const connectedBody = connectedLeads.map(function renderConnectedLead(lead) {
-    const status = lead.appointment_status || lead.status || lead.sale_status || 'new';
-    const source = lead.source || (lead.reseller_id ? 'Reseller' : 'Order');
-    return '<tr><td><b>' + esc(lead.customer_name || lead.reseller_name || 'Connected lead') + '</b><br><span class="muted">' + esc(lead.listing_title || lead.store_name || source) + '</span></td><td>' + badge(status) + '</td><td>' + esc(lead.customer_phone || '—') + '</td><td>' + esc(lead.customer_email || '—') + '</td><td>' + formatDate(lead.appointment_date || lead.updated_at || lead.created_at) + '</td><td>' + badge(source, 'info') + '</td></tr>';
-  }).join('');
-  const connectedTable = connectedBody
-    ? '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected leads and orders</h3><p>Orders and reseller appointments from AutoMarket Pro</p></div>' + badge(String(connectedLeads.length) + ' loaded', 'success') + '</div>' + remoteReadOnlyNote() + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Status</th><th>Phone</th><th>Email</th><th>Activity</th><th>Source</th></tr></thead><tbody>' + connectedBody + '</tbody></table></div></article>'
-    : '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected leads and orders</h3><p>Orders and reseller appointments</p></div>' + remoteStatusBadge('orders') + '</div>' + emptyMini('No connected leads loaded', 'Synchronize orders or reseller appointments to populate this section.') + '</article>';
-  return sectionHeader('Leads', 'Track local opportunities and connected website inquiries.') + toolbar('Leads', 'lead-create', 'lead-search', 'new-lead') + table + connectedTable;
+  const table=body?'<div class="table-wrap tall-table"><table><thead><tr><th>Lead / listing</th><th>Contact</th><th>Status</th><th>Priority</th><th>Value</th><th>Activity</th><th>Source</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>'+renderPagination(page,'leads','leads'):emptyMini('No leads found','Create a lead or synchronize orders:read.','leads-empty');
+  return sectionHeader('Leads','Orders from the website and reseller appointments now appear directly in the main lead pipeline.','<div class="button-row"><span class="summary-pill">'+rows.length+' total</span><button class="primary-button" data-nexa-action="lead-create">+ New lead</button></div>')+toolbar('Leads','lead-create','lead-search','new-lead')+table;
 }
 
 function renderTasks() {
-  const rows = state.tasks.filter(function filterTask(task) {
-    return modules.tasks ? modules.tasks.matches(task, state.search) : true;
-  });
-  const body = rows.map(function renderTask(task) {
-    const checked = task.status === 'Completed' ? ' checked' : '';
-    return '<tr><td><input style="width:auto" type="checkbox" data-nexa-action="task-complete" data-record-id="' + esc(task.id) + '"' + checked + '></td><td><b>' + esc(task.title) + '</b><br><span class="muted">' + esc(task.description || '') + '</span></td><td>' + badge(task.priority) + '</td><td>' + badge(task.status) + '</td><td>' + formatDate(task.due_at) + '</td><td><div class="row-actions"><button data-nexa-action="task-edit" data-record-id="' + esc(task.id) + '">Edit</button><button data-nexa-action="task-delete" data-record-id="' + esc(task.id) + '">Delete</button></div></td></tr>';
-  }).join('');
-  const table = body ? '<div class="table-wrap"><table><thead><tr><th></th><th>Task</th><th>Priority</th><th>Status</th><th>Due</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' : emptyMini('No tasks found', 'Create a task to organize your next action.', 'tasks-empty');
-  return sectionHeader('Tasks', 'Manage work, follow-ups and deadlines.') + toolbar('Tasks', 'task-create', 'task-search', 'new-task') + table;
+  const rows=state.tasks.filter(function filterTask(task){ return modules.tasks?modules.tasks.matches(task,state.search):true; });
+  const page=paginateItems(rows,'tasks');
+  const body=page.items.map(function renderTask(task){ const checked=task.status==='Completed'?' checked':''; return '<tr><td><input style="width:auto" type="checkbox" data-nexa-action="task-complete" data-record-id="'+esc(task.id)+'"'+checked+'></td><td><b>'+esc(task.title)+'</b><br><span class="muted">'+esc(task.description||'')+'</span></td><td>'+badge(task.priority)+'</td><td>'+badge(task.status)+'</td><td>'+formatDate(task.due_at)+'</td><td><div class="row-actions"><button data-nexa-action="task-edit" data-record-id="'+esc(task.id)+'">Edit</button><button data-nexa-action="task-delete" data-record-id="'+esc(task.id)+'">Delete</button></div></td></tr>'; }).join('');
+  const table=body?'<div class="table-wrap tall-table"><table><thead><tr><th></th><th>Task</th><th>Priority</th><th>Status</th><th>Due</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>'+renderPagination(page,'tasks','tasks'):emptyMini('No tasks found','Create a task to organize your next action.','tasks-empty');
+  return sectionHeader('Tasks','Manage work, follow-ups and deadlines. Every list is limited to 40 records per page.')+toolbar('Tasks','task-create','task-search','new-task')+table;
+}
+
+function renderMessages() {
+  const rows=integrationRemote('messages').filter(function filterMessage(item){ return remoteMatches(item,state.search); }).sort(function sortMessages(a,b){ const announcement=Number(Boolean(b.is_announcement))-Number(Boolean(a.is_announcement)); if(announcement)return announcement; return (toValidDate(b.last_message_at||b.updated_at||b.created_at)||new Date(0))-(toValidDate(a.last_message_at||a.updated_at||a.created_at)||new Date(0)); });
+  const page=paginateItems(rows,'messages');
+  const cards=page.items.map(function renderMessage(item,index){ const id=remoteItemId('messages',item,index+page.start); const unread=Number(item.unread_count||0); return '<article class="message-card '+(item.is_announcement?'announcement ':'')+(unread?'unread':'')+'"><div class="message-icon">'+(item.is_announcement?'!':'✉')+'</div><div class="message-copy"><div><span>'+esc(item.is_announcement?'ADMIN ANNOUNCEMENT':item.context_type||'MESSAGE THREAD')+'</span><time>'+formatDate(item.last_message_at||item.updated_at||item.created_at)+'</time></div><h3>'+esc(item.subject||'Conversation')+'</h3><p>'+esc(item.last_message_preview||item.message_preview||('Related to '+(item.context_type||'business activity')+(item.context_id?' #'+item.context_id:'')))+'</p><small>'+esc(item.sender_type||'Unknown sender')+' → '+esc(item.receiver_type||'Unknown receiver')+' · '+esc(item.message_count||0)+' messages</small></div><div class="message-actions">'+(unread?badge(unread+' unread','warning'):badge('Read','success'))+(item.is_announcement?badge('Pinned','warning'):'')+'<button class="ghost-button" data-nexa-action="connected-ai" data-related-type="message" data-resource="messages" data-item-id="'+esc(id)+'">Ask AI</button><button class="ghost-button" data-nexa-action="connected-detail" data-resource="messages" data-item-id="'+esc(id)+'">Details</button></div></article>'; }).join('')||emptyMini('No website messages loaded','Synchronize messages:read and use API Sync Inspector if the resource fails.');
+  return sectionHeader('Messages','Read website conversation metadata and announcements in one place. Nexa AI can use the selected thread context without sending anything.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync messages</button></div>')+'<div class="toolbar"><div class="search-box"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search subject, context, sender or receiver…"></div><span class="summary-pill">'+rows.length+' threads</span></div><div class="message-list">'+cards+'</div>'+renderPagination(page,'messages','message threads');
 }
 
 function renderAgenda() {
-  const query = String(state.search || '').toLowerCase();
-  const rows = state.appointments.filter(function filterAppointment(appointment) {
-    const text = [appointment.title, appointment.description, appointment.contact_name, appointment.lead_name].join(' ').toLowerCase();
-    return text.includes(query);
-  });
-  const grouped = modules.agenda ? modules.agenda.groupByDay(rows) : {};
-  const agenda = Object.keys(grouped).sort().map(function renderDay(day) {
-    const entries = grouped[day].map(function renderAppointment(appointment) {
-      const time = new Date(appointment.start_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      return '<div class="timeline-item"><div class="timeline-time">' + esc(time) + '</div><div class="timeline-dot"></div><div class="timeline-content"><div class="list-item"><div class="list-item-main"><strong>' + esc(appointment.title) + '</strong><span>' + esc(appointment.contact_name || appointment.lead_name || appointment.description || 'Local appointment') + '</span></div><div class="row-actions"><button data-nexa-action="appointment-complete" data-record-id="' + esc(appointment.id) + '">Complete</button><button data-nexa-action="appointment-edit" data-record-id="' + esc(appointment.id) + '">Edit</button><button data-nexa-action="appointment-delete" data-record-id="' + esc(appointment.id) + '">Delete</button></div></div></div></div>';
-    }).join('');
-    return '<div class="agenda-day"><h3>' + formatDate(day, false) + '</h3>' + entries + '</div>';
-  }).join('');
-  const connectedAppointments = integrationRemote('reseller-appointments').concat(integrationRemote('orders').filter(function orderHasAppointment(item) {
-    return Boolean(item.appointment_date || item.appointment_time || String(item.order_type || '').toLowerCase().includes('appointment'));
-  })).filter(function filterRemote(item) { return remoteMatches(item, state.search); });
-  const connectedAgenda = connectedAppointments.map(function renderRemoteAppointment(item) {
-    const dateText = [item.appointment_date || '', item.appointment_time || ''].join(' ').trim() || item.updated_at || item.created_at;
-    return '<div class="connected-appointment"><div class="timeline-dot"></div><div><strong>' + esc(item.customer_name || item.listing_title || 'Connected appointment') + '</strong><span>' + esc(item.listing_title || item.store_name || item.dealer_name || 'AutoMarket Pro') + '</span><small>' + esc(dateText || 'Date not supplied') + ' · ' + esc(item.appointment_status || item.status || 'pending') + '</small></div></div>';
-  }).join('');
-  const viewButtons = '<div class="row-actions"><button class="ghost-button" data-nexa-action="agenda-day">Day</button><button class="ghost-button" data-nexa-action="agenda-week">Week</button></div>';
-  const remotePanel = '<article class="panel-card connected-section"><div class="panel-header"><div><h3>Connected appointments</h3><p>Dealer and reseller appointment activity</p></div>' + badge(String(connectedAppointments.length) + ' loaded', connectedAppointments.length ? 'success' : 'warning') + '</div>' + (connectedAgenda ? '<div class="connected-appointment-list">' + connectedAgenda + '</div>' : emptyMini('No connected appointments loaded', 'Synchronize orders or reseller appointments.')) + '</article>';
-  return sectionHeader('Agenda', 'A daily and weekly view of local and connected appointments.', viewButtons) + toolbar('Appointments', 'appointment-create', 'appointment-search', 'new-appointment') + (agenda || emptyMini('No local appointments found', 'Create your first appointment or change the search.')) + remotePanel;
+  const query=String(state.search||'').toLowerCase();
+  const events=agendaEvents().filter(function filter(event){ return remoteMatches({title:event.title,detail:event.detail,source:event.source,status:event.status},query); });
+  const anchor=toValidDate(state.agendaAnchor)||new Date();
+  let calendar='';
+  if(state.agendaMode==='week'){
+    const start=startOfWeek(anchor);
+    calendar='<div class="calendar-week">'+Array.from({length:7},function(_,index){ const day=addDays(start,index); const key=dateKey(day); const dayEvents=events.filter(function(event){return dateKey(event.date)===key;}); return '<section class="calendar-week-day '+(key===dateKey(new Date())?'today':'')+'"><header><span>'+day.toLocaleDateString(undefined,{weekday:'short'})+'</span><strong>'+day.getDate()+'</strong></header><div>'+dayEvents.map(eventChip).join('')+(dayEvents.length?'': '<span class="calendar-empty">No items</span>')+'</div></section>'; }).join('')+'</div>';
+  } else {
+    const first=new Date(anchor.getFullYear(),anchor.getMonth(),1); const gridStart=startOfWeek(first);
+    calendar='<div class="calendar-weekdays">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(day){return '<span>'+day+'</span>';}).join('')+'</div><div class="calendar-month">'+Array.from({length:42},function(_,index){ const day=addDays(gridStart,index); const key=dateKey(day); const dayEvents=events.filter(function(event){return dateKey(event.date)===key;}); const visible=dayEvents.slice(0,4); return '<section class="calendar-day '+(day.getMonth()!==anchor.getMonth()?'outside ':'')+(key===dateKey(new Date())?'today':'')+'"><header><span>'+day.getDate()+'</span><small>'+dayEvents.length+'</small></header><div>'+visible.map(eventChip).join('')+(dayEvents.length>4?'<button class="calendar-more" data-nexa-action="agenda-day-focus" data-day="'+key+'">+'+(dayEvents.length-4)+' more</button>':'')+'</div></section>'; }).join('')+'</div>';
+  }
+  const page=paginateItems(events,'agenda-list');
+  const list=page.items.map(function eventRow(event){ const action=event.local?(event.kind==='task'?'task-edit':event.kind==='appointment'?'appointment-edit':'agenda-noop'):'connected-detail'; const attrs=event.local?' data-record-id="'+esc(event.id)+'"':' data-resource="'+esc(event.resource)+'" data-item-id="'+esc(event.id)+'"'; return '<div class="agenda-work-item"><div class="agenda-date-block"><strong>'+event.date.toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</strong><span>'+event.date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></div><div><b>'+esc(event.title)+'</b><span>'+esc(event.detail||event.source)+'</span></div>'+badge(event.kind,'info')+badge(event.status||'scheduled')+'<button class="ghost-button" data-nexa-action="'+esc(action)+'"'+attrs+'>'+(event.local?'Open':'Details')+'</button></div>'; }).join('')||emptyMini('Nothing scheduled','Create a task, appointment or synchronize website appointments.');
+  const label=state.agendaMode==='week'?'Week of '+formatDate(startOfWeek(anchor),false):anchor.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const controls='<div class="agenda-controls"><button class="ghost-button" data-nexa-action="agenda-prev">‹</button><button class="ghost-button" data-nexa-action="agenda-today">Today</button><button class="ghost-button" data-nexa-action="agenda-next">›</button><strong>'+esc(label)+'</strong><button class="'+(state.agendaMode==='month'?'primary-button':'ghost-button')+'" data-nexa-action="agenda-month">Month</button><button class="'+(state.agendaMode==='week'?'primary-button':'ghost-button')+'" data-nexa-action="agenda-week">Week</button></div>';
+  return sectionHeader('Agenda','A visual command center for local tasks, appointments, reminders and website appointments.','<div class="button-row"><button class="secondary-button" data-nexa-action="task-create">+ Task</button><button class="primary-button" data-nexa-action="appointment-create">+ Appointment</button></div>')+toolbar('Agenda items','appointment-create','appointment-search','new-appointment')+'<article class="panel-card calendar-panel">'+controls+calendar+'</article><article class="panel-card agenda-work-panel"><div class="panel-header"><div><h3>Organized work</h3><p>Everything with a date, in chronological order</p></div><strong>'+events.length+'</strong></div><div class="agenda-work-list">'+list+'</div>'+renderPagination(page,'agenda-list','agenda items')+'</article>';
 }
 
 function renderAI() {
   const provider = state.settings && state.settings.preferred_provider ? state.settings.preferred_provider : 'openai';
   const providerState = state.settings && state.settings.secrets ? state.settings.secrets[provider] : null;
   const configured = Boolean(providerState && providerState.configured);
-  const history = state.suggestions.slice(0, 8).map(function renderSuggestion(item) {
+  const suggestionPage = paginateItems(state.suggestions, 'ai-history');
+  const history = suggestionPage.items.map(function renderSuggestion(item) {
     return '<div class="list-item"><div class="list-item-main"><strong>' + esc(String(item.kind || '').replaceAll('_', ' ')) + '</strong><span>' + esc(item.provider) + ' · ' + formatDate(item.created_at) + '</span></div><button class="ghost-button" data-nexa-action="ai-show-suggestion" data-show-suggestion="' + esc(item.id) + '">View</button></div>';
   }).join('') || emptyMini('No suggestions yet', 'Generate the first suggestion when an AI provider is configured.');
   const statusBadge = configured ? badge('Configured', 'success') : badge('Not configured', 'warning');
@@ -411,27 +547,23 @@ function renderAI() {
     '<div class="grid ai-layout">' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Generate a suggestion</h3><p>No automatic messages or record changes</p></div>' + statusBadge + '</div><div class="form-grid">' +
         '<label>Provider<select id="ai-provider" data-nexa-action="ai-provider-select">' + providerOptions + '</select></label>' +
-        '<label>Suggestion type<select id="ai-kind"><option value="daily_priorities">Daily priorities</option><option value="lead_next_step">Lead next step</option><option value="agenda_optimization">Agenda optimization</option><option value="follow_up_draft">Follow-up note draft</option><option value="stale_leads">Stale leads</option></select></label>' +
-        '<label>Related record type<select id="ai-related-type"><option value="">Entire workspace</option><option value="lead">Lead</option><option value="contact">Contact</option><option value="task">Task</option><option value="appointment">Appointment</option></select></label>' +
+        '<label>Suggestion type<select id="ai-kind"><option value="daily_priorities">Daily priorities</option><option value="lead_next_step">Lead next step</option><option value="agenda_optimization">Agenda optimization</option><option value="follow_up_draft">Follow-up note draft</option><option value="stale_leads">Stale leads</option><option value="message_response_strategy">Message response strategy</option><option value="order_follow_up">Order / lead follow-up</option></select></label>' +
+        '<label>Related record type<select id="ai-related-type"><option value="">Entire workspace</option><option value="lead">Lead</option><option value="contact">Contact</option><option value="task">Task</option><option value="appointment">Appointment</option><option value="message">Website message</option><option value="order">Website order / lead</option></select></label>' +
         '<label>Related record<select id="ai-related-id"><option value="">None selected</option></select></label>' +
-        '<label class="span-2">What should Nexa focus on?<textarea id="ai-focus" placeholder="Example: Help me prioritize follow-ups before Friday."></textarea></label>' +
+        '<label class="span-2">What should Nexa focus on?<textarea id="ai-focus" placeholder="Example: Help me prioritize follow-ups before Friday.">' + esc(state.aiPrefill && state.aiPrefill.focus || '') + '</textarea></label>' +
       '</div><div class="dialog-actions" style="padding-top:14px"><button class="secondary-button" id="ai-cancel" data-nexa-action="ai-cancel"' + (state.activeAIRequest ? '' : ' disabled') + '>Cancel</button><button class="primary-button" id="ai-generate" data-nexa-action="ai-generate" data-testid="generate-suggestion">Generate suggestion</button></div><p class="ai-status" id="ai-status">' + (configured ? 'Ready to use the selected provider.' : 'AI provider not configured') + '</p></article>' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Suggestion</h3><p>Review before turning it into an action</p></div></div><div class="ai-output" id="ai-output">' + esc(state.aiResult || 'Your generated suggestion will appear here.') + '</div><div class="dialog-actions"><button class="secondary-button" data-nexa-action="ai-save-note" id="ai-save-note">Save note</button><button class="primary-button" data-nexa-action="ai-save-task" id="ai-save-task">Save task</button></div></article>' +
-      '<article class="panel-card" style="grid-column:1/-1"><div class="panel-header"><div><h3>Recent suggestions</h3><p>Stored locally in your workspace</p></div></div><div class="list">' + history + '</div></article>' +
+      '<article class="panel-card" style="grid-column:1/-1"><div class="panel-header"><div><h3>Recent suggestions</h3><p>Stored locally in your workspace</p></div></div><div class="list">' + history + '</div>' + renderPagination(suggestionPage, 'ai-history', 'suggestions') + '</article>' +
     '</div>';
 }
 
 function renderAlerts() {
-  const alertCards = state.alerts.map(function renderAlert(alert) {
-    return '<article class="alert-card ' + esc(alert.level) + '"><div class="alert-marker"></div><div><h3>' + esc(alert.title) + '</h3><p class="muted" style="margin:0">' + esc(alert.type) + ' · ' + formatDate(alert.date) + '</p></div>' + badge(alert.level) + '</article>';
-  }).join('') || emptyMini('No active alerts', 'There is nothing urgent right now.');
-  const reminderRows = state.reminders.map(function renderReminder(reminder) {
-    const enabled = Number(reminder.enabled) === 1;
-    return '<div class="list-item"><div class="list-item-main"><strong>' + esc(reminder.title) + '</strong><span>' + formatDate(reminder.remind_at) + ' · ' + (enabled ? 'Enabled' : 'Paused') + '</span></div><button class="ghost-button" data-nexa-action="reminder-toggle" data-record-id="' + esc(reminder.id) + '">' + (enabled ? 'Pause' : 'Enable') + '</button></div>';
-  }).join('') || emptyMini('No custom reminders', 'Create a reminder for an important follow-up.');
-  return sectionHeader('Alerts', 'Overdue tasks, due follow-ups and upcoming appointments.', '<button class="primary-button" data-nexa-action="reminder-create">+ Reminder</button>') + '<div class="grid">' + alertCards + '</div><article class="panel-card"><div class="panel-header"><div><h3>Custom reminders</h3><p>Local reminders that work without AI</p></div><button class="ghost-button" data-nexa-action="alert-refresh">Refresh</button></div><div class="list">' + reminderRows + '</div></article>';
+  const alertPage=paginateItems(state.alerts,'alerts');
+  const alertCards=alertPage.items.map(function renderAlert(alert){ return '<article class="alert-card '+esc(alert.level)+'"><div class="alert-marker"></div><div><h3>'+esc(alert.title)+'</h3><p class="muted" style="margin:0">'+esc(alert.type)+' · '+formatDate(alert.date)+'</p></div>'+badge(alert.level)+'</article>'; }).join('')||emptyMini('No active alerts','There is nothing urgent right now.');
+  const reminderPage=paginateItems(state.reminders,'reminders');
+  const reminderRows=reminderPage.items.map(function renderReminder(reminder){ const enabled=Number(reminder.enabled)===1; return '<div class="list-item"><div class="list-item-main"><strong>'+esc(reminder.title)+'</strong><span>'+formatDate(reminder.remind_at)+' · '+(enabled?'Enabled':'Paused')+'</span></div><button class="ghost-button" data-nexa-action="reminder-toggle" data-record-id="'+esc(reminder.id)+'">'+(enabled?'Pause':'Enable')+'</button></div>'; }).join('')||emptyMini('No custom reminders','Create a reminder for an important follow-up.');
+  return sectionHeader('Alerts','Overdue tasks, due follow-ups and upcoming appointments.','<button class="primary-button" data-nexa-action="reminder-create">+ Reminder</button>')+'<div class="grid">'+alertCards+'</div>'+renderPagination(alertPage,'alerts','alerts')+'<article class="panel-card"><div class="panel-header"><div><h3>Custom reminders</h3><p>Local reminders that work without AI</p></div><button class="ghost-button" data-nexa-action="alert-refresh">Refresh</button></div><div class="list">'+reminderRows+'</div>'+renderPagination(reminderPage,'reminders','reminders')+'</article>';
 }
-
 
 function integrationSnapshot(resource) {
   const integration = state.integration || {};
@@ -482,20 +614,13 @@ function remoteSubtitle(resource, item) {
 }
 
 function renderConnectedRows(resource, payloadOrItems, limit) {
-  const items = Array.isArray(payloadOrItems) ? payloadOrItems : dataList(payloadOrItems);
-  const ordered = resource === 'messages'
-    ? items.slice().sort(function announcementsFirst(a, b) { return Number(Boolean(b.is_announcement)) - Number(Boolean(a.is_announcement)); })
-    : items;
-  const rows = ordered.slice(0, Number(limit || 8));
-  if (!rows.length) return emptyMini('No ' + resource + ' cached', 'Open API Sync Inspector to see whether this resource loaded or failed.');
-  return '<div class="connected-record-list">' + rows.map(function renderRemoteItem(item) {
-    const title = remoteTitle(resource, item);
-    const subtitle = remoteSubtitle(resource, item);
-    const url = item.listing_url || item.public_store_url || item.profile_url || '';
-    const announcement = item.is_announcement ? '<span class="connected-announcement">Announcement</span>' : '';
-    const link = url ? '<a class="ghost-button connected-open-link" href="' + esc(url) + '" target="_blank" rel="noreferrer">Open</a>' : '';
-    return '<div class="connected-record ' + (item.is_announcement ? 'announcement' : '') + '"><div><strong>' + esc(title) + '</strong><span>' + esc(valueLabel(subtitle)) + '</span></div><div class="connected-record-actions">' + announcement + (item.status ? badge(item.status) : '') + link + '</div></div>';
-  }).join('') + '</div>';
+  const items=Array.isArray(payloadOrItems)?payloadOrItems:dataList(payloadOrItems);
+  const ordered=resource==='messages'?items.slice().sort(function announcementsFirst(a,b){return Number(Boolean(b.is_announcement))-Number(Boolean(a.is_announcement));}):items;
+  const key='connected:'+resource;
+  const page=paginateItems(ordered,key);
+  const rows=page.items.slice(0,Number(limit||PAGE_SIZE));
+  if(!rows.length)return emptyMini('No '+resource+' cached','Open API Sync Inspector to see whether this resource loaded or failed.');
+  return '<div class="connected-record-list">'+rows.map(function renderRemoteItem(item,index){ const title=remoteTitle(resource,item); const subtitle=remoteSubtitle(resource,item); const url=item.listing_url||item.public_store_url||item.profile_url||''; const announcement=item.is_announcement?'<span class="connected-announcement">Announcement</span>':''; const link=url?'<a class="ghost-button connected-open-link" href="'+esc(url)+'" target="_blank" rel="noreferrer">Open</a>':''; const id=remoteItemId(resource,item,index+page.start); return '<div class="connected-record '+(item.is_announcement?'announcement':'')+'"><div><strong>'+esc(title)+'</strong><span>'+esc(valueLabel(subtitle))+'</span></div><div class="connected-record-actions">'+announcement+(item.status?badge(item.status):'')+'<button class="ghost-button" data-nexa-action="connected-detail" data-resource="'+esc(resource)+'" data-item-id="'+esc(id)+'">Details</button>'+link+'</div></div>'; }).join('')+'</div>'+renderPagination(page,key,resource);
 }
 
 function connectedResourceDefinitions(accountType) {
@@ -569,7 +694,7 @@ function renderConnectedBusiness() {
     return '<article class="panel-card connected-resource-card"><div class="panel-header"><div><h3>' + esc(title) + '</h3><p>' + esc(description) + '</p></div>' + remoteStatusBadge(resource) + '</div>' +
       (['store', 'dealer-summary', 'reseller-profile', 'reseller-summary', 'admin-summary', 'api-keys-status'].includes(resource)
         ? renderConnectedSummary(items[0] || integrationSnapshot(resource))
-        : renderConnectedRows(resource, items, 6)) + '</article>';
+        : renderConnectedRows(resource, items, 40)) + '</article>';
   }).join('');
   return sectionHeader('Connected Business', 'A real read-only sync from AutoMarket Pro, separated by account type and API scope.', '<div class="button-row"><button class="secondary-button" data-go="sync-inspector" data-nexa-action="navigate-sync-inspector">API Sync Inspector</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync now</button></div>') +
     '<div class="connection-hero ' + (connected ? 'connected' : '') + '">' +
@@ -615,7 +740,8 @@ function renderApiSyncInspector() {
   const filtered = resources.filter(function filterResource(row) {
     return [row.resource, row.status, row.required_scope, row.last_error].join(' ').toLowerCase().includes(query);
   });
-  const body = filtered.map(function renderInspectorRow(row) {
+  const inspectorPage = paginateItems(filtered, 'inspector');
+  const body = inspectorPage.items.map(function renderInspectorRow(row) {
     const error = row.last_error || '—';
     return '<tr><td><b>' + esc(row.resource) + '</b></td><td>' + inspectorStatusBadge(row) + '</td><td>' + esc(row.item_count || 0) + '</td><td>' + esc(row.required_scope || '—') + '</td><td>' + esc(row.http_status || '—') + '</td><td>' + esc(row.duration_ms ? row.duration_ms + ' ms' : '—') + '</td><td>' + formatDate(row.last_success_at || row.last_checked_at) + '</td><td class="inspector-error">' + esc(error) + '</td></tr>';
   }).join('');
@@ -629,7 +755,7 @@ function renderApiSyncInspector() {
     '<div class="inspector-hero"><div><p class="eyebrow">LIVE API DIAGNOSTICS</p><h2>' + esc(connectedAccountLabel(status)) + '</h2><p>' + esc(status.last_error || 'All available resources are reporting normally.') + '</p></div><div class="inspector-hero-state">' + badge(status.sync_state || 'idle', status.sync_state === 'ready' ? 'success' : status.sync_state === 'partial' ? 'warning' : 'info') + '<span>Last attempt: ' + formatDate(status.last_attempt_at) + '</span></div></div>' +
     renderConnectionProgress(resources) +
     '<div class="toolbar inspector-toolbar"><div class="search-box"><input id="view-search" data-nexa-action="integration-inspector-search" type="search" value="' + esc(state.search) + '" placeholder="Search resource, scope or error…"></div><button class="ghost-button" data-integration-sync="1" data-nexa-action="integration-retry-failed">Retry failed resources</button></div>' +
-    '<article class="panel-card"><div class="panel-header"><div><h3>Resource status</h3><p>Ping → connection-map → account-specific resources</p></div><strong>' + esc(resources.length) + '</strong></div>' + table + '</article>' +
+    '<article class="panel-card"><div class="panel-header"><div><h3>Resource status</h3><p>Ping → connection-map → account-specific resources</p></div><strong>' + esc(resources.length) + '</strong></div>' + table + renderPagination(inspectorPage, 'inspector', 'resources') + '</article>' +
     '<article class="panel-card"><div class="panel-header"><div><h3>Recent synchronization runs</h3><p>Manual and automatic background history</p></div></div><div class="sync-run-list">' + runRows + '</div></article>';
 }
 
@@ -651,7 +777,8 @@ function renderSmartNotifications() {
   const settings = state.settings || {};
   const consent = settings.notifications_user_consent === '1';
   const events = state.notifications || [];
-  const cards = events.map(function renderNotificationEvent(event) {
+  const notificationPage = paginateItems(events, 'notifications');
+  const cards = notificationPage.items.map(function renderNotificationEvent(event) {
     const unreadClass = event.read_at ? '' : ' unread';
     return '<article class="pulse-event ' + esc(event.severity || 'info') + unreadClass + '" data-notification-id="' + esc(event.id) + '">' +
       '<div class="pulse-event-icon"><img src="assets/nexa-ai-orb.svg" alt=""></div>' +
@@ -673,7 +800,7 @@ function renderSmartNotifications() {
       '<div class="pulse-unread"><span>Unread</span><strong>' + state.unreadNotifications + '</strong><small>notifications</small></div>' +
     '</div>' +
     '<div class="grid pulse-layout">' +
-      '<article class="panel-card pulse-feed"><div class="panel-header"><div><h3>Notification center</h3><p>Larger, detailed alerts inside the application</p></div></div><div class="pulse-events">' + cards + '</div></article>' +
+      '<article class="panel-card pulse-feed"><div class="panel-header"><div><h3>Notification center</h3><p>Larger, detailed alerts inside the application</p></div></div><div class="pulse-events">' + cards + '</div>' + renderPagination(notificationPage, 'notifications', 'notifications') + '</article>' +
       '<form id="notification-preferences-form" class="panel-card pulse-preferences" data-nexa-action="notification-preferences-save"><div class="panel-header"><div><h3>What should Nexa tell you?</h3><p>Each category can be in-app, Windows, both or disabled.</p></div></div><div class="preference-list">' + preferences + '</div>' +
         '<div class="preference-behavior"><label>Sound<select name="notifications_sound"><option value="1"' + (settings.notifications_sound !== '0' ? ' selected' : '') + '>On</option><option value="0"' + (settings.notifications_sound === '0' ? ' selected' : '') + '>Silent</option></select></label>' +
         '<label>Closing the window<select name="notifications_minimize_to_tray"><option value="1"' + (settings.notifications_minimize_to_tray !== '0' ? ' selected' : '') + '>Keep monitoring in tray</option><option value="0"' + (settings.notifications_minimize_to_tray === '0' ? ' selected' : '') + '>Exit application</option></select></label>' +
@@ -705,10 +832,9 @@ function hidePulseToast() {
 }
 
 function renderActivity() {
-  const items = state.activity.map(function renderActivityItem(item) {
-    return '<div class="activity-item"><div class="activity-icon">' + esc(String(item.action || '').slice(0, 1).toUpperCase()) + '</div><div><strong>' + esc(String(item.action || '').replaceAll('_', ' ')) + ' · ' + esc(item.entity_type) + '</strong><div class="muted">' + esc(item.details || item.entity_id || '') + '</div></div><time class="muted">' + formatDate(item.created_at) + '</time></div>';
-  }).join('') || emptyMini('No activity yet', 'Changes to records will appear here.');
-  return sectionHeader('Activity', 'A local audit trail of important changes.') + '<article class="panel-card">' + items + '</article>';
+  const page=paginateItems(state.activity,'activity');
+  const items=page.items.map(function renderActivityItem(item){ return '<div class="activity-item"><div class="activity-icon">'+esc(String(item.action||'').slice(0,1).toUpperCase())+'</div><div><strong>'+esc(String(item.action||'').replaceAll('_',' '))+' · '+esc(item.entity_type)+'</strong><div class="muted">'+esc(item.details||item.entity_id||'')+'</div></div><time class="muted">'+formatDate(item.created_at)+'</time></div>'; }).join('')||emptyMini('No activity yet','Changes to records will appear here.');
+  return sectionHeader('Activity','A local audit trail of important changes.')+'<article class="panel-card activity-scroll">'+items+renderPagination(page,'activity','activity records')+'</article>';
 }
 
 function backupName(filePath) {
@@ -835,9 +961,12 @@ function populateAIRelated() {
   if (type === 'contact') collection = state.contacts;
   if (type === 'task') collection = state.tasks;
   if (type === 'appointment') collection = state.appointments;
+  if (type === 'message') collection = integrationRemote('messages').map(function messageOption(item,index){ return { id:remoteItemId('messages',item,index), name:item.subject || 'Conversation', title:item.subject || 'Conversation' }; });
+  if (type === 'order') collection = integrationRemote('orders').concat(integrationRemote('reseller-appointments')).map(function orderOption(item,index){ return { id:remoteItemId(item.__resource || (item.order_id ? 'orders' : 'reseller-appointments'),item,index), name:item.customer_name || item.listing_title || 'Connected order', title:item.customer_name || item.listing_title || 'Connected order' }; });
   select.innerHTML = '<option value="">None selected</option>' + collection.map(function option(item) {
     return '<option value="' + esc(item.id) + '">' + esc(item.name || item.title) + '</option>';
   }).join('');
+  if (state.aiPrefill && state.aiPrefill.type === type) select.value = state.aiPrefill.id;
 }
 
 async function generateAI() {
@@ -919,11 +1048,46 @@ function bindViewEvents() {
   if (search) {
     search.addEventListener('input', function searchRecords(event) {
       state.search = event.target.value;
+      state.pages = {};
       renderView();
       const nextSearch = document.getElementById('view-search');
       if (nextSearch) nextSearch.focus();
     });
   }
+
+
+  document.querySelectorAll('[data-page-key]').forEach(function bindPagination(button) {
+    button.addEventListener('click', function changePage() {
+      if (button.disabled) return;
+      state.pages[button.dataset.pageKey] = Math.max(1, Number(button.dataset.page || 1));
+      renderView();
+      content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+  document.querySelectorAll('[data-nexa-action="connected-detail"]').forEach(function bindConnectedDetail(button) {
+    button.addEventListener('click', function showDetail() { openConnectedDetail(button.dataset.resource, button.dataset.itemId); });
+  });
+  document.querySelectorAll('[data-nexa-action="connected-ai"]').forEach(function bindConnectedAi(button) {
+    button.addEventListener('click', function askAi() {
+      const type=button.dataset.relatedType || (button.dataset.resource==='messages'?'message':'order');
+      const kind=type==='message'?'message_response_strategy':'order_follow_up';
+      setAiPrefill(type,button.dataset.itemId,kind,type==='message'?'Review this website conversation and suggest the safest useful response or next action.':'Review this website lead and recommend the next follow-up action.');
+    });
+  });
+  document.querySelectorAll('[data-nexa-action="agenda-prev"],[data-nexa-action="agenda-next"],[data-nexa-action="agenda-today"],[data-nexa-action="agenda-month"],[data-nexa-action="agenda-week"]').forEach(function bindAgendaControl(button) {
+    button.addEventListener('click', function controlAgenda() {
+      const action=button.dataset.nexaAction; const anchor=toValidDate(state.agendaAnchor)||new Date();
+      if(action==='agenda-today') state.agendaAnchor=new Date().toISOString();
+      if(action==='agenda-month') state.agendaMode='month';
+      if(action==='agenda-week') state.agendaMode='week';
+      if(action==='agenda-prev'){ if(state.agendaMode==='month') anchor.setMonth(anchor.getMonth()-1); else anchor.setDate(anchor.getDate()-7); state.agendaAnchor=anchor.toISOString(); }
+      if(action==='agenda-next'){ if(state.agendaMode==='month') anchor.setMonth(anchor.getMonth()+1); else anchor.setDate(anchor.getDate()+7); state.agendaAnchor=anchor.toISOString(); }
+      renderView();
+    });
+  });
+  document.querySelectorAll('[data-nexa-action="agenda-day-focus"]').forEach(function bindAgendaDay(button) {
+    button.addEventListener('click', function focusDay(){ state.agendaMode='week'; state.agendaAnchor=new Date(button.dataset.day+'T12:00:00').toISOString(); renderView(); });
+  });
 
   document.querySelectorAll('[data-nexa-action]').forEach(function bindAction(element) {
     const action = element.getAttribute('data-nexa-action');
@@ -960,6 +1124,8 @@ function bindViewEvents() {
 
   if (state.view === 'ai') {
     document.getElementById('ai-related-type').addEventListener('change', populateAIRelated);
+    if (state.aiPrefill) { document.getElementById('ai-kind').value = state.aiPrefill.kind || 'daily_priorities'; document.getElementById('ai-related-type').value = state.aiPrefill.type || ''; }
+    populateAIRelated();
     document.getElementById('ai-provider').addEventListener('change', function selectProvider(event) { api.ai.selectProvider(event.target.value); });
     document.getElementById('ai-generate').addEventListener('click', generateAI);
     document.getElementById('ai-cancel').addEventListener('click', async function cancelAI() { if (state.activeAIRequest) await api.ai.cancel(state.activeAIRequest); });
@@ -1187,6 +1353,9 @@ async function initialize() {
         document.getElementById('notification-count').textContent = String(state.unreadNotifications);
         document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
         document.getElementById('notification-bell').classList.toggle('has-unread', state.unreadNotifications > 0);
+  const messageCount = integrationRemote('messages').reduce(function countUnread(total, item) { return total + Number(item.unread_count || 0); }, 0);
+  const messageCountElement = document.getElementById('message-count');
+  if (messageCountElement) messageCountElement.textContent = String(messageCount);
         if (state.view === 'alerts' || state.view === 'dashboard' || state.view === 'notifications') {
           state.dashboard = await api.dashboard.summary();
           renderView();
@@ -1204,4 +1373,5 @@ async function initialize() {
 window.NEXA_UI_CONTRACT_V1 = NEXA_UI_CONTRACT_V1;
 window.NEXA_UI_TESTID_CONTRACT = UI_TESTID_CONTRACT;
 window.NEXA_ACTION_CONTRACT = ACTION_CONTRACT;
+window.NEXA_UI_TESTID_EXTENDED_CONTRACT = UI_TESTID_EXTENDED_CONTRACT;
 initialize();

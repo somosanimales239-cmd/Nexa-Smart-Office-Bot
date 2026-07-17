@@ -1,27 +1,16 @@
-# Nexa Smart Office Bot
+# Nexa Smart Office Bot 1.3.0
 
-Nexa Smart Office Bot is a local-first Windows desktop application for contacts, leads, appointments, tasks, reminders, business alerts, AI suggestions, connected marketplace data and protected SQLite backups.
+A local-first Windows business assistant with a fully reflected AutoMarket Pro workspace.
 
-## Main features
+## Main areas
 
-- Local contacts, leads, agenda, tasks and reminders.
-- User-configured OpenAI and DeepSeek providers.
-- API keys protected with Electron `safeStorage`.
-- Local SQLite workspace with additive migrations and backup recovery.
-- Nexa Pulse notifications inside the application and through Windows.
-- Full AutoMarket Pro synchronization after the API connection test.
-- Account-aware support for Dealer, Reseller and Administrator keys.
-- Read-only connected contacts, orders, listings, messages, appointments, stores and summaries.
-- Phone normalization so common formats are treated as the same number.
-- API Sync Inspector with status, item count, required scope, HTTP status, duration, last success and last error for every resource.
-- GitHub Actions delivery for NSIS Installer, Portable EXE and Windows ZIP.
+- Dashboard with local and connected totals.
+- Unified Contacts: local records plus synchronized website agenda contacts.
+- Unified Leads: local opportunities plus `orders:read` and reseller appointments.
+- Messages: safe website thread metadata, announcements, unread counts and optional previews.
+- Visual Agenda: month/week planner for tasks, appointments, reminders and connected appointments.
+- Tasks, Alerts, Nexa Pulse, Activity, Settings and backups.
+- AI suggestions with explicit user approval and selectable website message/order context.
+- API Sync Inspector for resource-level diagnostics.
 
-## Version 1.2.0
-
-Version 1.2.0 replaces the connection-only behavior with a complete synchronization pipeline:
-
-`ping → connection-map → account detection → allowed resources → protected local cache → dashboard and business views → per-resource diagnostics`
-
-A failed optional resource no longer hides the data loaded successfully from other resources. Nexa shows the exact failed resource and missing scope while keeping the connected account available.
-
-See `CONNECTED_BUSINESS_SETUP.md` and `API_SYNC_INSPECTOR.md`.
+All dense lists use 40 records per page. All main views, tables, dialogs and internal feeds expose visible scrolling. Connected website records remain read-only inside Nexa.

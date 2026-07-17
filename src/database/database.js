@@ -361,6 +361,8 @@ class DatabaseService {
     if (type === 'lead') return this.db.prepare('SELECT * FROM leads WHERE id = ?').get(entityId) || null;
     if (type === 'task') return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(entityId) || null;
     if (type === 'appointment') return this.db.prepare('SELECT * FROM appointments WHERE id = ?').get(entityId) || null;
+    if (type === 'message') return this.findIntegrationCacheItem(['messages'], entityId);
+    if (type === 'order') return this.findIntegrationCacheItem(['orders','reseller-appointments'], entityId);
     return null;
   }
 
@@ -384,10 +386,10 @@ class DatabaseService {
         sync_state: connectedStatus.sync_state || 'idle',
         last_sync_at: connectedStatus.last_sync_at || null,
         summary: connectedSummary,
-        recent_orders: this.listIntegrationCache('orders', '', 15),
+        recent_orders: this.listIntegrationCache('orders', '', 40),
         reseller_appointments: this.listIntegrationCache('reseller-appointments', '', 15),
         agenda_contacts: this.listIntegrationCache('agenda', '', 15),
-        unread_message_threads: this.listIntegrationCache('messages', '', 15).filter(function unread(item) { return Number(item.unread_count || 0) > 0 || Number(item.is_announcement || 0) === 1; }),
+        unread_message_threads: this.listIntegrationCache('messages', '', 40).filter(function unread(item) { return Number(item.unread_count || 0) > 0 || Number(item.is_announcement || 0) === 1; }),
         listings_needing_attention: connectedListings.filter(function needsAttention(item) {
           return !item.main_image_url || item.price === null || item.price === undefined || Number(item.price) <= 0 || String(item.status || '').toLowerCase() !== 'active';
         }).slice(0, 15),
@@ -587,6 +589,19 @@ class DatabaseService {
         __last_seen_at: row.last_seen_at
       });
     });
+  }
+
+
+  findIntegrationCacheItem(resources, itemId) {
+    const wanted=String(itemId || '');
+    for (const resource of (resources || [])) {
+      const row=this.db.prepare('SELECT * FROM integration_cache WHERE resource=? AND item_id=?').get(normalizeText(resource),wanted);
+      if (row) {
+        let payload={}; try { payload=JSON.parse(row.payload_json || '{}'); } catch (_) { payload={}; }
+        return Object.assign({},payload,{__resource:row.resource,__item_id:row.item_id,__normalized_phone:row.normalized_phone,__normalized_email:row.normalized_email});
+      }
+    }
+    return null;
   }
 
   integrationCacheCount(resource) {

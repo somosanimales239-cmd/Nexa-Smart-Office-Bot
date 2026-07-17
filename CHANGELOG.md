@@ -1,24 +1,13 @@
 # Changelog
 
-## 1.2.0
+## 1.3.0
 
-- Replaced connection-only behavior with complete account-aware API synchronization.
-- Added strict `ping` and `connection-map` discovery before business resources.
-- Added Dealer, Reseller and Administrator resource plans.
-- Added API Sync Inspector with per-resource status, count, scope, HTTP code, duration and last error.
-- Added synchronization run history and partial-success reporting.
-- Added protected read-only connected-business cache in SQLite.
-- Added safe-field allowlists that discard unexpected secret and sensitive response fields.
-- Added normalized phone search for connected agenda contacts.
-- Added connected contacts to Contacts, website inquiries to Leads and remote appointments to Agenda.
-- Added connected account metrics and navigation to Dashboard.
-- Added missing-scope detection without unnecessary HTTP calls.
-- Preserved successful resources when another resource fails.
-- Added idempotent upgrade migration from 1.1.0.
-- Updated application version to 1.2.0.
-
-## 1.1.0
-
-- Added Connected Business API-key integration.
-- Added encrypted AutoMarket Pro key storage.
-- Added Nexa Pulse, Windows notifications, tray monitoring and notification preferences.
+- Added visible vertical and horizontal scrollbars throughout the application.
+- Added sticky table headers and scroll-safe dialogs.
+- Added 40-record pagination to contacts, leads, tasks, messages, agenda, activity, notifications, API inspector, AI history and connected resource cards.
+- Unified AutoMarket Pro agenda contacts directly with the Contacts workspace, including phone/email deduplication.
+- Unified orders and reseller appointments directly with the Leads workspace and exposed full connected details.
+- Added a dedicated Messages area for website threads and admin announcements.
+- Added AI context actions for selected website messages and orders.
+- Rebuilt Agenda as a professional month/week visual planner containing local tasks, appointments, reminders and connected appointments.
+- Added connected-record detail dialog and preserved read-only website data.

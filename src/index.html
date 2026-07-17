@@ -20,6 +20,7 @@
         <button class="nav-item" data-view="sync-inspector" data-testid="api-sync-inspector" data-nexa-action="navigate-sync-inspector"><span>⌁</span>API Sync Inspector</button>
         <button class="nav-item" data-view="contacts" data-testid="contacts" data-nexa-action="navigate-contacts"><span>◎</span>Contacts</button>
         <button class="nav-item" data-view="leads" data-testid="leads" data-nexa-action="navigate-leads"><span>◈</span>Leads</button>
+        <button class="nav-item" data-view="messages" data-testid="messages" data-nexa-action="navigate-messages"><span>✉</span>Messages <em id="message-count">0</em></button>
         <button class="nav-item" data-view="agenda" data-testid="agenda" data-nexa-action="navigate-agenda"><span>□</span>Agenda</button>
         <button class="nav-item" data-view="tasks" data-testid="tasks" data-nexa-action="navigate-tasks"><span>✓</span>Tasks</button>
         <button class="nav-item" data-view="ai" data-testid="ai" data-nexa-action="navigate-ai"><span>✦</span>AI Suggestions</button>
@@ -31,7 +32,7 @@
       </nav>
       <div class="sidebar-footer">
         <div class="system-dot"></div>
-        <div><strong>Local workspace</strong><span id="sidebar-version">v1.2.0</span></div>
+        <div><strong>Local workspace</strong><span id="sidebar-version">v1.3.0</span></div>
       </div>
     </aside>
 
@@ -90,7 +91,16 @@
     </form>
   </dialog>
 
-
+  <dialog id="connected-detail-dialog" class="dialog connected-detail-dialog" data-testid="connected-detail-dialog">
+    <form method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow" id="connected-detail-eyebrow">CONNECTED RECORD</p><h2 id="connected-detail-title">Record details</h2></div>
+        <button value="close" class="icon-button" data-nexa-action="connected-detail-close" aria-label="Close">×</button>
+      </div>
+      <div id="connected-detail-body" class="connected-detail-body"></div>
+      <div class="dialog-actions"><button value="close" class="secondary-button" data-nexa-action="connected-detail-close">Close</button></div>
+    </form>
+  </dialog>
 
   <aside id="nexa-pulse-toast" class="nexa-pulse-toast" hidden aria-live="assertive">
     <div class="pulse-avatar-wrap">

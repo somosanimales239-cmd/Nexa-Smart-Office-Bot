@@ -46,7 +46,9 @@ class AIService {
       lead_next_step: 'Recommend the best next step for this lead. Include timing, objective, and a short follow-up note draft.',
       agenda_optimization: 'Suggest a practical way to organize the upcoming agenda and reduce conflicts or missed follow-ups.',
       follow_up_draft: 'Write a concise professional follow-up note. Do not claim that it was sent.',
-      stale_leads: 'Identify the leads that need attention and recommend a specific next action for each one.'
+      stale_leads: 'Identify the leads that need attention and recommend a specific next action for each one.',
+      message_response_strategy: 'Review the selected website message thread metadata and available safe preview. Explain the likely intent, what information should be verified, and draft a professional response for user approval. Never claim it was sent.',
+      order_follow_up: 'Review the selected website order or lead. Summarize the customer need, missing information, urgency, and recommend a concrete follow-up plan with a draft reply for user approval.'
     };
     const instruction = instructions[kind] || instructions.daily_priorities;
     const userFocus = String(focus || '').trim() || 'No additional instructions.';

@@ -19,7 +19,7 @@ assert.equal(preload.includes("integration:test"), true);
 assert.equal(preload.includes("integration:inspector"), true);
 assert.equal(preload.includes("integration:items"), true);
 assert.equal(preload.includes("notifications:permission"), true);
-['dashboard', 'sidebar', 'connected-business', 'api-sync-inspector', 'contacts', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'smart-notifications', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
+['dashboard', 'sidebar', 'connected-business', 'api-sync-inspector', 'contacts', 'messages', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'smart-notifications', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
   assert.equal(html.includes('data-testid="' + id + '"'), true);
 });
 const integrationIpc = fs.readFileSync(path.join(root, 'src', 'ipc', 'integrations-ipc.js'), 'utf8');

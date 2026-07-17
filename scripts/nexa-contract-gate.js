@@ -26,6 +26,7 @@ const requirements = [
   ['src/ipc/integrations-ipc.js', 'integration:test'],
   ['src/ipc/notifications-ipc.js', 'notifications:permission'],
   ['src/index.html', 'data-testid="connected-business"'],
+  ['src/index.html', 'data-testid="messages"'],
   ['src/index.html', 'data-testid="smart-notifications"'],
   ['src/index.html', 'data-testid="api-sync-inspector"'],
   ['src/services/automarket-api-service.js', 'NEXA_API_SYNC_INSPECTOR_V1'],
