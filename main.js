@@ -10,6 +10,7 @@ const { BackupService } = require('./src/services/backup-service');
 const { AIService } = require('./src/services/ai-service');
 const { AutoMarketApiService } = require('./src/services/automarket-api-service');
 const { NotificationService } = require('./src/services/notification-service');
+const { AutomaticActionsService } = require('./src/services/automatic-actions-service');
 const { registerFoundationIpc } = require('./src/ipc/foundation-ipc');
 const { registerRecordsIpc } = require('./src/ipc/records-ipc');
 const { registerAgendaIpc } = require('./src/ipc/agenda-ipc');
@@ -17,6 +18,7 @@ const { registerAiIpc } = require('./src/ipc/ai-ipc');
 const { registerIntegrationsIpc } = require('./src/ipc/integrations-ipc');
 const { registerNotificationsIpc } = require('./src/ipc/notifications-ipc');
 const { registerMessagesIpc } = require('./src/ipc/messages-ipc');
+const { registerAutomationIpc } = require('./src/ipc/automation-ipc');
 
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -29,7 +31,7 @@ const Tray = electron.Tray;
 const Menu = electron.Menu;
 const nativeImage = electron.nativeImage;
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const NOTIFICATION_IMPLEMENTATION_MARKER = 'notification marker: new Notification(...)';
 const webPreferences = {
   preload: path.join(__dirname, 'preload.js'),
@@ -49,6 +51,7 @@ let backupService = null;
 let aiService = null;
 let apiService = null;
 let notificationService = null;
+let automationService = null;
 let tray = null;
 let isQuitting = false;
 
@@ -86,12 +89,12 @@ function createWindow() {
   mainWindow.on('close', function keepNotificationsRunning(event) {
     if (isQuitting || process.env.NEXA_UI_SMOKE === '1') return;
     const settings = database ? database.getSettings() : {};
-    if (settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1') {
+    if ((settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1') || settings.auto_actions_enabled === '1') {
       event.preventDefault();
       mainWindow.hide();
       if (tray) tray.displayBalloon({
         title: 'Nexa Smart Office Bot is still running',
-        content: 'Smart notifications remain active in the system tray.',
+        content: settings.auto_actions_enabled === '1' ? 'Authorized automatic actions remain active in the system tray.' : 'Smart notifications remain active in the system tray.',
         iconType: 'info'
       });
     }
@@ -138,7 +141,7 @@ async function runSmokeWhenReady(windowInstance) {
       result = await windowInstance.webContents.executeJavaScript([
         '(function () {',
         '  var ready = document.body.dataset.ready === "true";',
-        '  var required = ["dashboard", "sidebar", "connected-business", "api-sync-inspector", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "smart-notifications", "activity", "settings", "about"];',
+        '  var required = ["dashboard", "sidebar", "connected-business", "api-sync-inspector", "contacts", "leads", "agenda", "tasks", "ai", "alerts", "smart-notifications", "activity", "settings", "ai-control", "about"];',
         '  var missing = required.filter(function (id) { return !document.querySelector("[data-testid=\\\"" + id + "\\\"]"); });',
         '  return { ready: ready, missing: missing, title: document.title, errors: window.__NEXA_ERRORS__ || [] };',
         '}())'
@@ -166,7 +169,8 @@ function registerDirectHealthIpc() {
         backupReady: Boolean(backupService),
         aiReady: Boolean(aiService),
         apiReady: Boolean(apiService),
-        notificationsReady: Boolean(notificationService)
+        notificationsReady: Boolean(notificationService),
+        automationReady: Boolean(automationService)
       }
     };
   });
@@ -183,6 +187,7 @@ function registerAllIpc() {
     aiService: aiService,
     apiService: apiService,
     notificationService: notificationService,
+    automationService: automationService,
     nativeImage: nativeImage,
     appVersion: APP_VERSION,
     getMainWindow: function getMainWindow() { return mainWindow; }
@@ -194,6 +199,7 @@ function registerAllIpc() {
   registerIntegrationsIpc(ipcMain, services);
   registerNotificationsIpc(ipcMain, services);
   registerMessagesIpc(ipcMain, services);
+  registerAutomationIpc(ipcMain, services);
 }
 
 function maybeAutomaticBackup() {
@@ -235,11 +241,19 @@ if (!gotLock) {
       getMainWindow: function getMainWindow() { return mainWindow; },
       iconPath: path.join(__dirname, 'src', 'assets', 'nexa-ai-orb.png')
     });
+    automationService = new AutomaticActionsService({
+      database: database,
+      settingsService: settingsService,
+      apiService: apiService,
+      aiService: aiService,
+      notificationService: notificationService
+    });
     registerDirectHealthIpc();
     registerAllIpc();
     createWindow();
     createTray();
     notificationService.start();
+    automationService.start();
     maybeAutomaticBackup();
 
     app.on('activate', function activateApplication() {
@@ -250,12 +264,13 @@ if (!gotLock) {
 
 app.on('before-quit', function beforeQuit() {
   isQuitting = true;
+  if (automationService) automationService.stop();
   if (notificationService) notificationService.stop();
 });
 
 app.on('window-all-closed', function closeApplication() {
   const settings = database ? database.getSettings() : {};
-  const keepRunning = settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1';
+  const keepRunning = (settings.notifications_minimize_to_tray === '1' && settings.notifications_enabled === '1') || settings.auto_actions_enabled === '1';
   if (process.platform !== 'darwin' && !keepRunning) app.quit();
 });
 

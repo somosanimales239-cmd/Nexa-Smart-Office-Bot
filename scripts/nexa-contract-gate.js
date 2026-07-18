@@ -35,7 +35,12 @@ const requirements = [
   ['src/database/migrations.js', 'integration_resource_status'],
   ['src/database/migrations.js', 'integration_cache'],
   ['src/ipc/integrations-ipc.js', 'integration:inspector'],
-  ['src/ipc/integrations-ipc.js', 'integration:items']
+  ['src/ipc/integrations-ipc.js', 'integration:items'],
+  ['src/services/automatic-actions-service.js', 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1'],
+  ['src/services/automatic-actions-service.js', 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1'],
+  ['src/ipc/automation-ipc.js', 'automation:save'],
+  ['src/services/automarket-api-service.js', 'dealer-appointment-availability'],
+  ['src/index.html', 'data-testid="ai-control"']
 ];
 
 const failures = [];

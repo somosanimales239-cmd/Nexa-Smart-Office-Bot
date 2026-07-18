@@ -29,7 +29,7 @@ const integrationItemIdentity = (resource, item, index = 0) => {
     users: ['user_id', 'account_id', 'id'], validation: ['validation_id', 'id'], 'reseller-profile': ['reseller_id', 'id'],
     'reseller-listings': ['assignment_id', 'listing_id', 'id'], 'reseller-appointments': ['appointment_id', 'id'],
     store: ['store_id', 'id'], 'dealer-summary': ['store_id', 'id'], 'reseller-summary': ['reseller_id', 'id'],
-    'admin-summary': ['id'], 'api-keys-status': ['id']
+    'admin-summary': ['id'], 'api-keys-status': ['id'], 'dealer-appointment-availability': ['slot_id', 'availability_id', 'id'], 'appointment-create': ['appointment_id', 'id']
   };
   const keys = keysByResource[resource] || ['id', 'uuid'];
   for (const key of keys) {
@@ -217,18 +217,23 @@ class DatabaseService {
     const startAt = normalizeText(data.start_at);
     if (!startAt) throw new Error('Appointment start date and time are required.');
     const timestamp = nowIso();
-    const existing = this.db.prepare('SELECT id, created_at, notification_sent_at FROM appointments WHERE id = ?').get(recordId);
+    const existing = this.db.prepare('SELECT id, created_at, notification_sent_at, source_type, source_id, thread_id, remote_appointment_id, created_by FROM appointments WHERE id = ?').get(recordId);
     const status = ['Scheduled', 'Completed', 'Canceled'].includes(data.status) ? data.status : 'Scheduled';
     this.db.prepare(`
-      INSERT INTO appointments(id, title, description, start_at, end_at, status, contact_id, lead_id, reminder_at, notification_sent_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO appointments(id, title, description, start_at, end_at, status, contact_id, lead_id, reminder_at, notification_sent_at, created_at, updated_at,
+        source_type, source_id, thread_id, remote_appointment_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title=excluded.title, description=excluded.description, start_at=excluded.start_at, end_at=excluded.end_at,
         status=excluded.status, contact_id=excluded.contact_id, lead_id=excluded.lead_id,
         reminder_at=excluded.reminder_at,
         notification_sent_at=CASE WHEN appointments.reminder_at IS NOT excluded.reminder_at OR appointments.status IS NOT excluded.status THEN NULL ELSE appointments.notification_sent_at END,
+        source_type=excluded.source_type, source_id=excluded.source_id, thread_id=excluded.thread_id,
+        remote_appointment_id=excluded.remote_appointment_id, created_by=excluded.created_by,
         updated_at=excluded.updated_at
-    `).run(recordId, title, normalizeText(data.description), startAt, nullable(data.end_at), status, nullable(data.contact_id), nullable(data.lead_id), nullable(data.reminder_at), existing?.notification_sent_at || null, existing?.created_at || timestamp, timestamp);
+    `).run(recordId, title, normalizeText(data.description), startAt, nullable(data.end_at), status, nullable(data.contact_id), nullable(data.lead_id), nullable(data.reminder_at), existing?.notification_sent_at || null, existing?.created_at || timestamp, timestamp,
+      normalizeText(data.source_type || (existing && existing.source_type) || 'local'), nullable(data.source_id || (existing && existing.source_id)), nullable(data.thread_id || (existing && existing.thread_id)),
+      nullable(data.remote_appointment_id || (existing && existing.remote_appointment_id)), normalizeText(data.created_by || (existing && existing.created_by) || 'user'));
     this.log(existing ? 'updated' : 'created', 'appointment', recordId, `${title} · ${startAt}`);
     return this.db.prepare('SELECT * FROM appointments WHERE id = ?').get(recordId);
   }
@@ -328,7 +333,7 @@ class DatabaseService {
   }
 
   saveSettings(values) {
-    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end', 'message_realtime_enabled', 'message_poll_seconds', 'message_ai_mode', 'message_ai_fallback', 'message_learning_enabled', 'message_send_confirmation']);
+    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end', 'message_realtime_enabled', 'message_poll_seconds', 'message_ai_mode', 'message_ai_fallback', 'message_learning_enabled', 'message_send_confirmation', 'auto_actions_enabled', 'auto_actions_consent_at', 'auto_actions_run_interval_seconds', 'auto_messages_enabled', 'auto_messages_knowledge_only', 'auto_messages_ai_fallback', 'auto_messages_min_confidence', 'auto_messages_send_delay_seconds', 'auto_messages_max_per_hour', 'auto_messages_max_per_day', 'auto_messages_quiet_start', 'auto_messages_quiet_end', 'auto_messages_languages', 'auto_messages_require_unread', 'auto_messages_mark_read', 'auto_messages_allowed_safety', 'auto_messages_excluded_intents', 'auto_appointments_enabled', 'auto_appointments_source', 'auto_appointments_offer_slots', 'auto_appointments_duration_minutes', 'auto_appointments_min_notice_hours', 'auto_appointments_max_days', 'auto_appointments_require_contact', 'auto_appointments_create_remote', 'auto_appointments_send_confirmation', 'auto_appointments_timezone', 'auto_appointments_slot_limit', 'auto_actions_no_delete_guard']);
     const statement = this.db.prepare(`
       INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
@@ -813,7 +818,7 @@ class DatabaseService {
       agenda: 200, orders: 100, listings: 100, messages: 100, resellers: 100,
       'reseller-appointments': 100, 'reseller-listings': 100, stores: 100, users: 100, validation: 100,
       store: 1, 'dealer-summary': 1, 'reseller-profile': 1, 'reseller-summary': 1, 'admin-summary': 1,
-      'api-keys-status': 20
+      'api-keys-status': 20, 'dealer-appointment-availability': 100
     };
     Object.keys(limits).forEach((resource) => {
       remote[resource] = this.listIntegrationCache(resource, '', limits[resource]);
@@ -909,6 +914,82 @@ class DatabaseService {
       });
     });
     return this.listNotificationPreferences();
+  }
+
+  listAutomaticActionEvents(limit = 100) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    return this.db.prepare('SELECT * FROM automatic_action_events ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+  }
+
+  automaticActionSummary() {
+    const totals = this.db.prepare(`SELECT COUNT(*) AS total,
+      SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
+      SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
+      SUM(CASE WHEN action_type='message_send' AND status='completed' THEN 1 ELSE 0 END) AS messages_sent,
+      SUM(CASE WHEN action_type='appointment_create' AND status='completed' THEN 1 ELSE 0 END) AS appointments_created
+      FROM automatic_action_events`).get() || {};
+    return Object.assign({}, totals, { recent: this.listAutomaticActionEvents(40) });
+  }
+
+  hasAutomaticActionEvent(dedupeKey) {
+    const row = this.db.prepare('SELECT id FROM automatic_action_events WHERE dedupe_key=?').get(normalizeText(dedupeKey));
+    return Boolean(row);
+  }
+
+  createAutomaticActionEvent(values) {
+    const eventId = normalizeText(values && values.id) || id();
+    const dedupeKey = normalizeText(values && values.dedupe_key) || eventId;
+    try {
+      this.db.prepare(`INSERT INTO automatic_action_events(
+        id, dedupe_key, action_type, source_type, source_id, thread_id, status, engine, confidence,
+        summary, payload_json, error, created_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(eventId, dedupeKey, normalizeText(values && values.action_type), normalizeText(values && values.source_type || 'system'),
+          nullable(values && values.source_id), nullable(values && values.thread_id), normalizeText(values && values.status || 'pending'),
+          normalizeText(values && values.engine), Number(values && values.confidence || 0), normalizeText(values && values.summary),
+          JSON.stringify(values && values.payload || {}), normalizeText(values && values.error), nowIso(), nullable(values && values.completed_at));
+    } catch (error) {
+      if (String(error.message || '').toLowerCase().includes('unique')) return null;
+      throw error;
+    }
+    this.log('created', 'automatic_action', eventId, normalizeText(values && values.action_type));
+    return this.db.prepare('SELECT * FROM automatic_action_events WHERE id=?').get(eventId);
+  }
+
+  completeAutomaticActionEvent(eventId, values) {
+    const input = values || {};
+    this.db.prepare(`UPDATE automatic_action_events SET status=?, engine=?, confidence=?, summary=?, payload_json=?, error=?, completed_at=? WHERE id=?`)
+      .run(normalizeText(input.status || 'completed'), normalizeText(input.engine), Number(input.confidence || 0),
+        normalizeText(input.summary), JSON.stringify(input.payload || {}), normalizeText(input.error), nowIso(), normalizeText(eventId));
+    return this.db.prepare('SELECT * FROM automatic_action_events WHERE id=?').get(normalizeText(eventId)) || null;
+  }
+
+  countAutomaticActions(actionType, sinceIso) {
+    const row = this.db.prepare(`SELECT COUNT(*) AS total FROM automatic_action_events
+      WHERE action_type=? AND status='completed' AND created_at>=?`).get(normalizeText(actionType), normalizeText(sinceIso));
+    return Number(row && row.total || 0);
+  }
+
+  listAutomaticMessageCandidates(limit = 50) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const rows = this.db.prepare(`SELECT t.*,
+      (SELECT message_id FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)!='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS inbound_message_id,
+      (SELECT body FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)!='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS inbound_body,
+      (SELECT COALESCE(e.sent_at,e.created_at) FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)!='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS inbound_at,
+      (SELECT COALESCE(e.sent_at,e.created_at) FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS outbound_at,
+      (SELECT is_read FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)!='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS inbound_is_read
+      FROM message_threads t
+      WHERE t.can_reply=1 AND t.is_announcement=0
+      ORDER BY COALESCE(t.last_message_at,t.updated_at) ASC LIMIT ?`).all(safeLimit);
+    return rows.filter(function needsReply(row) {
+      if (!row.inbound_message_id || !row.inbound_at) return false;
+      return !row.outbound_at || Date.parse(row.inbound_at) > Date.parse(row.outbound_at);
+    });
+  }
+
+  findAppointmentBySource(sourceType, sourceId) {
+    if (!sourceId) return null;
+    return this.db.prepare('SELECT * FROM appointments WHERE source_type=? AND source_id=?').get(normalizeText(sourceType), normalizeText(sourceId)) || null;
   }
 
   createBackup(backupPath) {

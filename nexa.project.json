@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
-    "application_version": "1.5.0",
-    "workspace_revision": "1.0.28",
+    "application_version": "1.6.0",
+    "workspace_revision": "1.0.30",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -20,8 +20,9 @@
         "SBO-08-complete-workspace-reflection",
         "SBO-09-pagination-scroll-agenda-messages",
         "SBO-10-realtime-messages-knowledge-first",
-        "SBO-11-automotive-dealer-knowledge-library"
+        "SBO-11-automotive-dealer-knowledge-library",
+        "SBO-12-guarded-ai-autonomy"
     ],
-    "version": "1.5.0",
-    "updated_at": "2026-07-17 17:38:44"
+    "version": "1.6.0",
+    "updated_at": "2026-07-18 15:04:18"
 }

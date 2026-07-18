@@ -14,7 +14,8 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['orders', 'orders:read'],
     ['agenda', 'agenda:read'],
     ['messages', 'messages:read'],
-    ['resellers', 'resellers:read']
+    ['resellers', 'resellers:read'],
+    ['dealer-appointment-availability', '']
   ]),
   reseller: Object.freeze([
     ['reseller-profile', 'reseller-profile:read'],
@@ -22,7 +23,8 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['reseller-listings', 'reseller-listings:read'],
     ['reseller-appointments', 'reseller-appointments:read'],
     ['agenda', 'agenda:read'],
-    ['messages', 'messages:read']
+    ['messages', 'messages:read'],
+    ['dealer-appointment-availability', '']
   ]),
   admin: Object.freeze([
     ['admin-summary', 'admin:read'],
@@ -34,31 +36,32 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['messages', 'messages:read'],
     ['resellers', 'resellers:read'],
     ['validation', 'validation:read'],
-    ['api-keys-status', 'admin:read']
+    ['api-keys-status', 'admin:read'],
+    ['dealer-appointment-availability', '']
   ])
 });
 
 const SAFE_RESOURCES = new Set([
   'ping', 'connection-map', 'store', 'dealer-summary', 'listings', 'orders', 'agenda', 'messages', 'message-thread', 'message-send', 'message-read', 'resellers',
   'reseller-profile', 'reseller-summary', 'reseller-listings', 'reseller-appointments',
-  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status'
+  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status', 'dealer-appointment-availability', 'appointment-create'
 ]);
 
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','allowed_resources','resources','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','allowed_resources','resources','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read','dealer_appointment_availability','appointment_create'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
   orders: ['id','order_id','listing_id','store_id','listing_title','listing_url','listing_image_url','customer_name','customer_email','customer_phone','customer_location','message','order_notes','order_type','source','status','created_at','updated_at','reseller_id','reseller_name','reseller_email','appointment_date','appointment_time','appointment_status','sale_status','sale_price','commission_percent','commission_amount','dealer_status_note'],
   agenda: ['id','contact_id','store_id','owner_id','name','email','phone','location','source_type','times_seen','first_seen_at','last_seen_at','created_from'],
   messages: ['id','thread_id','subject','context_type','context_id','store_id','sender_type','receiver_type','participant_name','participant_type','last_message_id','last_message_at','created_at','updated_at','message_count','unread_count','is_favorite','is_pinned','is_announcement','audience','can_reply','message_preview','last_message_preview','capabilities'],
-  'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','participant_name','participant_type','customer_name','sender_type','receiver_type','last_message_id','last_message_at','message_count','unread_count','is_announcement','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
+  'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','participant_name','participant_type','customer_name','customer_phone','customer_email','sender_type','receiver_type','last_message_id','last_message_at','message_count','unread_count','is_announcement','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
   'message-send': ['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','direction','body','body_format','sent_at','created_at','updated_at','status','is_read'],
   'message-read': ['thread_id','message_id','last_message_id','read_at','updated_at','status'],
-  resellers: ['id','reseller_id','reseller_name','reseller_email','reseller_phone','status','assigned_listings','appointment_count','pending_appointments','completed_appointments','positive_sales','commission_percent','commission_amount','last_activity','appointments'],
-  'reseller-profile': ['reseller_id','name','email','phone','location','professional_title','bio','languages','rating','status','visibility','profile_image_url'],
+  resellers: ['id','reseller_id','reseller_name','reseller_email','reseller_phone','status','assigned_listings','appointment_count','pending_appointments','completed_appointments','positive_sales','commission_percent','commission_amount','last_activity','appointments','availability','available_slots','appointment_availability','dealer_appointment_availability'],
+  'reseller-profile': ['reseller_id','name','email','phone','location','professional_title','bio','languages','rating','status','visibility','profile_image_url','availability','available_slots','appointment_availability','dealer_appointment_availability'],
   'reseller-summary': ['assigned_listings','appointments_created','appointments_pending','appointments_completed','positive_sales','commission_total','unread_messages','agenda_contacts'],
   'reseller-listings': ['id','assignment_id','listing_id','store_id','dealer_name','store_name','listing_title','listing_url','listing_image_url','price','category','status','commission_percent','agreement_status','created_at'],
   'reseller-appointments': ['id','appointment_id','listing_id','store_id','dealer_name','store_name','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_status','sale_status','sale_price','commission_percent','commission_amount','dealer_note','created_at','updated_at'],
@@ -66,10 +69,12 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   stores: ['id','store_id','owner_id','store_name','slug','email','phone','location','status','logo_url','banner_url','listings_count','orders_count','created_at','updated_at','public_store_url'],
   users: ['id','user_id','account_id','name','email','role','status','location','created_at','last_login_at'],
   validation: ['id','validation_id','dealer_user_id','store_id','business_name','authorized_representative','phone','email','address','city','state','zip','driver_license_number','dealer_license_number','business_tax_account_number','business_tax_receipt_number','resale_certificate_number','status','submitted_at','reviewed_at','reviewed_by','admin_note'],
-  'api-keys-status': ['id','key_id','name','owner_type','owner_id','status','scopes','expires_at','last_used_at','created_at','updated_at']
+  'api-keys-status': ['id','key_id','name','owner_type','owner_id','status','scopes','expires_at','last_used_at','created_at','updated_at'],
+  'dealer-appointment-availability': ['id','slot_id','availability_id','dealer_id','reseller_id','store_id','listing_id','listing_title','date','appointment_date','start_at','end_at','start_time','end_time','available','status','timezone','duration_minutes','location','address','notes','day_of_week','recurrence','capacity','created_at','updated_at'],
+  'appointment-create': ['id','appointment_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','appointment_date','appointment_time','start_at','end_at','status','location','notes','created_at','updated_at']
 });
 
-const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys']);
+const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys','slots','availability']);
 const MESSAGE_ENTRY_FIELDS = Object.freeze(['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','receiver_id','direction','body','message','text','content','body_format','sent_at','created_at','updated_at','status','is_read','attachments','reply_to_message_id']);
 
 function sanitizeRecord(resource, record) {
@@ -82,6 +87,10 @@ function sanitizeRecord(resource, record) {
     if (!allowed.has(key)) return;
     if (key === 'appointments' && Array.isArray(value)) {
       output[key] = value.map(function sanitizeAppointment(item) { return sanitizeRecord('reseller-appointments', item); });
+      return;
+    }
+    if (['availability','available_slots','appointment_availability','dealer_appointment_availability'].includes(key) && Array.isArray(value)) {
+      output[key] = value.map(function sanitizeAvailability(item) { return sanitizeRecord('dealer-appointment-availability', item); });
       return;
     }
     output[key] = value;
@@ -163,7 +172,8 @@ const RESOURCE_QUERIES = Object.freeze({
   'reseller-appointments': { limit: 100 },
   stores: { limit: 100 },
   users: { limit: 100 },
-  validation: { limit: 100 }
+  validation: { limit: 100 },
+  'dealer-appointment-availability': { limit: 100 }
 });
 
 class AutoMarketApiError extends Error {
@@ -344,7 +354,7 @@ class AutoMarketApiService {
         Accept: 'application/json',
         Authorization: 'Bearer ' + apiKey,
         'X-Nexa-Api-Key': apiKey,
-        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.5.0'
+        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.6.0'
       };
       if (method !== 'GET') headers['Content-Type'] = 'application/json';
       if (requestOptions.idempotencyKey) headers['Idempotency-Key'] = String(requestOptions.idempotencyKey);
@@ -467,6 +477,23 @@ class AutoMarketApiService {
       method: 'POST',
       timeoutMs: 20000,
       body: { thread_id: wanted, last_message_id: lastMessageId || null }
+    });
+  }
+
+  async fetchDealerAppointmentAvailability(query) {
+    return this.fetchResource('dealer-appointment-availability', Object.assign({ limit: 100 }, query || {}));
+  }
+
+  async createRemoteAppointment(payload, idempotencyKey) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    if (!input.start_at && !(input.appointment_date && input.appointment_time)) {
+      throw new AutoMarketApiError('Appointment date and time are required.', { resource: 'appointment-create' });
+    }
+    return this.request('appointment-create', {}, {
+      method: 'POST',
+      timeoutMs: 30000,
+      idempotencyKey: String(idempotencyKey || crypto.randomUUID()),
+      body: input
     });
   }
 }

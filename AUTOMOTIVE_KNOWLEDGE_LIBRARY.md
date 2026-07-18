@@ -1,6 +1,6 @@
 # Nexa Automotive Dealer Knowledge Library
 
-Version 1.0.0 is bundled with Nexa Smart Office Bot 1.5.0.
+Version 1.0.0 is bundled with Nexa Smart Office Bot 1.6.0.
 
 ## Installed coverage
 

@@ -98,8 +98,8 @@ class AIService {
     const conversation = this.database.getMessageConversationContext(threadId, 120);
     if (!conversation) throw new Error('The selected conversation is not available locally.');
     const settings = this.settingsService.getPublicSettings();
-    const mode = String(settings.message_ai_mode || 'knowledge_first');
-    const allowFallback = String(settings.message_ai_fallback || '1') === '1';
+    const mode = input && input.force_ai_only === true ? 'ai_only' : String(settings.message_ai_mode || 'knowledge_first');
+    const allowFallback = input && input.force_ai_fallback === true ? true : String(settings.message_ai_fallback || '1') === '1';
     const localMatch = this.messageEngine.match(conversation);
     if (mode !== 'ai_only' && localMatch.matched) {
       this.database.incrementKnowledgeUse(localMatch.knowledgeId);

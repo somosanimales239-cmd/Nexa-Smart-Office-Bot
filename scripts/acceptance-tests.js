@@ -11,10 +11,18 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
 const apiService = fs.readFileSync(path.join(root, 'src', 'services', 'automarket-api-service.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
+const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
 assert.equal(preload.includes('integration:inspector'), true);
 assert.equal(preload.includes('integration:items'), true);
 assert.equal(html.includes('data-testid="api-sync-inspector"'), true);
+assert.equal(html.includes('data-testid="ai-control"'), true);
+assert.equal(preload.includes('automation:run-now'), true);
 assert.equal(apiService.includes('RESOURCE_FIELD_ALLOWLISTS'), true);
+assert.equal(apiService.includes('dealer-appointment-availability'), true);
+assert.equal(appSource.includes('Website API upgrade required for full two-way chat'), false);
+assert.equal(automationService.includes('never_changes_customer_records'), true);
+assert.equal(automationService.includes('never_deletes_data'), true);
 
 ['npm ci', 'npm run validate', 'npm test', 'npm run test:implementation', 'npm run test:acceptance', 'npm run ui:smoke', 'npm run build:win', 'npm run verify:artifacts', 'actions/upload-artifact'].forEach(function requireWorkflowStep(marker) {
   assert.equal(workflow.includes(marker), true, 'Workflow missing: ' + marker);

@@ -1,6 +1,6 @@
 # API Sync Inspector
 
-API Sync Inspector answers the difference between **the key connects** and **the application loaded usable data**.
+API Sync Inspector shows whether the connected key loaded usable data, not merely whether authentication succeeded.
 
 Each resource displays:
 
@@ -13,13 +13,21 @@ Each resource displays:
 - Last successful synchronization.
 - Exact last error.
 
-The inspector also shows synchronization history with the trigger type, account type, planned resources, successes and failures.
+Important resources for version 1.6.0 include:
+
+- `messages`
+- `message-thread`
+- `message-send`
+- `message-read`
+- `dealer-appointment-availability`
+- `appointment-create` when supported
 
 Examples:
 
 - `agenda · OK · 84`
 - `orders · OK · 12`
 - `messages · Missing scope · messages:read`
-- `resellers · Failed · invalid JSON response`
+- `dealer-appointment-availability · OK · 18`
+- `appointment-create · Not advertised`
 
-A partial run keeps previously loaded cache available while clearly identifying the failed resource. Use **Sync all resources** after correcting scopes or server errors.
+A partial run keeps previously loaded cache available while identifying the failed resource. AI Control never bypasses a missing resource or scope.

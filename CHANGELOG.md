@@ -1,26 +1,27 @@
 # Changelog
 
+## 1.6.0
+
+- Added AI Control with explicit master authorization and detailed automatic-action parameters.
+- Added guarded automatic customer message sending through the connected website API.
+- Preserved Knowledge Library priority and made external AI fallback a separate opt-in.
+- Added delay, confidence, language, quiet-hours, hourly and daily message controls.
+- Added mandatory human review for legal, emergency, complaint, refund, payment-dispute and financing-approval conversations.
+- Added Dealer Appointment Availability reading and verified-slot matching.
+- Added automatic local calendar appointment creation with duplicate protection.
+- Added optional remote appointment creation only when the website API advertises the capability and the user enables it.
+- Added appointment slot offering and confirmation messages under the user's authorization rules.
+- Added automatic-action event audit history and Emergency pause.
+- Added hard protections preventing automatic customer-record changes and automatic deletion.
+- Updated About to describe guarded autonomy.
+- Removed obsolete two-way-chat upgrade warning text from the interface.
+- Added migration 7. Existing local data and custom knowledge are preserved.
+
 ## 1.5.0
 
-- Added the Nexa Automotive Dealer Knowledge Library.
-- Added 2,880 built-in knowledge records.
-- Added 120 core dealership intentions across 12 dealer segments.
-- Added English and Spanish knowledge matching.
-- Added 8,640 natural built-in response variations.
-- Added automatic language detection and dealer-segment inference.
-- Added deterministic response variation to reduce repetitive replies.
-- Added safety metadata and required-context metadata.
-- Added built-in library summary cards in Messages > Knowledge Engine.
-- Added search and 40-record pagination for the library.
-- Added enable and disable controls for built-in knowledge.
-- Prevented accidental deletion or overwrite of built-in records.
-- Preserved custom user-approved knowledge with higher matching priority.
-- Added migration 6 with idempotent library installation.
-- Added 10 dedicated automotive-library integration tests.
+- Added the Automotive Dealer Knowledge Library with 2,880 bilingual knowledge records and 8,640 response variations.
+- Added custom-knowledge priority, built-in disable and re-enable controls, and deletion protection.
 
 ## 1.4.0
 
-- Added full message conversation mirroring.
-- Added knowledge-first response drafting.
-- Added OpenAI and DeepSeek fallback.
-- Added user-confirmed website message sending.
+- Added complete conversation reading, Knowledge-first reply preparation, AI fallback, drafts, outbox and two-way message API support.

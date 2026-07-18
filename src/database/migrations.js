@@ -6,7 +6,7 @@ const AUTOMOTIVE_DEALER_LIBRARY_MANIFEST = require('../data/automotive-dealer-li
 const NEXA_SCHEMA_MIGRATION_CONTRACT = 'migration marker: NEXA_SCHEMA_MIGRATION_V1';
 
 const NEXA_SCHEMA_MIGRATION_V1 = 'NEXA_SCHEMA_MIGRATION_V1';
-const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, integration_resource_status, integration_cache, integration_sync_runs, notification_preferences, notification_events, message_threads, message_entries, message_reply_drafts, message_outbox, response_knowledge';
+const REQUIRED_TABLES = 'tables: contacts, leads, appointments, tasks, reminders, ai_suggestions, settings, activity_logs, migrations, integration_status, integration_snapshots, integration_resource_status, integration_cache, integration_sync_runs, notification_preferences, notification_events, message_threads, message_entries, message_reply_drafts, message_outbox, response_knowledge, automatic_action_events';
 
 const nowIso = function nowIso() {
   return new Date().toISOString();
@@ -289,6 +289,53 @@ function applyMigrations(database) {
           .run(String(AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.version), installedAt);
         database.prepare(`INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('automotive_knowledge_library_count', ?, ?)`)
           .run(String(AUTOMOTIVE_DEALER_LIBRARY_MANIFEST.record_count), installedAt);
+      }
+    },
+    {
+      id: 7,
+      name: 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1',
+      apply: function installGuardedAutomaticActions(database) {
+        addColumnIfMissing(database, 'appointments', 'source_type', "TEXT NOT NULL DEFAULT 'local'");
+        addColumnIfMissing(database, 'appointments', 'source_id', 'TEXT');
+        addColumnIfMissing(database, 'appointments', 'thread_id', 'TEXT');
+        addColumnIfMissing(database, 'appointments', 'remote_appointment_id', 'TEXT');
+        addColumnIfMissing(database, 'appointments', 'created_by', "TEXT NOT NULL DEFAULT 'user'");
+        database.exec(`CREATE TABLE IF NOT EXISTS automatic_action_events (
+          id TEXT PRIMARY KEY,
+          dedupe_key TEXT NOT NULL UNIQUE,
+          action_type TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'system',
+          source_id TEXT,
+          thread_id TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          engine TEXT NOT NULL DEFAULT '',
+          confidence REAL NOT NULL DEFAULT 0,
+          summary TEXT NOT NULL DEFAULT '',
+          payload_json TEXT NOT NULL DEFAULT '{}',
+          error TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        );`);
+        database.exec('CREATE INDEX IF NOT EXISTS idx_automatic_action_events_created ON automatic_action_events(created_at DESC);');
+        database.exec('CREATE INDEX IF NOT EXISTS idx_automatic_action_events_type_status ON automatic_action_events(action_type, status, created_at DESC);');
+        database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_source_identity ON appointments(source_type, source_id) WHERE source_id IS NOT NULL;');
+        const defaults = {
+          auto_actions_enabled: '0', auto_actions_consent_at: '', auto_actions_run_interval_seconds: '15',
+          auto_messages_enabled: '0', auto_messages_knowledge_only: '1', auto_messages_ai_fallback: '0',
+          auto_messages_min_confidence: '0.88', auto_messages_send_delay_seconds: '20', auto_messages_max_per_hour: '12',
+          auto_messages_max_per_day: '60', auto_messages_quiet_start: '22:00', auto_messages_quiet_end: '07:00',
+          auto_messages_languages: 'en,es', auto_messages_require_unread: '1', auto_messages_mark_read: '1',
+          auto_messages_allowed_safety: 'standard',
+          auto_messages_excluded_intents: 'financing_approval,legal_issue,emergency_issue,human_escalation,complaint,refund_dispute,payment_dispute',
+          auto_appointments_enabled: '0', auto_appointments_source: 'dealer-appointment-availability',
+          auto_appointments_offer_slots: '1', auto_appointments_duration_minutes: '30', auto_appointments_min_notice_hours: '2',
+          auto_appointments_max_days: '60', auto_appointments_require_contact: '1', auto_appointments_create_remote: '0',
+          auto_appointments_send_confirmation: '1', auto_appointments_timezone: 'local', auto_appointments_slot_limit: '50',
+          auto_actions_no_delete_guard: '1'
+        };
+        const insert = database.prepare('INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES (?, ?, ?)');
+        const installedAt = nowIso();
+        Object.entries(defaults).forEach(function addDefault(entry) { insert.run(entry[0], entry[1], installedAt); });
       }
     }
 

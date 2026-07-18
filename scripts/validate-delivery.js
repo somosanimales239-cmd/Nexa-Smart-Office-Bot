@@ -17,10 +17,12 @@ const requiredFiles = [
   'src/services/openai-provider.js',
   'src/services/deepseek-provider.js',
   'src/services/ai-service.js',
+  'src/services/automatic-actions-service.js',
   'src/ipc/foundation-ipc.js',
   'src/ipc/records-ipc.js',
   'src/ipc/agenda-ipc.js',
   'src/ipc/ai-ipc.js',
+  'src/ipc/automation-ipc.js',
   'package-lock.json',
   '.github/workflows/windows-build.yml'
 ];

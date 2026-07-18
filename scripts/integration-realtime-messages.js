@@ -168,7 +168,7 @@ const engine = new MessageResponseEngine(database);
     const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
     const ipc = fs.readFileSync(path.join(__dirname, '..', 'src', 'ipc', 'messages-ipc.js'), 'utf8');
     assert.match(renderer, /message-thread-open/);
-    assert.match(renderer, /Send approved reply/);
+    assert.match(renderer, /Send reply/);
     assert.match(renderer, /Knowledge Engine/);
     assert.match(preload, /messages:send/);
     assert.match(ipc, /user_confirmed !== true/);

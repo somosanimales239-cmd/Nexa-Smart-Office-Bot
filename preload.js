@@ -106,6 +106,12 @@ contextBridge.exposeInMainWorld('nexa', Object.freeze({
     knowledgeSummary: function knowledgeSummary() { return invoke('messages:knowledge-summary'); },
     knowledgeDelete: function knowledgeDelete(id) { return invoke('messages:knowledge-delete', { id: id }); }
   }),
+  automation: Object.freeze({
+    get: function get() { return invoke('automation:get'); },
+    save: function save(settings, userAuthorized) { return invoke('automation:save', { settings: settings || {}, user_authorized: userAuthorized === true }); },
+    runNow: function runNow() { return invoke('automation:run-now'); },
+    pause: function pause() { return invoke('automation:pause'); }
+  }),
   notifications: Object.freeze({
     list: function list(limit, unreadOnly) { return invoke('notifications:list', { limit: limit || 100, unread_only: unreadOnly === true }); },
     preferences: function preferences() { return invoke('notifications:preferences'); },

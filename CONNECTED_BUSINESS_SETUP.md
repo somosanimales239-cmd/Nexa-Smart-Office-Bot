@@ -9,11 +9,11 @@ Every request sends both supported authentication headers:
 - `Authorization: Bearer YOUR_API_KEY`
 - `X-Nexa-Api-Key: YOUR_API_KEY`
 
-The API key is protected with Electron `safeStorage`. It is not returned to the renderer, stored in SQLite, written to logs or included in builds and backups.
+The API key is protected with Electron `safeStorage`. It is not returned to the renderer, stored as plain text in SQLite, written to logs or included in builds.
 
 ## Base synchronization
 
-Nexa performs the following sequence:
+Nexa performs this sequence:
 
 1. `resource=ping`
 2. `resource=connection-map`
@@ -25,7 +25,7 @@ Nexa performs the following sequence:
 8. Update Dashboard, Contacts, Leads, Agenda, Messages and Connected Business.
 9. Record each result in API Sync Inspector.
 
-## Dealer key scopes
+## Recommended dealer key scopes
 
 - `store:read`
 - `dealer:read`
@@ -34,28 +34,35 @@ Nexa performs the following sequence:
 - `agenda:read`
 - `messages:read`
 - `resellers:read`
+- `messages:write` for manual or authorized automatic replies
 
-For two-way Messages, also grant:
+The website may require a separate appointment-write scope for optional remote appointment creation.
 
-- `messages:write`
+## Message resources
 
-## Message capabilities
+For complete conversations and replies, the website should advertise:
 
-The existing `resource=messages` endpoint supplies the inbox/thread list and safe metadata.
+- `messages`
+- `message-thread`
+- `message-send`
+- `message-read`
 
-For complete conversations, the website must additionally advertise and implement:
+Nexa stores authorized conversation bodies locally and never includes API keys in AI context.
 
-- `message-thread` for full authorized thread history.
-- `message-send` for user-approved outgoing replies.
-- `message-read` for read-state synchronization.
+## Dealer Appointment Availability
 
-Nexa stores full message bodies only after the authorized `message-thread` endpoint returns them. Bodies stay in the local app database and are not copied to builds, logs or backups containing secrets.
+AI Control reads:
+
+- `dealer-appointment-availability`
+
+The endpoint should expose only verified open slots belonging to the connected dealer. Nexa can create a local calendar appointment from an exact selected slot after the user authorizes automatic appointments.
+
+For optional website-side creation, the connection map must advertise:
+
+- `appointment-create`
+
+Nexa leaves remote creation off by default. When it is unavailable, local calendar appointments continue to work.
 
 ## Partial capability behavior
 
-When the website still provides metadata only:
-
-- Inbox rows continue to appear.
-- Nexa displays a clear API capability warning.
-- Full conversation loading and Send remain disabled.
-- Contacts, Leads, Agenda and every other connected resource continue working.
+Each resource is diagnosed independently in API Sync Inspector. One missing capability does not disconnect other working resources. Messages, contacts, leads, orders, agenda and appointment availability retain their last successful local cache when another resource fails.

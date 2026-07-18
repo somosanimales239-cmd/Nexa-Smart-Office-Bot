@@ -2,7 +2,7 @@
 
 const NEXA_UI_CONTRACT_V1 = 'NEXA_UI_CONTRACT_V1';
 const UI_TESTID_CONTRACT = 'data-testid values for dashboard, sidebar, contacts, leads, agenda, tasks, ai, alerts, activity, settings, about';
-const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, messages, smart-notifications';
+const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, messages, smart-notifications, ai-control';
 const ACTION_CONTRACT = 'data-nexa-action on every actionable button/form';
 
 window.__NEXA_ERRORS__ = [];
@@ -62,6 +62,7 @@ const state = {
   messageTab: 'inbox',
   messageKnowledge: [],
   knowledgeSummary: null,
+  automation: null,
   messagePollBusy: false,
   messageLastPollAt: 0
 };
@@ -80,6 +81,7 @@ const viewTitles = {
   notifications: 'Nexa Pulse',
   activity: 'Activity',
   settings: 'Settings',
+  'ai-control': 'AI Control',
   about: 'About'
 };
 
@@ -162,7 +164,8 @@ async function refreshAll(options) {
     api.notifications.list(150, false),
     api.notifications.preferences(),
     api.messages.knowledgeList(''),
-    api.messages.knowledgeSummary()
+    api.messages.knowledgeSummary(),
+    api.automation.get()
   ]);
   state.meta = results[0];
   state.dashboard = results[1];
@@ -182,6 +185,7 @@ async function refreshAll(options) {
   state.notificationPreferences = Array.isArray(results[14]) ? results[14] : [];
   state.messageKnowledge = Array.isArray(results[15]) ? results[15] : [];
   state.knowledgeSummary = results[16] || null;
+  state.automation = results[17] || null;
   document.getElementById('alert-count').textContent = String(state.alerts.length);
   document.getElementById('notification-count').textContent = String(state.unreadNotifications);
   document.getElementById('notification-bell-count').textContent = String(state.unreadNotifications);
@@ -371,6 +375,7 @@ function renderView() {
       notifications: renderSmartNotifications,
       activity: renderActivity,
       settings: renderSettings,
+      'ai-control': renderAIControl,
       about: renderAbout
     };
     const renderer = renderers[state.view] || renderDashboard;
@@ -465,7 +470,7 @@ function renderDashboard() {
       connectedPanel +
       '<article class="panel-card"><div class="panel-header"><div><h3>Upcoming agenda</h3><p>Next scheduled appointments</p></div><button class="ghost-button" data-go="agenda" data-nexa-action="agenda-day">Open agenda</button></div><div class="list">' + upcoming + '</div></article>' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Priority tasks</h3><p>Items that deserve attention</p></div><button class="ghost-button" data-go="tasks" data-nexa-action="navigate-tasks">Open tasks</button></div><div class="list">' + priorities + '</div></article>' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Smart assistant</h3><p>Get an action plan from your configured provider</p></div>' + (providerConfigured ? badge('Ready', 'success') : badge('Not configured', 'warning')) + '</div><p class="muted">Nexa can review your pending work and suggest practical next actions. It never sends messages or edits records without approval.</p><button class="primary-button" data-go="ai" data-nexa-action="navigate-ai">Generate suggestions</button></article>' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Smart assistant</h3><p>Get an action plan from your configured provider</p></div>' + (providerConfigured ? badge('Ready', 'success') : badge('Not configured', 'warning')) + '</div><p class="muted">Nexa can review pending work and prepare next actions. Messages and appointments run automatically only when the user authorizes precise AI Control parameters; customer records remain read-only.</p><button class="primary-button" data-go="ai" data-nexa-action="navigate-ai">Generate suggestions</button></article>' +
       '<article class="panel-card"><div class="panel-header"><div><h3>Active alerts</h3><p>Overdue and upcoming work</p></div><strong>' + state.alerts.length + '</strong></div><div class="list">' + alerts + '</div></article>' +
     '</div>';
 }
@@ -596,11 +601,10 @@ function renderMessages() {
   const canReply=Boolean(state.messageThreadId)&&!Boolean(thread.is_announcement)&&thread.can_reply!==false&&Number(thread.can_reply)!==0;
   const latest=latestInboundMessage();
   const draftMeta=state.messageDraftMeta?'<div class="draft-source">'+badge(state.messageDraftMeta.engine==='knowledge'?(state.messageDraftMeta.built_in?'Automotive library':'Custom knowledge'):'AI fallback',state.messageDraftMeta.engine==='knowledge'?'success':'info')+(state.messageDraftMeta.confidence?'<span>'+Math.round(Number(state.messageDraftMeta.confidence)*100)+'% confidence</span>':'')+(state.messageDraftMeta.category?'<span>'+esc(state.messageDraftMeta.category)+'</span>':'')+(state.messageDraftMeta.safety_level&&state.messageDraftMeta.safety_level!=='standard'?'<span>Safety: '+esc(state.messageDraftMeta.safety_level)+'</span>':'')+'</div>':'';
-  const capabilityWarning=(!capabilities.fullThread||!capabilities.send)?'<div class="message-capability-banner"><b>Website API upgrade required for full two-way chat</b><span>Needed: <code>message-thread</code> + <code>message-send</code> and the <code>messages:write</code> scope. Metadata-only messages remain readable.</span></div>':'';
-  const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle"><input id="message-teach-after-send" type="checkbox"> Teach Nexa from this approved reply</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send approved reply</button></div></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
-  const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p></div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions and user-approved sending.</p></div></div>';
+  const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle"><input id="message-teach-after-send" type="checkbox"> Teach Nexa from this approved reply</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send reply</button></div></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
+  const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p></div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions, manual sending and user-authorized automatic actions.</p></div></div>';
   const settings='<div class="message-live-settings"><label><input id="message-realtime-enabled" type="checkbox" '+(String(state.settings&&state.settings.message_realtime_enabled||'1')==='1'?'checked':'')+'> Live refresh</label><label>Every <select id="message-poll-seconds"><option value="3"'+(String(state.settings&&state.settings.message_poll_seconds)==='3'?' selected':'')+'>3 sec</option><option value="5"'+(String(state.settings&&state.settings.message_poll_seconds||'5')==='5'?' selected':'')+'>5 sec</option><option value="10"'+(String(state.settings&&state.settings.message_poll_seconds)==='10'?' selected':'')+'>10 sec</option><option value="15"'+(String(state.settings&&state.settings.message_poll_seconds)==='15'?' selected':'')+'>15 sec</option></select></label><button class="ghost-button" data-nexa-action="message-settings-save">Save</button><span class="live-indicator"><i></i>'+(state.messageBusy?'Synchronizing':'Ready')+'</span></div>';
-  return sectionHeader('Messages','Mirror website conversations, prepare replies locally first, use AI only when needed, and send only after user approval.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="ghost-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync inbox</button></div>')+capabilityWarning+settings+'<div class="message-workspace"><aside class="message-inbox"><div class="message-inbox-toolbar"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search conversations…"><span>'+rows.length+' threads</span></div><div class="message-thread-list">'+threadCards+'</div>'+renderPagination(page,'messages','message threads')+'</aside><section class="conversation-panel">'+conversationHeader+'<div class="conversation-scroll" id="conversation-scroll">'+renderConversationBubbles()+'</div>'+composer+'</section></div>';
+  return sectionHeader('Messages','Mirror website conversations, prepare replies locally first, and send manually or through explicitly authorized AI Control rules.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="ghost-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync inbox</button></div>')+settings+'<div class="message-workspace"><aside class="message-inbox"><div class="message-inbox-toolbar"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search conversations…"><span>'+rows.length+' threads</span></div><div class="message-thread-list">'+threadCards+'</div>'+renderPagination(page,'messages','message threads')+'</aside><section class="conversation-panel">'+conversationHeader+'<div class="conversation-scroll" id="conversation-scroll">'+renderConversationBubbles()+'</div>'+composer+'</section></div>';
 }
 
 function renderAgenda() {
@@ -634,7 +638,7 @@ function renderAI() {
   const providerOptions = '<option value="openai"' + (provider === 'openai' ? ' selected' : '') + '>OpenAI</option><option value="deepseek"' + (provider === 'deepseek' ? ' selected' : '') + '>DeepSeek</option>';
   return sectionHeader('AI Suggestions', 'Use approved local knowledge first, then your selected AI provider only when the conversation needs it.') +
     '<div class="grid ai-layout">' +
-      '<article class="panel-card"><div class="panel-header"><div><h3>Generate a suggestion</h3><p>No automatic messages or record changes</p></div>' + statusBadge + '</div><div class="form-grid">' +
+      '<article class="panel-card"><div class="panel-header"><div><h3>Generate a suggestion</h3><p>Manual AI workspace; automatic permissions are managed separately in AI Control</p></div>' + statusBadge + '</div><div class="form-grid">' +
         '<label>Provider<select id="ai-provider" data-nexa-action="ai-provider-select">' + providerOptions + '</select></label>' +
         '<label>Suggestion type<select id="ai-kind"><option value="daily_priorities">Daily priorities</option><option value="lead_next_step">Lead next step</option><option value="agenda_optimization">Agenda optimization</option><option value="follow_up_draft">Follow-up note draft</option><option value="stale_leads">Stale leads</option><option value="live_message_reply">Live conversation reply</option><option value="message_response_strategy">Message response strategy</option><option value="order_follow_up">Order / lead follow-up</option></select></label>' +
         '<label>Related record type<select id="ai-related-type"><option value="">Entire workspace</option><option value="lead">Lead</option><option value="contact">Contact</option><option value="task">Task</option><option value="appointment">Appointment</option><option value="message">Website message</option><option value="order">Website order / lead</option></select></label>' +
@@ -962,12 +966,84 @@ function renderSettings() {
     '</form>';
 }
 
+function automationOption(value, label, current) {
+  return '<option value="' + esc(value) + '"' + (String(current) === String(value) ? ' selected' : '') + '>' + esc(label) + '</option>';
+}
+
+function renderAIControl() {
+  const automation = state.automation || {};
+  const settings = automation.settings || state.settings || {};
+  const summary = automation.summary || {};
+  const integration = automation.integration || {};
+  const enabledMaster = String(settings.auto_actions_enabled || '0') === '1';
+  const actions = Array.isArray(summary.recent) ? summary.recent : [];
+  const page = paginateItems(actions, 'automatic-actions');
+  const availability = integrationRemote('dealer-appointment-availability');
+  const rows = page.items.map(function actionRow(row) {
+    let payload = {};
+    try { payload = JSON.parse(row.payload_json || '{}'); } catch (_) { payload = {}; }
+    return '<tr><td>' + formatDate(row.created_at) + '</td><td>' + esc(String(row.action_type || '').replaceAll('_', ' ')) + '</td><td>' + badge(row.status || 'unknown', row.status === 'completed' ? 'success' : row.status === 'failed' ? 'danger' : row.status === 'blocked' ? 'warning' : 'info') + '</td><td>' + esc(row.engine || '—') + '</td><td>' + (row.confidence ? Math.round(Number(row.confidence) * 100) + '%' : '—') + '</td><td>' + esc(row.summary || row.error || payload.message || '—') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6">No automatic actions have been performed. AI Control is disabled by default.</td></tr>';
+  const activeLabel = enabledMaster ? badge('Authorized and active', 'success') : badge('Disabled', 'warning');
+  const timerLabel = automation.timer_active ? badge('Background guard ready', 'info') : badge('Stopped', 'warning');
+  const connectedLabel = integration.connected ? badge('Website connected', 'success') : badge('Website not connected', 'warning');
+  return sectionHeader('AI Control', 'Give Nexa limited autonomy only inside parameters you explicitly authorize. Customer records remain read-only and automatic deletion is impossible.', '<div class="button-row">' + activeLabel + timerLabel + connectedLabel + '</div>') +
+    '<form id="automation-form" class="automation-layout" data-nexa-action="automation-save">' +
+      '<article class="panel-card autonomy-master"><div class="panel-header"><div><p class="eyebrow">MASTER AUTHORIZATION</p><h2>Guarded automatic actions</h2><p>Nexa can send customer messages and create appointments from verified dealer availability while the program is running.</p></div><div class="autonomy-orb"><img src="assets/nexa-ai-orb.svg" alt="Nexa AI"><span></span><span></span><span></span></div></div>' +
+        '<div class="automation-grid">' +
+          '<label>Automatic actions<select name="auto_actions_enabled">' + automationOption('0','Disabled',settings.auto_actions_enabled) + automationOption('1','Enabled',settings.auto_actions_enabled) + '</select></label>' +
+          '<label>Background check interval<select name="auto_actions_run_interval_seconds">' + [5,10,15,30,60,120].map(function seconds(value){return automationOption(String(value),value+' seconds',settings.auto_actions_run_interval_seconds||'15');}).join('') + '</select></label>' +
+          '<label class="authorization-check span-2"><input id="automation-user-consent" type="checkbox"> I authorize Nexa to perform only the actions enabled below. I understand every automatic action is logged and can be stopped immediately.</label>' +
+        '</div>' +
+        '<div class="button-row"><button class="primary-button" type="submit" data-nexa-action="automation-save">Save authorization</button><button class="secondary-button" type="button" id="automation-run-now" data-nexa-action="automation-run-now"' + (!enabledMaster ? ' disabled' : '') + '>Run authorized actions now</button><button class="danger-button" type="button" id="automation-pause" data-nexa-action="automation-pause">Emergency pause</button></div>' +
+      '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><p class="eyebrow">AUTOMATIC MESSAGES</p><h3>Customer reply parameters</h3><p>Knowledge Library first. External AI fallback is a separate opt-in.</p></div>' + badge(String(summary.messages_sent || 0) + ' sent', 'info') + '</div>' +
+        '<div class="automation-grid">' +
+          '<label>Automatic message sending<select name="auto_messages_enabled">' + automationOption('0','Disabled',settings.auto_messages_enabled) + automationOption('1','Enabled',settings.auto_messages_enabled) + '</select></label>' +
+          '<label>Response engine<select name="auto_messages_knowledge_only">' + automationOption('1','Knowledge Library only',settings.auto_messages_knowledge_only) + automationOption('0','Knowledge + authorized AI fallback',settings.auto_messages_knowledge_only) + '</select></label>' +
+          '<label>External AI fallback<select name="auto_messages_ai_fallback">' + automationOption('0','Disabled',settings.auto_messages_ai_fallback) + automationOption('1','Enabled',settings.auto_messages_ai_fallback) + '</select></label>' +
+          '<label>Minimum local confidence<input name="auto_messages_min_confidence" type="number" min="0.72" max="1" step="0.01" value="' + esc(settings.auto_messages_min_confidence || '0.88') + '"></label>' +
+          '<label>Delay before sending<input name="auto_messages_send_delay_seconds" type="number" min="0" max="3600" value="' + esc(settings.auto_messages_send_delay_seconds || '20') + '"><small>Seconds after the latest customer message.</small></label>' +
+          '<label>Hourly limit<input name="auto_messages_max_per_hour" type="number" min="1" max="100" value="' + esc(settings.auto_messages_max_per_hour || '12') + '"></label>' +
+          '<label>Daily limit<input name="auto_messages_max_per_day" type="number" min="1" max="1000" value="' + esc(settings.auto_messages_max_per_day || '60') + '"></label>' +
+          '<label>Require unread message<select name="auto_messages_require_unread">' + automationOption('1','Yes',settings.auto_messages_require_unread) + automationOption('0','No',settings.auto_messages_require_unread) + '</select></label>' +
+          '<label>Mark answered thread read<select name="auto_messages_mark_read">' + automationOption('1','Yes',settings.auto_messages_mark_read) + automationOption('0','No',settings.auto_messages_mark_read) + '</select></label>' +
+          '<label>Quiet hours start<input name="auto_messages_quiet_start" type="time" value="' + esc(settings.auto_messages_quiet_start || '22:00') + '"></label>' +
+          '<label>Quiet hours end<input name="auto_messages_quiet_end" type="time" value="' + esc(settings.auto_messages_quiet_end || '07:00') + '"></label>' +
+          '<label>Allowed languages<input name="auto_messages_languages" value="' + esc(settings.auto_messages_languages || 'en,es') + '"><small>Comma separated.</small></label>' +
+          '<label class="span-2">Never answer automatically<input name="auto_messages_excluded_intents" value="' + esc(settings.auto_messages_excluded_intents || '') + '"><small>Financing approvals, legal issues, emergencies, complaints and payment/refund disputes remain human-review only.</small></label>' +
+        '</div>' +
+      '</article>' +
+      '<article class="panel-card"><div class="panel-header"><div><p class="eyebrow">AUTOMATIC APPOINTMENTS</p><h3>Dealer Appointment Availability</h3><p>Nexa reads verified slots from the website and creates calendar appointments only when the customer selects an available date and time.</p></div>' + badge(String(availability.length) + ' slots loaded', availability.length ? 'success' : 'warning') + '</div>' +
+        '<div class="automation-grid">' +
+          '<label>Automatic appointment creation<select name="auto_appointments_enabled">' + automationOption('0','Disabled',settings.auto_appointments_enabled) + automationOption('1','Enabled',settings.auto_appointments_enabled) + '</select></label>' +
+          '<label>Availability source<input name="auto_appointments_source" value="dealer-appointment-availability" readonly></label>' +
+          '<label>Offer open slots<select name="auto_appointments_offer_slots">' + automationOption('1','Yes',settings.auto_appointments_offer_slots) + automationOption('0','No',settings.auto_appointments_offer_slots) + '</select></label>' +
+          '<label>Default duration<input name="auto_appointments_duration_minutes" type="number" min="10" max="480" value="' + esc(settings.auto_appointments_duration_minutes || '30') + '"><small>Minutes.</small></label>' +
+          '<label>Minimum notice<input name="auto_appointments_min_notice_hours" type="number" min="0" max="168" value="' + esc(settings.auto_appointments_min_notice_hours || '2') + '"><small>Hours.</small></label>' +
+          '<label>Maximum booking window<input name="auto_appointments_max_days" type="number" min="1" max="365" value="' + esc(settings.auto_appointments_max_days || '60') + '"><small>Days.</small></label>' +
+          '<label>Require customer identity<select name="auto_appointments_require_contact">' + automationOption('1','Yes',settings.auto_appointments_require_contact) + automationOption('0','No',settings.auto_appointments_require_contact) + '</select></label>' +
+          '<label>Create appointment on website<select name="auto_appointments_create_remote">' + automationOption('0','Local calendar only',settings.auto_appointments_create_remote) + automationOption('1','Website + local calendar when API permits',settings.auto_appointments_create_remote) + '</select></label>' +
+          '<label>Send confirmation<select name="auto_appointments_send_confirmation">' + automationOption('1','Yes, when automatic messages are authorized',settings.auto_appointments_send_confirmation) + automationOption('0','No',settings.auto_appointments_send_confirmation) + '</select></label>' +
+          '<label>Availability limit<input name="auto_appointments_slot_limit" type="number" min="1" max="100" value="' + esc(settings.auto_appointments_slot_limit || '50') + '"></label>' +
+        '</div>' +
+        '<div class="availability-preview">' + (availability.slice(0,8).map(function slotPreview(slot){return '<div><strong>' + esc(slot.appointment_date || slot.date || formatDate(slot.start_at)) + '</strong><span>' + esc(slot.start_time || slot.appointment_time || '') + '</span><small>' + esc(slot.location || slot.address || 'Dealer location') + '</small></div>';}).join('') || '<p>No availability has been synchronized yet. Nexa will read Dealer Appointment Availability during the next authorized cycle.</p>') + '</div>' +
+      '</article>' +
+      '<article class="panel-card autonomy-boundaries"><div class="panel-header"><div><p class="eyebrow">HARD BOUNDARIES</p><h3>Rules that cannot be disabled</h3></div>' + badge('Protected', 'success') + '</div><div class="boundary-grid"><div><b>Customer records</b><span>Nexa never edits contacts, leads, orders, reseller records or customer profiles automatically.</span></div><div><b>No deletion</b><span>Automatic actions have no delete operation and cannot erase messages, appointments, records or files.</span></div><div><b>Read-only announcements</b><span>Admin announcements and threads without reply permission are never answered.</span></div><div><b>Full audit trail</b><span>Every automatic send, appointment, blocked action and failure is recorded locally.</span></div></div></article>' +
+      '<article class="panel-card automation-history"><div class="panel-header"><div><p class="eyebrow">ACTION HISTORY</p><h3>Authorized automation audit</h3><p>' + esc(summary.total || 0) + ' total · ' + esc(summary.completed || 0) + ' completed · ' + esc(summary.failed || 0) + ' failed</p></div></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Action</th><th>Status</th><th>Engine</th><th>Confidence</th><th>Summary</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + renderPagination(page,'automatic-actions','automatic actions') + '</article>' +
+    '</form>';
+}
+
 function renderAbout() {
-  return sectionHeader('About', 'A local-first office assistant built for controlled, practical work.') +
+  const automation = state.automation || {};
+  const autoSettings = automation.settings || state.settings || {};
+  const active = String(autoSettings.auto_actions_enabled || '0') === '1';
+  return sectionHeader('About', 'A local-first business assistant with user-controlled guarded autonomy.') +
     '<div class="grid split-grid">' +
-      '<article class="panel-card"><p class="eyebrow">PRODUCT</p><h2>Nexa Smart Office Bot</h2><p class="muted">Version ' + esc(state.meta && state.meta.version ? state.meta.version : '1.0.0') + '</p><p>Contacts, leads, agenda, tasks, alerts, backups and approval-only AI suggestions in one Windows desktop application.</p></article>' +
-      '<article class="panel-card"><p class="eyebrow">PRIVACY</p><h3>Your business data stays local</h3><p class="muted">The SQLite workspace and backups are stored on this computer. Only selected context is sent to the AI provider.</p></article>' +
-      '<article class="panel-card"><p class="eyebrow">AI CONTROL</p><h3>No automatic actions</h3><p class="muted">Nexa never sends messages, changes customer records, creates appointments or deletes data based only on an AI response.</p></article>' +
+      '<article class="panel-card"><p class="eyebrow">PRODUCT</p><h2>Nexa Smart Office Bot</h2><p class="muted">Version ' + esc(state.meta && state.meta.version ? state.meta.version : '1.0.0') + '</p><p>Connected messages, automotive knowledge, contacts, leads, calendar, tasks, alerts, backups and controlled AI actions in one Windows desktop application.</p></article>' +
+      '<article class="panel-card"><p class="eyebrow">PRIVACY</p><h3>Your business data stays local</h3><p class="muted">The SQLite workspace, automation audit and backups are stored on this computer. External AI receives only the minimum safe context when the user enables fallback.</p></article>' +
+      '<article class="panel-card"><p class="eyebrow">AI CONTROL</p><h3>Guarded automatic actions · ' + (active ? 'Enabled' : 'Disabled') + '</h3><p class="muted">With explicit authorization, Nexa may send messages and create appointments from verified dealer availability. It never changes customer records and has no automatic delete capability.</p><div class="button-row">' + badge(String(autoSettings.auto_messages_enabled || '0') === '1' ? 'Messages authorized' : 'Messages manual', String(autoSettings.auto_messages_enabled || '0') === '1' ? 'success' : 'warning') + badge(String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'Appointments authorized' : 'Appointments manual', String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'success' : 'warning') + '</div></article>' +
+      '<article class="panel-card"><p class="eyebrow">SAFETY BOUNDARIES</p><h3>Human-owned business records</h3><p class="muted">Contacts, leads, orders, reseller records and customer profiles remain read-only to automation. Sensitive, legal, financial and dispute messages are escalated for human review.</p></article>' +
       '<article class="panel-card"><p class="eyebrow">DATA LOCATION</p><h3>Local application data</h3><p class="muted">' + esc(state.meta && state.meta.dataPath ? state.meta.dataPath : 'Available after application startup') + '</p></article>' +
     '</div>';
 }
@@ -1357,6 +1433,46 @@ function bindViewEvents() {
     });
     document.getElementById('ai-save-note').addEventListener('click', function saveNote() { saveAiResult('note'); });
     document.getElementById('ai-save-task').addEventListener('click', function saveTask() { saveAiResult('task'); });
+  }
+
+  const automationForm = document.getElementById('automation-form');
+  if (automationForm) {
+    automationForm.addEventListener('submit', async function saveAutomation(event) {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(automationForm).entries());
+      const userAuthorized = Boolean(document.getElementById('automation-user-consent') && document.getElementById('automation-user-consent').checked);
+      if (String(data.auto_actions_enabled || '0') === '1') {
+        const confirmed = await confirmAction('Authorize guarded automatic actions', 'Nexa will be permitted to send messages and/or create appointments only according to the parameters shown. Customer records remain read-only and no automatic delete operation exists.');
+        if (!confirmed) return;
+      }
+      try {
+        const saved = await api.automation.save(data, userAuthorized);
+        state.automation = saved;
+        state.settings = saved.settings || state.settings;
+        toast(String(data.auto_actions_enabled || '0') === '1' ? 'AI Control authorization saved.' : 'Automatic actions disabled.');
+        await refreshAll();
+      } catch (error) { toast(error.message, 'error'); }
+    });
+    const runNow = document.getElementById('automation-run-now');
+    if (runNow) runNow.addEventListener('click', async function runAutomation() {
+      try {
+        runNow.disabled = true;
+        runNow.textContent = 'Running authorized actions…';
+        const result = await api.automation.runNow();
+        if (result.skipped) toast('Automatic cycle skipped: ' + String(result.reason || 'not ready') + '.', 'error');
+        else toast('Automatic cycle complete: ' + String(result.messages_sent || 0) + ' messages, ' + String(result.appointments_created || 0) + ' appointments.');
+        await refreshAll();
+      } catch (error) { toast(error.message, 'error'); }
+      finally { runNow.disabled = false; runNow.textContent = 'Run authorized actions now'; }
+    });
+    const pause = document.getElementById('automation-pause');
+    if (pause) pause.addEventListener('click', async function emergencyPause() {
+      const confirmed = await confirmAction('Emergency pause', 'Immediately disable automatic messages and automatic appointment creation? Existing records will not be deleted.');
+      if (!confirmed) return;
+      state.automation = await api.automation.pause();
+      toast('All automatic actions paused.');
+      await refreshAll();
+    });
   }
 
   const settingsForm = document.getElementById('settings-form');

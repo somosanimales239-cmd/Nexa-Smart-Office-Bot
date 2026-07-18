@@ -1,31 +1,36 @@
-Nexa Smart Office Bot 1.5.0 Validation Report
+Nexa Smart Office Bot 1.6.0 Validation Report
 
-Package feature: Nexa Automotive Dealer Knowledge Library
-Library records: 2,880
-Core intents: 120
-Dealer segments: 12
-Languages: English and Spanish
-Response variants: 8,640
-Business categories: 9
+Package feature
+Guarded AI autonomy for messages and appointments
 
-Validation completed:
+Preserved platform features
+- 2,880 automotive dealer knowledge records
+- 8,640 built-in response variations
+- Complete website conversation module
+- Contacts, leads, orders, agenda, tasks and notifications
+- Installer, Portable and Windows ZIP targets
+
+Completed validation
 - Project validator passed.
 - Delivery validator passed.
+- Nexa contract gate passed.
 - JavaScript syntax validation passed.
 - 27 core integration tests passed.
 - 18 API synchronization and notification tests passed.
 - Complete workspace reflection test passed.
 - 9 real-time messaging tests passed.
 - 10 automotive knowledge library tests passed.
+- Guarded automatic-action integration tests passed.
 - Implementation tests passed.
 - Acceptance tests passed.
-- Migration 6 installed 2,880 records and remained idempotent.
-- Built-in knowledge disable and enable controls passed.
-- Built-in deletion protection passed.
-- Custom knowledge priority passed.
-- English and Spanish matching passed.
-- Trailer dealer segment inference passed.
-- Financing safety response test passed.
-- Installer, Portable and Windows ZIP targets remain configured.
+- Migration 7 remained additive and idempotent.
+- Automatic actions default to disabled.
+- Explicit user authorization is required before enabling the master switch.
+- Knowledge-first automatic reply and duplicate protection passed.
+- Dealer availability appointment creation and duplicate protection passed.
+- Customer contacts and leads remained unchanged during automatic-action tests.
+- Automatic service exposes no customer-record delete operation.
+- Obsolete website-upgrade warning is absent from the interface.
 
-The Electron UI smoke test and Windows packaging remain mandatory in GitHub Actions before artifacts are published.
+Build gate
+The Electron UI smoke test and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the full workflow passes.

@@ -1,32 +1,32 @@
-# Nexa Smart Office Bot 1.5.0
+# Nexa Smart Office Bot 1.6.0
 
-Nexa Smart Office Bot is a local-first Windows business assistant with AutoMarket Pro synchronization, complete message conversations, user-approved replies, contacts, leads, agenda, tasks, notifications and AI provider fallback.
+Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.5.0
+## New in 1.6.0
 
-The program now includes the Nexa Automotive Dealer Knowledge Library:
+- New AI Control section with explicit user authorization.
+- Optional guarded automatic customer replies.
+- Automotive Knowledge Library first, external AI fallback only when separately authorized.
+- Dealer Appointment Availability synchronization.
+- Automatic local calendar appointments from exact verified slots.
+- Optional website appointment creation only when the connected API advertises that capability.
+- Emergency pause.
+- Complete automatic-action audit history.
+- Updated About area describing the real autonomy and safety model.
+- Removed the obsolete two-way-chat upgrade warning from the application interface.
 
-- 2,880 built-in dealership knowledge records.
-- 120 core customer intentions.
-- 12 automotive dealer segments.
-- English and Spanish support.
-- 8,640 natural response variations.
-- Custom approved knowledge takes priority over the built-in library.
-- Built-in knowledge can be disabled without being deleted.
-- OpenAI or DeepSeek is used only when local knowledge does not match strongly enough.
+## Built-in automotive knowledge
 
-The library covers inventory, prices, appointments, financing, credit, trade-ins, vehicle details, delivery, documents, service, warranties, safety, privacy, fraud and human escalation.
+The application includes 2,880 bilingual dealership knowledge records, 120 core intentions, 12 dealer segments and 8,640 approved response variations. Custom user-approved knowledge has priority over the built-in library.
 
-See `AUTOMOTIVE_KNOWLEDGE_LIBRARY.md` for the complete design.
+## Safety model
 
-## Safety
+Automatic actions are disabled by default. Nexa may send messages or create appointments only after the user enables the master authorization and the specific feature parameters.
 
-Nexa never automatically sends a customer message. The user reviews and confirms every outgoing response. Built-in answers are designed not to invent prices, availability, approvals, appointments, warranties, legal outcomes or sensitive information.
+Nexa never automatically changes customer records and has no automatic delete operation. Contacts, leads, orders, reseller records and customer profiles remain read-only to automation. Sensitive conversations are routed to human review.
 
-## Windows delivery
+## Local data
 
-The project remains configured for:
+SQLite data, encrypted API keys, AI provider keys, drafts, message cache, appointments, knowledge settings and the automation audit remain in the application's local data directory. Existing data is preserved during updates.
 
-- NSIS Installer.
-- Portable EXE.
-- Windows ZIP.
+See `AUTOMATIC_ACTIONS.md`, `AUTOMOTIVE_KNOWLEDGE_LIBRARY.md`, `CONNECTED_BUSINESS_SETUP.md` and `MESSAGING_API_SERVER_CONTRACT.md` for configuration details.

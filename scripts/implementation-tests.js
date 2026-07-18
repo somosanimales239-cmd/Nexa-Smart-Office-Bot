@@ -19,17 +19,27 @@ assert.equal(preload.includes("integration:test"), true);
 assert.equal(preload.includes("integration:inspector"), true);
 assert.equal(preload.includes("integration:items"), true);
 assert.equal(preload.includes("notifications:permission"), true);
-['dashboard', 'sidebar', 'connected-business', 'api-sync-inspector', 'contacts', 'messages', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'smart-notifications', 'activity', 'settings', 'about'].forEach(function requireTestId(id) {
+assert.equal(preload.includes("automation:get"), true);
+assert.equal(preload.includes("automation:save"), true);
+['dashboard', 'sidebar', 'connected-business', 'api-sync-inspector', 'contacts', 'messages', 'leads', 'agenda', 'tasks', 'ai', 'alerts', 'smart-notifications', 'activity', 'settings', 'ai-control', 'about'].forEach(function requireTestId(id) {
   assert.equal(html.includes('data-testid="' + id + '"'), true);
 });
 const integrationIpc = fs.readFileSync(path.join(root, 'src', 'ipc', 'integrations-ipc.js'), 'utf8');
 const apiService = fs.readFileSync(path.join(root, 'src', 'services', 'automarket-api-service.js'), 'utf8');
 const notificationService = fs.readFileSync(path.join(root, 'src', 'services', 'notification-service.js'), 'utf8');
 const migrations = fs.readFileSync(path.join(root, 'src', 'database', 'migrations.js'), 'utf8');
+const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
+const automationIpc = fs.readFileSync(path.join(root, 'src', 'ipc', 'automation-ipc.js'), 'utf8');
 assert.equal(integrationIpc.includes('integration:inspector'), true);
 assert.equal(integrationIpc.includes('integration:items'), true);
 assert.equal(apiService.includes('NEXA_API_SYNC_INSPECTOR_V1'), true);
 assert.equal(notificationService.includes('NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2'), true);
 assert.equal(migrations.includes('integration_resource_status'), true);
 assert.equal(migrations.includes('integration_cache'), true);
+assert.equal(migrations.includes('automatic_action_events'), true);
+assert.equal(automationService.includes('NEXA_GUARDED_AUTOMATIC_ACTIONS_V1'), true);
+assert.equal(automationService.includes('NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1'), true);
+assert.equal(automationIpc.includes('Explicit user authorization'), true);
+assert.equal(automationService.includes('deleteContact'), false);
+assert.equal(automationService.includes('deleteLead'), false);
 console.log('Implementation tests passed.');

@@ -468,7 +468,7 @@ tbody tr:hover { background: rgba(107,124,255,.045); }
   .live-indicator { margin-left:0; }
 }
 
-/* Nexa Smart Office Bot 1.5.0 — Automotive Dealer Knowledge Library */
+/* Nexa Smart Office Bot 1.6.0 — Automotive Dealer Knowledge Library and Guarded AI Control */
 .knowledge-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
 .knowledge-summary-grid article { display:grid; gap:4px; padding:14px; border:1px solid #263552; border-radius:14px; background:linear-gradient(145deg,#101a2f,#0c1426); }
 .knowledge-summary-grid span { color:#9ca9bd; font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
@@ -485,3 +485,46 @@ tbody tr:hover { background: rgba(107,124,255,.045); }
 .knowledge-search input { min-width:0; width:100%; }
 @media (max-width:1180px) { .knowledge-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:720px) { .knowledge-summary-grid { grid-template-columns:1fr; } .knowledge-safety-note { grid-template-columns:1fr; } }
+
+/* Nexa Smart Office Bot 1.6.0 — Guarded AI Autonomy */
+.automation-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding-bottom:28px; }
+.automation-layout > .autonomy-master,
+.automation-layout > .autonomy-boundaries,
+.automation-layout > .automation-history { grid-column:1/-1; }
+.autonomy-master { background:radial-gradient(circle at 88% 14%,rgba(107,124,255,.18),transparent 24%),linear-gradient(145deg,#111c32,#0c1528); border-color:rgba(107,124,255,.42); }
+.autonomy-orb { position:relative; width:82px; height:70px; display:grid; place-items:center; flex:0 0 auto; }
+.autonomy-orb img { width:54px; height:54px; filter:drop-shadow(0 0 18px rgba(107,124,255,.45)); animation:nexaOrbFloat 3.2s ease-in-out infinite; }
+.autonomy-orb span { position:absolute; width:7px; height:7px; border-radius:50%; background:#9da9ff; animation:nexaThought 1.8s ease-in-out infinite; }
+.autonomy-orb span:nth-of-type(1) { right:10px; top:12px; }
+.autonomy-orb span:nth-of-type(2) { right:1px; top:2px; animation-delay:.28s; width:10px; height:10px; }
+.autonomy-orb span:nth-of-type(3) { right:15px; top:-7px; animation-delay:.56s; width:13px; height:13px; }
+@keyframes nexaOrbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+@keyframes nexaThought { 0%,100%{opacity:.25;transform:scale(.7)} 50%{opacity:1;transform:scale(1.12)} }
+.automation-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.automation-grid label { display:grid; gap:5px; align-content:start; color:#aebbd0; font-size:9px; text-transform:uppercase; letter-spacing:.04em; }
+.automation-grid label small { color:#6f7e98; font-size:8px; text-transform:none; letter-spacing:0; line-height:1.35; }
+.automation-grid .span-2 { grid-column:1/-1; }
+.authorization-check { display:flex !important; grid-template-columns:none; flex-direction:row; align-items:flex-start !important; padding:12px; border:1px solid rgba(107,124,255,.35); border-radius:12px; background:rgba(107,124,255,.08); color:#dce3f2 !important; line-height:1.45; text-transform:none !important; letter-spacing:0 !important; }
+.authorization-check input { width:auto; margin-top:2px; }
+.availability-preview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:12px; max-height:230px; overflow:auto; }
+.availability-preview > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; padding:10px; border:1px solid #263552; border-radius:10px; background:#0d1729; }
+.availability-preview strong { font-size:10px; }
+.availability-preview span { color:#aab6ff; font-size:9px; }
+.availability-preview small { grid-column:1/-1; color:#71809a; }
+.availability-preview > p { grid-column:1/-1; color:#8492aa; margin:0; padding:14px; border:1px dashed #31415f; border-radius:10px; }
+.boundary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
+.boundary-grid > div { display:grid; gap:6px; padding:12px; border:1px solid #29415b; border-radius:12px; background:#0d192a; }
+.boundary-grid b { color:#8fe4d6; font-size:10px; }
+.boundary-grid span { color:#94a3ba; font-size:9px; line-height:1.45; }
+.automation-history .table-wrap { max-height:420px; overflow:auto; scrollbar-gutter:stable; }
+.automation-history table { min-width:880px; }
+@media (max-width:1080px) {
+  .automation-layout { grid-template-columns:1fr; }
+  .automation-layout > * { grid-column:1 !important; }
+  .boundary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:720px) {
+  .automation-grid,.availability-preview,.boundary-grid { grid-template-columns:1fr; }
+  .automation-grid .span-2 { grid-column:1; }
+  .autonomy-master .panel-header { align-items:flex-start; }
+}

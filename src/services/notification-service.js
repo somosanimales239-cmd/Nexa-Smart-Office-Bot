@@ -8,7 +8,7 @@ const NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2 = 'NEXA_CONNECTED_BUSINESS_FULL_SYNC_
 const DEFAULT_RESOURCES = [
   'store', 'dealer-summary', 'listings', 'orders', 'agenda', 'messages', 'resellers',
   'reseller-profile', 'reseller-summary', 'reseller-listings', 'reseller-appointments',
-  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status'
+  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status', 'dealer-appointment-availability'
 ];
 
 function nowIso() {
@@ -20,7 +20,7 @@ function listFromPayload(payload) {
   if (!payload || typeof payload !== 'object') return [];
   for (const key of [
     'items', 'records', 'rows', 'listings', 'orders', 'contacts', 'agenda', 'messages', 'threads', 'resellers',
-    'appointments', 'assignments', 'stores', 'users', 'validations', 'api_keys', 'data'
+    'appointments', 'assignments', 'stores', 'users', 'validations', 'api_keys', 'slots', 'availability', 'data'
   ]) {
     if (Array.isArray(payload[key])) return payload[key];
   }
@@ -579,7 +579,7 @@ class NotificationService {
       orders: 'New order activity', messages: 'New message activity', resellers: 'New reseller activity',
       agenda: 'Agenda update', listings: 'Listing update', 'dealer-summary': 'Dealer dashboard update',
       'reseller-summary': 'Reseller dashboard update', 'reseller-appointments': 'Reseller appointment update',
-      'reseller-listings': 'Assigned listing update', 'admin-summary': 'Platform summary update',
+      'reseller-listings': 'Assigned listing update', 'dealer-appointment-availability': 'Dealer appointment availability', 'admin-summary': 'Platform summary update',
       stores: 'Store activity', users: 'User activity', validation: 'Dealer validation activity',
       store: 'Store profile update', 'reseller-profile': 'Reseller profile update'
     };
