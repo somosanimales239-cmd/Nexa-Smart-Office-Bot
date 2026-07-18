@@ -1,0 +1,37 @@
+NEXA SMART OFFICE BOT 1.6.2
+Correccion de Message send endpoint y messages:write
+
+TIPO DE ENTREGA
+- Actualizacion parcial: contiene solamente archivos nuevos o modificados.
+- No contiene node_modules, base de datos, claves API ni datos del usuario.
+- No requiere borrar ni reinstalar la base SQLite.
+
+COMO APLICARLA
+1. Haz una copia de seguridad del proyecto actual.
+2. Extrae el ZIP en la raiz del repositorio Nexa-Smart-Office-Bot.
+3. Permite reemplazar los archivos existentes conservando las carpetas.
+4. Sube los cambios a GitHub para ejecutar la compilacion normal de Windows.
+5. Instala la version 1.6.2 sobre la version actual; la informacion local se conserva.
+
+PASO OBLIGATORIO DESPUES DE ABRIR 1.6.2
+1. Entra a Connected Business.
+2. Pulsa Test connection y despues Sync now.
+3. Abre AI Control y confirma:
+   - Message send endpoint: Ready
+   - messages:read scope: Ready
+   - messages:write scope: Ready
+
+CAUSA CORREGIDA
+La version 1.6.1 recibia scopes y endpoints validos del connection-map, pero su
+filtro de seguridad eliminaba varios nombres aceptados antes de guardar la
+conexion. Esto producia indicadores falsos o contradictorios. La version 1.6.2
+conserva los campos seguros, normaliza nombres y usa un solo calculo de
+capacidades en Messages y AI Control.
+
+SI TODAVIA APARECE BLOCKED
+La correccion no inventa permisos que el servidor no otorgo. Si despues de Test
+connection y Sync now un indicador continua bloqueado, el connection-map real
+del website no esta anunciando message-send o la API key no tiene
+messages:write. En ese caso hay que actualizar el API del website o regenerar la
+clave con ese scope.
+

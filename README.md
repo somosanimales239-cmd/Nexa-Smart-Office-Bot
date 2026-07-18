@@ -1,8 +1,15 @@
-# Nexa Smart Office Bot 1.6.1
+# Nexa Smart Office Bot 1.6.2
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.1
+## New in 1.6.2
+
+- Fixed false `Message send endpoint` and `messages:write scope` blocks caused by the connection-map safety filter removing valid capability fields.
+- Preserved and normalized `scopes`, `allowed_scopes`, `permissions`, `endpoints` and `allowed_endpoints` from the safe connection contract.
+- Added compatibility for singular/plural message endpoint names and case-insensitive scopes.
+- Kept explicit server denials authoritative: a genuinely absent or disabled write capability still remains blocked.
+
+## Existing 1.6.1 improvements
 
 - Added a visible **AI Messages ON/OFF** switch inside Messages.
 - Fixed the false **Automatic cycle skipped: not ready** result. A completed cycle with messages skipped for individual reasons is no longer misclassified as an unready cycle.

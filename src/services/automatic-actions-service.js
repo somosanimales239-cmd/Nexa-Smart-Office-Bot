@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { deriveMessageCapabilities } = require('./automarket-api-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
@@ -189,16 +190,8 @@ class AutomaticActionsService {
     const publicSettings = this.settingsService.getPublicSettings();
     const integration = this.database.getIntegrationStatus();
     const map = safeJson(integration.connection_map_json, {});
-    const resources = [].concat(map.available_resources || map.allowed_resources || map.resources || []).map(function normalize(item) {
-      return typeof item === 'string' ? item.toLowerCase() : text(item && (item.resource || item.name)).toLowerCase();
-    }).filter(Boolean);
     const scopes = safeJson(integration.scopes_json, []);
-    const scopeList = Array.isArray(scopes) ? scopes.map(function lower(item) { return text(item).toLowerCase(); }) : [];
-    const capabilities = map.capabilities && typeof map.capabilities === 'object' ? map.capabilities : {};
-    const fullThread = resources.includes('message-thread') || resources.includes('messages-thread') || Boolean(map.message_threads || capabilities.message_threads);
-    const send = resources.includes('message-send') || resources.includes('messages-send') || Boolean(map.message_send || capabilities.message_send);
-    const readScope = !scopeList.length || scopeList.includes('messages:read');
-    const writeScope = scopeList.includes('messages:write') || Boolean(map.message_send || capabilities.message_send);
+    const messageCapabilities = deriveMessageCapabilities({ scopes: scopes }, map);
     const preferred = text(publicSettings.preferred_provider || 'openai');
     const provider = publicSettings.secrets && publicSettings.secrets[preferred] ? publicSettings.secrets[preferred] : {};
     return {
@@ -209,11 +202,13 @@ class AutomaticActionsService {
       messages_switch_on: enabled(settings.messages_ai_enabled),
       appointments_authorized: enabled(settings.auto_appointments_enabled),
       integration_connected: Number(integration.connected || 0) === 1,
-      message_list_available: resources.includes('messages') || !resources.length,
-      full_thread_available: fullThread,
-      message_send_available: send,
-      messages_read_scope: readScope,
-      messages_write_scope: writeScope,
+      message_list_available: messageCapabilities.resources.includes('messages') || !messageCapabilities.resources.length,
+      full_thread_available: messageCapabilities.fullThread,
+      message_send_available: messageCapabilities.send,
+      message_read_available: messageCapabilities.markRead,
+      messages_read_scope: messageCapabilities.read,
+      messages_write_scope: messageCapabilities.write,
+      message_scopes_advertised: messageCapabilities.scopesAdvertised,
       knowledge_only: enabled(settings.auto_messages_knowledge_only),
       ai_fallback_enabled: enabled(settings.auto_messages_ai_fallback),
       preferred_provider: preferred,

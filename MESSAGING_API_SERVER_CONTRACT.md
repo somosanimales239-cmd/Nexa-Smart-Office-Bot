@@ -1,4 +1,4 @@
-# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.1
+# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.2
 
 This contract supports complete conversations, manual or explicitly authorized automatic replies, dealer appointment availability and optional remote appointment creation.
 

@@ -629,18 +629,40 @@ function renderTasks() {
 }
 
 function messageCapabilities() {
+  const readiness=state.automation&&state.automation.readiness?state.automation.readiness:null;
+  if(readiness){
+    return {
+      read:Boolean(readiness.messages_read_scope),
+      write:Boolean(readiness.messages_write_scope),
+      fullThread:Boolean(readiness.full_thread_available),
+      send:Boolean(readiness.message_send_available),
+      markRead:Boolean(readiness.message_read_available)
+    };
+  }
   const status=state.integration&&state.integration.status?state.integration.status:{};
   let map={};
   try { map=JSON.parse(status.connection_map_json||'{}'); } catch(error) { map={}; }
   let scopes=[];
   try { scopes=JSON.parse(status.scopes_json||'[]'); } catch(error) { scopes=[]; }
-  const available=[].concat(map.available_resources||map.allowed_resources||map.resources||[]).map(function normalizeResource(item){ return typeof item==='string'?item:String(item&&item.resource||item&&item.name||''); });
+  scopes=[].concat(scopes||[]).map(function normalizeScope(item){return String(item&&item.scope||item||'').trim().toLowerCase();}).filter(Boolean);
+  const sources=[map.available_resources,map.allowed_resources,map.resources,map.endpoints,map.allowed_endpoints];
+  const available=sources.reduce(function collect(result,source){
+    if(Array.isArray(source))return result.concat(source);
+    if(source&&typeof source==='object')return result.concat(Object.keys(source));
+    if(typeof source==='string')return result.concat(source.split(','));
+    return result;
+  },[]).map(function normalizeResource(item){
+    const resource=String(item&&item.resource||item&&item.name||item||'').replace(/^resource=/i,'').trim().toLowerCase();
+    return {'messages-thread':'message-thread','messages-send':'message-send','messages-read':'message-read'}[resource]||resource;
+  });
+  const capabilities=map.capabilities&&typeof map.capabilities==='object'?map.capabilities:{};
+  const send=available.includes('message-send')||Boolean(map.message_send||capabilities.message_send);
   return {
     read:scopes.includes('messages:read')||!scopes.length,
-    write:scopes.includes('messages:write'),
-    fullThread:available.includes('message-thread')||available.includes('messages-thread')||Boolean(map.message_threads||map.capabilities&&map.capabilities.message_threads),
-    send:available.includes('message-send')||available.includes('messages-send')||Boolean(map.message_send||map.capabilities&&map.capabilities.message_send),
-    markRead:available.includes('message-read')||Boolean(map.message_read||map.capabilities&&map.capabilities.message_read)
+    write:scopes.length?scopes.includes('messages:write'):send,
+    fullThread:available.includes('message-thread')||Boolean(map.message_threads||capabilities.message_threads),
+    send:send,
+    markRead:available.includes('message-read')||Boolean(map.message_read||capabilities.message_read)
   };
 }
 

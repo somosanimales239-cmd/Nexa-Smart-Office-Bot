@@ -1,0 +1,32 @@
+Nexa Smart Office Bot 1.6.2 - Validation Summary
+Date: 2026-07-18
+
+PASSED
+- JavaScript syntax validation
+- Delivery graph validation
+- Project contract validation
+- 28 core integration tests
+- 20 API synchronization and notification tests
+- Workspace reflection validation
+- 9/9 real-time messaging tests
+- 10/10 automotive knowledge library tests
+- Guarded automatic actions integration tests
+- Implementation tests
+- Acceptance tests
+- Git diff whitespace validation
+
+REGRESSION CASES ADDED
+- Preserve safe scopes and endpoints from connection-map.
+- Detect messages:write case-insensitively.
+- Accept message-send and messages-send aliases.
+- Accept endpoints and allowed_endpoints maps/lists.
+- Use connection-map scopes when an older cached identity is empty.
+- Keep an explicitly disabled message_send capability blocked.
+
+ENVIRONMENT LIMITATION
+Electron UI smoke could not execute in this restricted Linux container because
+Chromium process sockets and sandbox startup are not permitted. The renderer
+source passed syntax, workspace reflection, implementation and acceptance
+checks. The repository's Windows workflow remains the authoritative packaged UI
+smoke and build environment.
+

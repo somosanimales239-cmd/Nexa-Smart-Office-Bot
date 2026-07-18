@@ -49,8 +49,8 @@ const SAFE_RESOURCES = new Set([
 
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
-  ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','available_resources','allowed_resources','resources','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read','dealer_appointment_availability','appointment_create'],
+  ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','api_version','status','message','ok'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read','dealer_appointment_availability','appointment_create'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
@@ -246,16 +246,40 @@ function normalizeStringArray(value) {
       return '';
     }).map(String).map(function clean(item) { return item.trim(); }).filter(Boolean);
   }
-  if (typeof value === 'object') return Object.keys(value);
+  if (typeof value === 'object') {
+    return Object.entries(value).filter(function enabledEntry(entry) {
+      const enabled = entry[1];
+      return enabled !== false && enabled !== 0 && enabled !== '0' && enabled !== null;
+    }).map(function entryName(entry) { return entry[0]; });
+  }
   return [];
+}
+
+function normalizeResourceName(value) {
+  const resource = String(value || '').replace(/^resource=/i, '').trim().toLowerCase();
+  const aliases = {
+    'messages-thread': 'message-thread',
+    'messages-send': 'message-send',
+    'messages-read': 'message-read'
+  };
+  return aliases[resource] || resource;
+}
+
+function normalizeScopes() {
+  const sources = Array.from(arguments);
+  const scopes = sources.reduce(function combine(result, source) {
+    return result.concat(normalizeStringArray(source));
+  }, []).map(function normalizeScope(scope) { return scope.toLowerCase(); }).filter(Boolean);
+  return Array.from(new Set(scopes));
 }
 
 function extractAvailableResources(connectionMap) {
   const map = connectionMap && typeof connectionMap === 'object' ? connectionMap : {};
-  const source = map.available_resources || map.resources || map.endpoints || map.allowed_resources || [];
-  return Array.from(new Set(normalizeStringArray(source).map(function normalize(resource) {
-    return resource.replace(/^resource=/i, '').trim().toLowerCase();
-  }).filter(function safe(resource) { return SAFE_RESOURCES.has(resource); })));
+  const sources = [map.available_resources, map.allowed_resources, map.resources, map.endpoints, map.allowed_endpoints];
+  const resources = sources.reduce(function combine(result, source) {
+    return result.concat(normalizeStringArray(source));
+  }, []).map(normalizeResourceName).filter(function safe(resource) { return SAFE_RESOURCES.has(resource); });
+  return Array.from(new Set(resources));
 }
 
 function deriveConnectionIdentity(pingPayload, connectionMap) {
@@ -271,16 +295,48 @@ function deriveConnectionIdentity(pingPayload, connectionMap) {
     owner_id: source.owner_id || source.account_id || null,
     user_id: source.user_id || null,
     store_id: source.store_id || null,
-    scopes: Array.from(new Set(normalizeStringArray(source.scopes || source.allowed_scopes || map.scopes))),
+    scopes: normalizeScopes(ping.scopes, ping.allowed_scopes, ping.permissions, map.scopes, map.allowed_scopes, map.permissions),
     available_resources: extractAvailableResources(map),
     api_version: source.api_version || map.api_version || 'v1'
   };
 }
 
+function deriveMessageCapabilities(identity, connectionMap) {
+  const source = identity && typeof identity === 'object' ? identity : {};
+  const map = connectionMap && typeof connectionMap === 'object' ? connectionMap : {};
+  const resources = new Set(extractAvailableResources(map).concat(
+    normalizeStringArray(source.available_resources).map(normalizeResourceName)
+  ));
+  const scopes = new Set(normalizeScopes(source.scopes, source.allowed_scopes, source.permissions, map.scopes, map.allowed_scopes, map.permissions));
+  const capabilities = map.capabilities && typeof map.capabilities === 'object' ? map.capabilities : {};
+  const capabilityNames = new Set(normalizeStringArray(map.capabilities).map(function normalizeCapability(capability) {
+    return capability.toLowerCase().replaceAll('-', '_');
+  }));
+  const capabilityEnabled = function capabilityEnabled(names) {
+    return names.some(function enabledCapability(name) {
+      return map[name] === true || Number(map[name]) === 1 || capabilities[name] === true || Number(capabilities[name]) === 1 || capabilityNames.has(name);
+    });
+  };
+  const fullThread = resources.has('message-thread') || capabilityEnabled(['message_threads', 'message_thread']);
+  const send = resources.has('message-send') || capabilityEnabled(['message_send']);
+  const markRead = resources.has('message-read') || capabilityEnabled(['message_read']);
+  const scopesAdvertised = scopes.size > 0;
+  return {
+    read: !scopesAdvertised || scopes.has('messages:read'),
+    write: scopesAdvertised ? scopes.has('messages:write') : send,
+    fullThread: fullThread,
+    send: send,
+    markRead: markRead,
+    scopesAdvertised: scopesAdvertised,
+    scopes: Array.from(scopes),
+    resources: Array.from(resources)
+  };
+}
+
 function resourcePlan(identity) {
   const accountType = normalizeAccountType(identity && identity.account_type);
-  const available = new Set(normalizeStringArray(identity && identity.available_resources).map(function lower(item) { return item.toLowerCase(); }));
-  const scopes = new Set(normalizeStringArray(identity && identity.scopes));
+  const available = new Set(normalizeStringArray(identity && identity.available_resources).map(normalizeResourceName));
+  const scopes = new Set(normalizeStringArray(identity && identity.scopes).map(function lower(item) { return item.toLowerCase(); }));
   const configured = ACCOUNT_RESOURCE_PLANS[accountType] || [];
   const candidates = configured.length ? configured : Array.from(available).map(function makeEntry(resource) { return [resource, '']; });
   return candidates.filter(function allowed(entry) {
@@ -354,7 +410,7 @@ class AutoMarketApiService {
         Accept: 'application/json',
         Authorization: 'Bearer ' + apiKey,
         'X-Nexa-Api-Key': apiKey,
-        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.6.1'
+        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.6.2'
       };
       if (method !== 'GET') headers['Content-Type'] = 'application/json';
       if (requestOptions.idempotencyKey) headers['Idempotency-Key'] = String(requestOptions.idempotencyKey);
@@ -506,9 +562,12 @@ module.exports = {
   NEXA_API_SYNC_INSPECTOR_V1,
   SAFE_RESOURCES,
   cleanBaseUrl,
+  deriveMessageCapabilities,
   deriveConnectionIdentity,
   extractAvailableResources,
   normalizeAccountType,
+  normalizeResourceName,
+  normalizeScopes,
   normalizeStringArray,
   resourcePlan,
   sanitizeMessageEntry,

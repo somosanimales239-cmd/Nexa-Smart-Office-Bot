@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.2
+
+- Fixed the connection-map sanitizer so safe message scopes and endpoint advertisements are not discarded.
+- Normalized scope and endpoint aliases before calculating AI Control readiness.
+- Unified Messages composer and AI Control readiness so they no longer disagree about write access.
+- Added regression coverage for `messages:write`, `messages-send`, mixed-case scopes and explicitly disabled capabilities.
+
 ## 1.6.1
 
 - Added the Messages-level AI Messages ON/OFF master switch.

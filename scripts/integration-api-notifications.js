@@ -9,6 +9,7 @@ const { SettingsService } = require('../src/services/settings-service');
 const {
   AutoMarketApiService,
   cleanBaseUrl,
+  deriveMessageCapabilities,
   resourcePlan,
   stableHash
 } = require('../src/services/automarket-api-service');
@@ -51,10 +52,10 @@ settingsService.saveSettings({
   automarket_max_items: '100'
 });
 
-const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'resellers:read'];
+const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read'];
 const responses = {
   ping: { ok: true, data: { account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1' } },
-  'connection-map': { ok: true, data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', scopes: dealerScopes.slice(), available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers'] } },
+  'connection-map': { ok: true, data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', scopes: dealerScopes.slice(), available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers'], endpoints: ['messages-thread','messages-send','messages-read'] } },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
   'dealer-summary': { ok: true, data: { total_listings: 5, active_listings: 4, unreviewed_orders: 1, agenda_contacts: 2, unread_messages: 2 } },
   orders: { ok: true, data: [{ order_id: 'order-1', customer_name: 'Customer One', customer_phone: '(786) 555-3333', status: 'unreviewed', created_at: '2026-07-17T10:00:00Z' }] },
@@ -73,7 +74,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.1');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.2');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
@@ -119,14 +120,37 @@ const notificationService = new NotificationService({
     assert(resourcePlan({ account_type:'admin', available_resources:['validation'], scopes:['validation:read'] }).some((item)=>item.resource === 'validation'));
   });
   await test('missing scopes remain visible in the synchronization plan', function () {
-    const plan = resourcePlan({ account_type:'dealer', available_resources:['orders','messages'], scopes:['orders:read'] });
+    const plan = resourcePlan({ account_type:'dealer', available_resources:['ORDERS','messages'], scopes:['ORDERS:READ'] });
     assert.equal(plan.find((item)=>item.resource === 'orders').scopeGranted, true);
     assert.equal(plan.find((item)=>item.resource === 'messages').scopeGranted, false);
+  });
+  await test('explicitly disabled message capabilities remain blocked', function () {
+    const capabilities = deriveMessageCapabilities({ scopes: ['messages:read'] }, { capabilities: { message_threads: true, message_send: false, message_read: true } });
+    assert.equal(capabilities.fullThread, true);
+    assert.equal(capabilities.send, false);
+    assert.equal(capabilities.markRead, true);
+    assert.equal(capabilities.write, false);
+  });
+  await test('connection-map scopes are used when an older cached identity has an empty scope array', function () {
+    const capabilities = deriveMessageCapabilities({ scopes: [] }, { scopes: ['Messages:Read','Messages:Write'], endpoints: ['messages-send'] });
+    assert.equal(capabilities.read, true);
+    assert.equal(capabilities.write, true);
+    assert.equal(capabilities.send, true);
   });
   await test('API connection uses ping, connection-map and both authentication headers', async function () {
     requestedResources = [];
     const result = await apiService.testConnection();
     assert.equal(result.identity.account_type, 'dealer');
+    assert.equal(result.identity.scopes.includes('messages:write'), true);
+    assert.equal(result.identity.available_resources.includes('message-send'), true);
+    assert.deepEqual(result.connectionMap.scopes, dealerScopes);
+    assert.deepEqual(result.connectionMap.endpoints, ['messages-thread','messages-send','messages-read']);
+    const messageCapabilities = deriveMessageCapabilities(result.identity, result.connectionMap);
+    assert.equal(messageCapabilities.fullThread, true);
+    assert.equal(messageCapabilities.send, true);
+    assert.equal(messageCapabilities.markRead, true);
+    assert.equal(messageCapabilities.read, true);
+    assert.equal(messageCapabilities.write, true);
     assert.deepEqual(requestedResources, ['ping','connection-map']);
     assert(result.resources.some((entry)=>entry.resource === 'agenda'));
   });

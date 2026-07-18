@@ -49,6 +49,8 @@ For complete conversations and replies, the website should advertise:
 
 Nexa stores authorized conversation bodies locally and never includes API keys in AI context.
 
+Nexa 1.6.2 also accepts `endpoints` / `allowed_endpoints` and the plural aliases `messages-thread`, `messages-send` and `messages-read`. Scopes are compared case-insensitively. After installing this update, run **Test connection** or **Sync now** once so an older cached connection map is replaced with the corrected data.
+
 ## Dealer Appointment Availability
 
 AI Control reads:
