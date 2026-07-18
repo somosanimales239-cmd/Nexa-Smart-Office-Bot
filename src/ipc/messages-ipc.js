@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { registerIpcHandler } = require('./ipc-utils');
 
-const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:ai-toggle, messages:auto-reply-block, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete, messages:knowledge-toggle, messages:knowledge-summary';
+const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete, messages:knowledge-toggle, messages:knowledge-summary, messages:auto-reply-block';
 
 function threadParts(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
@@ -16,7 +16,6 @@ function registerMessagesIpc(ipcMain, services) {
   const database = services.database;
   const apiService = services.apiService;
   const aiService = services.aiService;
-  const automationService = services.automationService;
 
   registerIpcHandler(ipcMain, 'messages:thread', function getThread(payload) {
     return database.getMessageConversationContext(String(payload && payload.thread_id || ''), Number(payload && payload.limit || 120));
@@ -79,15 +78,7 @@ function registerMessagesIpc(ipcMain, services) {
         is_read: 1
       })], { thread_id: threadId });
       if (input.draft_id) database.markMessageDraftSent(input.draft_id, messageId);
-      if (input.teach === true && input.trigger_text) {
-        database.saveResponseKnowledge({
-          label: input.knowledge_label || 'Approved reply · ' + new Date().toLocaleDateString(),
-          category: input.knowledge_category || 'Approved conversations',
-          triggers: String(input.trigger_text),
-          response: body,
-          enabled: true
-        });
-      }
+      // Learning is never implicit during send. Custom knowledge remains available through the Knowledge Engine.
       database.log('sent', 'website_message', messageId, 'User-approved reply in thread ' + threadId);
       return { sent: true, message: remote, client_message_id: clientMessageId, conversation: database.getMessageConversationContext(threadId, 120) };
     } catch (error) {
@@ -102,22 +93,10 @@ function registerMessagesIpc(ipcMain, services) {
     return { marked: true, response: response.payload };
   });
 
-  registerIpcHandler(ipcMain, 'messages:ai-toggle', function toggleMessageAi(payload) {
-    const enabled = payload && payload.enabled === true;
-    database.saveSettings({ message_ai_interaction_enabled: enabled ? '1' : '0' });
-    database.log(enabled ? 'enabled' : 'disabled', 'message_ai_interaction', null,
-      enabled ? 'Messages AI interaction enabled from the Messages workspace.' : 'Messages AI interaction paused from the Messages workspace.');
-    if (automationService && typeof automationService.restart === 'function') automationService.restart();
-    return {
-      enabled: enabled,
-      settings: services.settingsService.getPublicSettings(),
-      automation: automationService && typeof automationService.getState === 'function' ? automationService.getState() : null
-    };
-  });
 
-  registerIpcHandler(ipcMain, 'messages:auto-reply-block', function blockAutomaticReply(payload) {
+  registerIpcHandler(ipcMain, 'messages:auto-reply-block', function setAutoReplyBlock(payload) {
     const threadId = String(payload && payload.thread_id || '').trim();
-    return database.setMessageAutoReplyBlocked(threadId, payload && payload.blocked === true);
+    return database.setMessageThreadAutomationBlocked(threadId, Boolean(payload && payload.blocked), payload && payload.reason);
   });
 
   registerIpcHandler(ipcMain, 'messages:knowledge-list', function listKnowledge(payload) {

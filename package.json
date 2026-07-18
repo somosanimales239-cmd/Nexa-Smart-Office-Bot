@@ -1,7 +1,7 @@
 {
     "name": "nexa-smart-office-bot",
     "version": "1.6.1",
-    "description": "Local-first smart office assistant with a visible Messages AI master switch, per-conversation automatic-reply blocking, guarded user-authorized messages and appointments, a 2,880-record automotive dealer knowledge library, full AutoMarket Pro conversations, API sync and actionable notifications.",
+    "description": "Local-first smart office assistant with guarded user-authorized automatic messages and appointments, a 2,880-record automotive dealer knowledge library, full AutoMarket Pro conversations, API sync, contacts, leads, agenda and notifications.",
     "main": "main.js",
     "author": "Nexa",
     "license": "MIT",
@@ -15,7 +15,7 @@
         "validate:delivery": "node scripts/validate-delivery.js",
         "validate:project": "node scripts/validate-project.js",
         "validate:nexa-contract": "node scripts/nexa-contract-gate.js",
-        "test": "node scripts/integration-tests.js && node scripts/integration-api-notifications.js && node scripts/integration-workspace-reflection.js && node scripts/integration-realtime-messages.js && node scripts/integration-automotive-knowledge-library.js && node scripts/integration-automatic-actions.js && node scripts/integration-message-control-navigation.js",
+        "test": "node scripts/integration-tests.js && node scripts/integration-api-notifications.js && node scripts/integration-workspace-reflection.js && node scripts/integration-realtime-messages.js && node scripts/integration-automotive-knowledge-library.js && node scripts/integration-automatic-actions.js",
         "node scripts/integration-tests.js": "node scripts/integration-tests.js",
         "test:implementation": "node scripts/implementation-tests.js",
         "test:acceptance": "node scripts/acceptance-tests.js",

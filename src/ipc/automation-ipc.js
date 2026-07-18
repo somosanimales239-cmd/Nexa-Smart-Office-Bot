@@ -5,7 +5,7 @@ const { registerIpcHandler } = require('./ipc-utils');
 const AUTOMATION_IPC_CONTRACT = 'IPC channels: automation:get, automation:save, automation:run-now, automation:pause';
 const EDITABLE_AUTOMATION_SETTINGS = new Set([
   'auto_actions_enabled', 'auto_actions_run_interval_seconds',
-  'auto_messages_enabled', 'auto_messages_knowledge_only', 'auto_messages_ai_fallback', 'auto_messages_min_confidence',
+  'auto_messages_enabled', 'messages_ai_enabled', 'auto_messages_knowledge_only', 'auto_messages_ai_fallback', 'auto_messages_min_confidence',
   'auto_messages_send_delay_seconds', 'auto_messages_max_per_hour', 'auto_messages_max_per_day',
   'auto_messages_quiet_start', 'auto_messages_quiet_end', 'auto_messages_languages', 'auto_messages_require_unread',
   'auto_messages_mark_read', 'auto_messages_allowed_safety', 'auto_messages_excluded_intents',

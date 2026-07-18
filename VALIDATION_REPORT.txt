@@ -1,38 +1,36 @@
 Nexa Smart Office Bot 1.6.1 Validation Report
 
 Package feature
-Messages AI operational switch, per-conversation automatic-reply block and actionable notifications
+Messages AI runtime control, exact automation diagnostics, per-thread reply blocking and notification deep links
 
 Preserved platform features
-- Guarded AI Control and explicit authorization
+- Guarded AI Control and Emergency pause
 - 2,880 automotive dealer knowledge records
 - 8,640 built-in response variations
 - Complete website conversation module
 - Contacts, leads, orders, agenda, tasks and notifications
 - Installer, Portable and Windows ZIP targets
 
-Completed validation
-- Project validator passed.
-- Delivery validator passed.
-- Nexa contract gate passed.
-- JavaScript syntax validation passed.
-- 27 core integration tests passed.
-- 18 API synchronization and notification tests passed.
-- Complete workspace reflection test passed.
-- 9 real-time messaging tests passed.
-- 10 automotive knowledge library tests passed.
-- Guarded automatic-action integration tests passed.
-- 10 Messages AI switch, thread block and notification-navigation tests passed.
-- Implementation tests passed.
-- Acceptance tests passed.
-- Migration 8 remained additive and idempotent.
-- Existing automatic-message authorization is mirrored into the new Messages switch during upgrade.
-- AI Messages OFF prevented automatic message interaction while synchronization remained available.
-- Per-thread blocking prevented automatic replies without hiding or deleting the conversation.
-- Manual message preparation and manual sending remained available.
-- In-app, toast and Windows notification click routing was verified.
-- Customer contacts, leads, orders and existing appointments remained unchanged.
-- Automatic service exposes no customer-record delete operation.
+Validation scope
+- Project and delivery validators
+- Nexa contract gate
+- JavaScript syntax
+- 28 core SQLite and business integration tests
+- API synchronization and notifications
+- Complete workspace reflection
+- Real-time messaging
+- Automotive knowledge library
+- Guarded automatic actions
+- Implementation and acceptance contracts
+
+Regression verified
+- A completed cycle with skipped individual messages is not reported as a skipped or unready whole cycle.
+- Messages AI OFF prevents automatic sends while message reading and caching remain active.
+- Per-thread block prevents automatic replies without deleting or hiding the conversation.
+- Stale threads absent from the current website message resource are not processed.
+- Notification targets route to the related application area.
+- Customer contacts and leads remain unchanged during automatic-action tests.
+- The automatic service exposes no customer-record delete operation.
 
 Build gate
-Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the complete workflow passes.
+Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the full workflow passes.

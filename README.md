@@ -1,34 +1,27 @@
 # Nexa Smart Office Bot 1.6.1
 
-Local-first Electron business assistant for Windows with AutoMarket Pro synchronization, complete conversations, an automotive dealership knowledge library, guarded AI actions and user-controlled automation.
+Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
 ## New in 1.6.1
 
 - Added a visible **AI Messages ON/OFF** switch inside Messages.
-- The Messages switch is independent from AI Control. Both must permit interaction before Nexa can answer automatically.
-- Added a per-conversation checkbox: **Block automatic AI replies for this conversation**.
-- A blocked conversation continues to synchronize, display, analyze and generate notifications, but Nexa does not answer it automatically.
-- Added direct navigation from in-app and Windows notifications to the related conversation, appointment, lead, task, alert or API diagnostic.
-- Added clear status badges for AI Control authorization and website send capability.
-- Preserved manual reply preparation and manual sending.
-- Preserved the 2,880-record bilingual Automotive Dealer Knowledge Library and 8,640 built-in response variants.
+- Fixed the false **Automatic cycle skipped: not ready** result. A completed cycle with messages skipped for individual reasons is no longer misclassified as an unready cycle.
+- Added exact automatic-cycle diagnostics for authorization, message endpoints, scopes, quiet hours, limits, confidence, missing verified context, AI fallback and per-thread blocks.
+- Added a per-conversation option to block automatic replies while Nexa continues to synchronize, read, analyze and notify.
+- Removed automatic Knowledge Engine learning from the send path. Knowledge is added only through deliberate user actions.
+- Added notification deep links so in-app and Windows notifications open the related conversation, appointment, task, lead, contact or connected area.
+- Prevented automatic processing of stale message threads that are no longer returned by the website API.
 
-## Important behavior
+## Existing capabilities preserved
 
-The previous **Teach Nexa from this approved reply** option did not block automatic replies. It only saved a manually approved response as custom knowledge. Version 1.6.1 replaces that composer checkbox with the requested inverse safety control.
+- Guarded AI Control and Emergency pause.
+- Optional automatic messages and verified-slot appointments.
+- 2,880 bilingual automotive dealer knowledge records and 8,640 approved response variations.
+- Complete website conversation module, drafts, outbox and local audit history.
+- Contacts, leads, orders, agenda, tasks, notifications and API Sync Inspector.
 
-Automatic message interaction requires all applicable gates:
+## Safety model
 
-1. Connected website API and a valid API key.
-2. `message-thread` and `message-send` support with `messages:read` and `messages:write`.
-3. AI Control master authorization.
-4. Automatic messages authorized in AI Control.
-5. **AI Messages ON** in Messages.
-6. The selected conversation is not blocked and is allowed to receive replies.
-7. Confidence, rate, schedule, language and human-review safety rules pass.
+AI Messages can run only when both AI Control and the Messages switch authorize it. Blocking one conversation stops automatic sending for that thread but does not stop reading or manual AI review. Nexa never automatically changes customer records and has no automatic delete operation.
 
-When **AI Messages OFF**, Nexa still reads, synchronizes, analyzes and notifies. It does not automatically prepare through the background worker, send, mark read, or create message-driven appointments.
-
-## Data safety
-
-Migration 8 is additive and idempotent. It preserves contacts, leads, orders, conversations, drafts, appointments, settings, encrypted keys, custom knowledge and the complete built-in automotive library. Nexa never automatically deletes customer data.
+Existing SQLite data, encrypted API keys, provider keys, conversations, appointments, custom knowledge and settings are preserved during this update.

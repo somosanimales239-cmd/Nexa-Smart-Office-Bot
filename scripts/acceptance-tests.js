@@ -21,6 +21,10 @@ assert.equal(preload.includes('automation:run-now'), true);
 assert.equal(apiService.includes('RESOURCE_FIELD_ALLOWLISTS'), true);
 assert.equal(apiService.includes('dealer-appointment-availability'), true);
 assert.equal(appSource.includes('Website API upgrade required for full two-way chat'), false);
+assert.equal(appSource.includes('Automatic cycle skipped: not ready'), false);
+assert.equal(appSource.includes('message-ai-toggle'), true);
+assert.equal(appSource.includes('message-auto-reply-block'), true);
+assert.equal(appSource.includes('notification-open'), true);
 assert.equal(automationService.includes('never_changes_customer_records'), true);
 assert.equal(automationService.includes('never_deletes_data'), true);
 

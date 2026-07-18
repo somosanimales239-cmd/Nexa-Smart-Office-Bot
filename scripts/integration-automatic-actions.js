@@ -15,6 +15,10 @@ let currentThread = null;
 let availabilityPayload = { slots: [] };
 let availabilityFailure = false;
 const apiService = {
+  async fetchResource(resource) {
+    if (resource !== 'messages') throw new Error('Unsupported test resource: ' + resource);
+    return { payload: { threads: database.listIntegrationCache('messages', '', 100) } };
+  },
   async fetchMessageThread(threadId) {
     return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: currentThread(threadId) };
   },
@@ -55,8 +59,7 @@ const service = new AutomaticActionsService({ database, settingsService, apiServ
 function saveBaseSettings(extra) {
   database.saveSettings(Object.assign({
     auto_actions_enabled: '1', auto_actions_consent_at: new Date().toISOString(), auto_actions_run_interval_seconds: '15',
-    message_ai_interaction_enabled: '1',
-    auto_messages_enabled: '1', auto_messages_knowledge_only: '1', auto_messages_ai_fallback: '0',
+    auto_messages_enabled: '1', messages_ai_enabled: '1', auto_messages_knowledge_only: '1', auto_messages_ai_fallback: '0',
     auto_messages_min_confidence: '0.88', auto_messages_send_delay_seconds: '0', auto_messages_max_per_hour: '20',
     auto_messages_max_per_day: '100', auto_messages_quiet_start: '00:00', auto_messages_quiet_end: '00:00',
     auto_messages_languages: 'en,es', auto_messages_require_unread: '1', auto_messages_mark_read: '1',
@@ -92,7 +95,9 @@ async function run() {
     };
   };
   const first = await service.runNow('test-message');
+  assert.equal(first.cycle_skipped, false);
   assert.equal(first.messages_sent, 1);
+  assert.equal(first.skipped_count, 0);
   assert.equal(sentMessages.length, 1);
   assert.equal(sentMessages[0].body, 'Yes, I can help you with that.');
   assert.equal(database.listAutomaticActionEvents(10)[0].status, 'completed');
@@ -100,6 +105,29 @@ async function run() {
   assert.equal(sentMessages.length, 1, 'Automatic response must be idempotent.');
   assert.equal(database.listContacts().length, contactsBefore, 'Automation must never change contacts.');
   assert.equal(database.listLeads().length, leadsBefore, 'Automation must never change leads.');
+  assert.equal(duplicate.cycle_skipped, false, 'A completed cycle with no work must not be reported as not ready.');
+  assert.equal(duplicate.no_work_reason, 'no_unanswered_messages');
+
+  saveBaseSettings({ messages_ai_enabled: '0' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-switch', subject: 'Switch', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadSwitch(threadId) {
+    return { thread: { thread_id: threadId, subject: 'Switch', participant_name: 'Customer Switch', can_reply: 1, is_announcement: 0 }, messages: [{ message_id: 'inbound-switch', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'Is it available?', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }] };
+  };
+  const switchOff = await service.runNow('test-message-switch-off');
+  assert.equal(switchOff.messages_sent, 0);
+  assert.equal(switchOff.reason_counts.messages_ai_switch_off, 1, 'Messages AI switch must block automatic sends while continuing to process the inbox.');
+
+  saveBaseSettings({ messages_ai_enabled: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-blocked', subject: 'Blocked thread', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadBlocked(threadId) {
+    return { thread: { thread_id: threadId, subject: 'Blocked thread', participant_name: 'Customer Blocked', can_reply: 1, is_announcement: 0 }, messages: [{ message_id: 'inbound-blocked', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'Is it available?', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }] };
+  };
+  await service.refreshCandidateThreads(database.getSettings());
+  database.setMessageThreadAutomationBlocked('thread-blocked', true, 'Test block');
+  const blockedThread = await service.runNow('test-thread-blocked');
+  assert.equal(blockedThread.messages_sent, 0);
+  assert.equal(blockedThread.reason_counts.thread_auto_reply_blocked, 1, 'Per-thread block must prevent automatic replies without deleting the conversation.');
+  assert.equal(database.getMessageConversationContext('thread-blocked', 10).messages.length, 1, 'Blocked threads must still be read and cached.');
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);

@@ -2,29 +2,26 @@
 
 ## 1.6.1
 
-- Added an independent **AI Messages ON/OFF** switch inside Messages.
-- Required AI Messages and AI Control to both permit automatic interaction.
-- Added a persistent per-conversation **Block automatic AI replies for this conversation** control.
-- Kept blocked conversations readable, synchronized, analyzed and eligible for notifications.
-- Removed the old composer learning checkbox and retained custom knowledge management in Knowledge Engine.
-- Added clear AI Control and website-send readiness badges in Messages.
-- Added direct navigation from notification cards, Nexa Pulse toasts and Windows notifications.
-- Added safe routing to an exact conversation, appointment, lead, task, alert or API diagnostic.
-- Added migration 8 without deleting or replacing existing data.
-- Added a 10-test regression suite for message controls and notification navigation.
+- Added the Messages-level AI Messages ON/OFF master switch.
+- Fixed the renderer bug that treated a nonzero per-message skipped count as a skipped whole automation cycle and displayed the misleading `not ready` message.
+- Replaced the ambiguous cycle result with `cycle_skipped`, `skipped_count`, `failed_count`, `reason_counts`, readiness and refresh diagnostics.
+- Added exact user-facing explanations for no unanswered messages, thread-loading failures, quiet hours, limits, confidence, missing verified context, disabled fallback and blocked threads.
+- Added per-conversation automatic-reply blocking while retaining synchronization, reading, notifications and manual AI review.
+- Removed implicit learning from sent replies; approved knowledge remains a deliberate user action.
+- Added notification deep links for messages, appointments, tasks, leads, contacts, listings and notification center fallback.
+- Added migration 8 for message automation controls. It is additive and idempotent.
+- Prevented stale removed website threads from being considered for automatic replies.
 
 ## 1.6.0
 
 - Added AI Control with explicit master authorization and detailed automatic-action parameters.
-- Added guarded automatic customer message sending through the connected website API.
-- Preserved Knowledge Library priority and made external AI fallback a separate opt-in.
-- Added Dealer Appointment Availability, verified-slot appointment creation, action history and Emergency pause.
+- Added guarded automatic customer message sending and verified-slot appointment creation.
+- Added Dealer Appointment Availability, Emergency pause and automatic-action audit history.
 - Added hard protections preventing automatic customer-record changes and automatic deletion.
 
 ## 1.5.0
 
 - Added the Automotive Dealer Knowledge Library with 2,880 bilingual knowledge records and 8,640 response variations.
-- Added custom-knowledge priority, built-in disable and re-enable controls, and deletion protection.
 
 ## 1.4.0
 

@@ -340,13 +340,13 @@ function applyMigrations(database) {
     },
     {
       id: 8,
-      name: 'NEXA_MESSAGES_AI_SWITCH_AND_THREAD_BLOCK_V1',
-      apply: function installMessageAiControls(database) {
-        addColumnIfMissing(database, 'message_threads', 'auto_reply_blocked', 'INTEGER NOT NULL DEFAULT 0');
-        database.exec('CREATE INDEX IF NOT EXISTS idx_message_threads_auto_reply_blocked ON message_threads(auto_reply_blocked, last_message_at);');
-        const current = database.prepare("SELECT value FROM settings WHERE key='auto_messages_enabled'").get();
-        database.prepare("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_ai_interaction_enabled', ?, ?)")
-          .run(current && String(current.value) === '1' ? '1' : '0', nowIso());
+      name: 'NEXA_MESSAGE_AUTOMATION_CONTROL_AND_DIAGNOSTICS_V1',
+      apply: function installMessageAutomationControl(database) {
+        addColumnIfMissing(database, 'message_threads', 'automation_blocked', 'INTEGER NOT NULL DEFAULT 0');
+        addColumnIfMissing(database, 'message_threads', 'automation_blocked_at', 'TEXT');
+        addColumnIfMissing(database, 'message_threads', 'automation_blocked_reason', "TEXT NOT NULL DEFAULT ''");
+        database.exec('CREATE INDEX IF NOT EXISTS idx_message_threads_automation_blocked ON message_threads(automation_blocked, updated_at DESC);');
+        database.prepare("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('messages_ai_enabled', '1', ?)").run(nowIso());
       }
     }
 

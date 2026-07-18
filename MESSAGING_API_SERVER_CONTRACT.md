@@ -15,12 +15,6 @@ This contract supports complete conversations, manual or explicitly authorized a
 - Every send and appointment-create request must support idempotency and be logged.
 - API secrets, password hashes, SMTP secrets and unrelated private fields must never be returned.
 
-## Client-side operational controls
-
-The server authorization is necessary but not sufficient for an automatic reply. Nexa 1.6.1 also requires AI Control authorization, the independent AI Messages switch, and an unblocked conversation. These client controls do not replace server-side scope, ownership, `can_reply`, rate-limit or idempotency enforcement.
-
-When an API response includes safe relationship metadata such as `thread_id`, `order_id`, `appointment_id`, `listing_id` or `context_id`, Nexa may use it only to navigate to the related local view.
-
 ## Connection map advertisement
 
 `resource=connection-map` should advertise supported resources:

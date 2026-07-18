@@ -3,6 +3,8 @@
 const NEXA_UI_CONTRACT_V1 = 'NEXA_UI_CONTRACT_V1';
 const UI_TESTID_CONTRACT = 'data-testid values for dashboard, sidebar, contacts, leads, agenda, tasks, ai, alerts, activity, settings, about';
 const UI_TESTID_EXTENDED_CONTRACT = 'data-testid values for connected-business, api-sync-inspector, messages, smart-notifications, ai-control';
+const NEXA_MESSAGES_AI_MASTER_SWITCH_V1 = 'NEXA_MESSAGES_AI_MASTER_SWITCH_V1';
+const NEXA_NOTIFICATION_DEEP_LINK_V1 = 'NEXA_NOTIFICATION_DEEP_LINK_V1';
 const ACTION_CONTRACT = 'data-nexa-action on every actionable button/form';
 
 window.__NEXA_ERRORS__ = [];
@@ -91,14 +93,6 @@ function esc(value) {
   return Array.from(text).map(function replaceCharacter(character) {
     return entities[character] || character;
   }).join('');
-}
-
-function safeJsonValue(value, fallback) {
-  try { return JSON.parse(String(value || '')); } catch (_) { return fallback; }
-}
-
-function messageAiInteractionEnabled() {
-  return String(state.settings && state.settings.message_ai_interaction_enabled || '0') === '1';
 }
 
 function formatDate(value, includeTime) {
@@ -224,6 +218,105 @@ function navigate(view) {
     button.classList.toggle('active', button.dataset.view === view);
   });
   renderView();
+}
+
+
+function parseEventMetadata(event) {
+  if (!event) return {};
+  if (event.metadata && typeof event.metadata === 'object') return event.metadata;
+  try { return JSON.parse(event.metadata_json || '{}'); } catch (_) { return {}; }
+}
+
+async function openNotificationTarget(event) {
+  if (!event) { navigate('notifications'); return; }
+  const metadata = parseEventMetadata(event);
+  if (event.id) {
+    try { await api.notifications.read(event.id); } catch (_) { /* navigation must still work */ }
+  }
+  const threadId = String(metadata.thread_id || (String(event.entity_type || '').includes('message') ? event.entity_id : '') || '');
+  if (threadId) {
+    state.messageTab = 'inbox';
+    state.messageThreadId = threadId;
+    navigate('messages');
+    await loadMessageThread(threadId, true);
+    return;
+  }
+  const appointmentId = String(metadata.appointment_id || (String(event.entity_type || '').includes('appointment') ? event.entity_id : '') || '');
+  if (appointmentId) {
+    navigate('agenda');
+    const local = state.appointments.find(function findAppointment(item) { return String(item.id) === appointmentId; });
+    if (local) setTimeout(function openAppointment() { openEntity('appointment', local); }, 50);
+    return;
+  }
+  const taskId = String(metadata.task_id || (String(event.entity_type || '') === 'task' ? event.entity_id : '') || '');
+  if (taskId) {
+    navigate('tasks');
+    const task = state.tasks.find(function findTask(item) { return String(item.id) === taskId; });
+    if (task) setTimeout(function openTask() { openEntity('task', task); }, 50);
+    return;
+  }
+  if (metadata.order_id || metadata.customer_name || event.type === 'remote_orders' || event.type === 'remote_resellers') {
+    state.view = 'leads';
+    state.search = String(metadata.order_id || metadata.customer_name || metadata.appointment_id || '');
+    state.pages = {};
+    pageTitle.textContent = viewTitles.leads;
+    document.querySelectorAll('.nav-item').forEach(function updateNavigation(item) { item.classList.toggle('active', item.dataset.view === 'leads'); });
+    renderView();
+    return;
+  }
+  if (metadata.contact_id || event.type === 'remote_agenda') {
+    state.view = 'contacts';
+    state.search = String(metadata.contact_id || metadata.name || metadata.phone || '');
+    state.pages = {};
+    pageTitle.textContent = viewTitles.contacts;
+    document.querySelectorAll('.nav-item').forEach(function updateNavigation(item) { item.classList.toggle('active', item.dataset.view === 'contacts'); });
+    renderView();
+    return;
+  }
+  if (metadata.listing_id || event.type === 'remote_listings') {
+    navigate('connected');
+    return;
+  }
+  navigate('notifications');
+}
+
+function automationReasonLabel(reason) {
+  const labels = {
+    already_running: 'another authorized cycle is already running',
+    not_authorized: 'AI Control authorization is not active',
+    no_automatic_actions_enabled: 'both automatic messages and appointments are disabled',
+    no_unanswered_messages: 'no unanswered customer messages were found',
+    message_threads_failed_to_load: 'the message list loaded but complete threads could not be read',
+    already_processed: 'the message was already processed',
+    read: 'the latest customer message is already marked read',
+    delay: 'the configured response delay has not finished',
+    thread_auto_reply_blocked: 'automatic reply is blocked for this conversation',
+    automatic_messages_disabled: 'automatic message sending is disabled in AI Control',
+    messages_ai_switch_off: 'AI Messages is OFF in the Messages screen',
+    message_limit_reached: 'the hourly or daily message limit was reached',
+    quiet_hours: 'the current time is inside quiet hours',
+    knowledge_confidence: 'local knowledge confidence is below the configured minimum',
+    language: 'the detected language is not authorized',
+    safety_level: 'the message requires a safer human review level',
+    missing_verified_context: 'the answer requires verified business context',
+    ai_fallback_disabled: 'no safe local answer was found and AI fallback is disabled',
+    empty_reply: 'the response engine returned an empty reply',
+    processing_error: 'a message could not be processed'
+  };
+  return labels[String(reason || '')] || String(reason || 'no action was required').replaceAll('_', ' ');
+}
+
+function automationResultMessage(result) {
+  if (!result) return 'The automatic cycle returned no result.';
+  if (result.cycle_skipped) return 'Automatic cycle did not run: ' + automationReasonLabel(result.reason) + '.';
+  const completed = Number(result.messages_sent || 0) + Number(result.appointments_created || 0);
+  if (completed > 0) return 'Automatic cycle complete: ' + String(result.messages_sent || 0) + ' messages sent and ' + String(result.appointments_created || 0) + ' appointments created.';
+  const exactErrors = Array.isArray(result.errors) ? result.errors.filter(function validAutomationError(item) { return item && item.error; }) : [];
+  const errorDetail = exactErrors.length ? ' Website/API detail: ' + String(exactErrors[0].error) + (exactErrors[0].thread_id ? ' (thread ' + String(exactErrors[0].thread_id) + ')' : '') + '.' : '';
+  if (result.no_work_reason) return 'Automatic cycle completed: ' + automationReasonLabel(result.no_work_reason) + '.' + errorDetail;
+  const reasons = Object.entries(result.reason_counts || {}).sort(function sortReasons(a, b) { return Number(b[1]) - Number(a[1]); });
+  if (reasons.length) return 'Automatic cycle completed without sending: ' + reasons.map(function reasonLine(entry) { return entry[1] + ' × ' + automationReasonLabel(entry[0]); }).join('; ') + '.' + errorDetail;
+  return 'Automatic cycle completed. No customer action was required.';
 }
 
 function sectionHeader(title, description, actionHtml) {
@@ -607,17 +700,15 @@ function renderMessages() {
   }).join('')||emptyMini('No website messages loaded','Synchronize messages:read and inspect the API resource status.');
   const thread=state.messageConversation&&state.messageConversation.thread?state.messageConversation.thread:selected||{};
   const canReply=Boolean(state.messageThreadId)&&!Boolean(thread.is_announcement)&&thread.can_reply!==false&&Number(thread.can_reply)!==0;
+  const automationSettings=state.automation&&state.automation.settings?state.automation.settings:state.settings||{};
+  const messagesAiOn=String(automationSettings.messages_ai_enabled||'1')==='1';
+  const threadBlocked=Number(thread.automation_blocked||0)===1;
   const latest=latestInboundMessage();
   const draftMeta=state.messageDraftMeta?'<div class="draft-source">'+badge(state.messageDraftMeta.engine==='knowledge'?(state.messageDraftMeta.built_in?'Automotive library':'Custom knowledge'):'AI fallback',state.messageDraftMeta.engine==='knowledge'?'success':'info')+(state.messageDraftMeta.confidence?'<span>'+Math.round(Number(state.messageDraftMeta.confidence)*100)+'% confidence</span>':'')+(state.messageDraftMeta.category?'<span>'+esc(state.messageDraftMeta.category)+'</span>':'')+(state.messageDraftMeta.safety_level&&state.messageDraftMeta.safety_level!=='standard'?'<span>Safety: '+esc(state.messageDraftMeta.safety_level)+'</span>':'')+'</div>':'';
-  const autoReplyBlocked=Number(thread.auto_reply_blocked||0)===1;
-  const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle auto-reply-block-toggle '+(autoReplyBlocked?'blocked':'')+'"><input id="message-auto-reply-block" type="checkbox" '+(autoReplyBlocked?'checked':'')+'> Block automatic AI replies for this conversation</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send reply</button></div><small class="message-automation-note">'+(autoReplyBlocked?'Nexa will continue reading, analyzing and notifying you, but it will not reply automatically in this conversation.':'Automatic replies may run only when AI Messages is ON and AI Control permits them.')+'</small></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
-  const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p></div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions, manual sending and user-authorized automatic actions.</p></div></div>';
-  const aiMessagesOn=messageAiInteractionEnabled();
-  const apiSendReady=Boolean(capabilities.send&&capabilities.write);
-  const automationSettings=state.automation&&state.automation.settings||{};
-  const aiControlReady=String(automationSettings.auto_actions_enabled||'0')==='1'&&String(automationSettings.auto_messages_enabled||'0')==='1';
-  const settings='<div class="message-live-settings message-control-bar"><button class="'+(aiMessagesOn?'ai-message-switch on':'ai-message-switch off')+'" data-nexa-action="message-ai-toggle" aria-pressed="'+(aiMessagesOn?'true':'false')+'"><span></span>AI Messages '+(aiMessagesOn?'ON':'OFF')+'</button><label><input id="message-realtime-enabled" type="checkbox" '+(String(state.settings&&state.settings.message_realtime_enabled||'1')==='1'?'checked':'')+'> Live refresh</label><label>Every <select id="message-poll-seconds"><option value="3"'+(String(state.settings&&state.settings.message_poll_seconds)==='3'?' selected':'')+'>3 sec</option><option value="5"'+(String(state.settings&&state.settings.message_poll_seconds||'5')==='5'?' selected':'')+'>5 sec</option><option value="10"'+(String(state.settings&&state.settings.message_poll_seconds)==='10'?' selected':'')+'>10 sec</option><option value="15"'+(String(state.settings&&state.settings.message_poll_seconds)==='15'?' selected':'')+'>15 sec</option></select></label><button class="ghost-button" data-nexa-action="message-settings-save">Save</button>'+badge(aiControlReady?'AI Control authorized':'AI Control not authorized',aiControlReady?'success':'warning')+badge(apiSendReady?'Website send ready':'Website send unavailable',apiSendReady?'success':'warning')+'<span class="live-indicator"><i></i>'+(state.messageBusy?'Synchronizing':'Ready')+'</span></div>';
-  return sectionHeader('Messages','Mirror website conversations, read every thread, and control automatic AI interaction independently from AI Control.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="ghost-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync inbox</button></div>')+settings+'<div class="message-workspace"><aside class="message-inbox"><div class="message-inbox-toolbar"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search conversations…"><span>'+rows.length+' threads</span></div><div class="message-thread-list">'+threadCards+'</div>'+renderPagination(page,'messages','message threads')+'</aside><section class="conversation-panel">'+conversationHeader+'<div class="conversation-scroll" id="conversation-scroll">'+renderConversationBubbles()+'</div>'+composer+'</section></div>';
+  const composer=canReply?'<div class="message-composer">'+draftMeta+'<textarea id="message-composer" maxlength="8000" placeholder="Write a reply or let Nexa prepare one…">'+esc(state.messageDraft)+'</textarea><div class="message-composer-actions"><label class="teach-toggle automation-block-toggle"><input id="message-auto-reply-block" data-nexa-action="message-auto-reply-block" type="checkbox" '+(threadBlocked?'checked':'')+'> Block Nexa from replying automatically to this conversation</label><button class="ghost-button" data-nexa-action="message-prepare-reply" '+(state.messageBusy?'disabled':'')+'>✦ Prepare reply</button><button class="primary-button" data-nexa-action="message-send-reply" '+(!capabilities.send||!capabilities.write||state.messageBusy?'disabled':'')+'>Send reply</button></div><small class="message-control-note">Blocking automatic replies does not stop synchronization, reading, notifications, or manual AI review.</small></div>':'<div class="message-readonly"><b>This conversation is read-only.</b><span>Announcements and threads without reply permission cannot be answered.</span></div>';
+  const conversationHeader=state.messageThreadId?'<div class="conversation-header"><div><span>'+esc(thread.context_type||'MESSAGE THREAD')+'</span><h3>'+esc(thread.subject||selected&&selected.subject||'Conversation')+'</h3><p>'+esc(thread.participant_name||selected&&selected.participant_name||selected&&selected.sender_type||'Customer conversation')+'</p>'+(threadBlocked?'<small class="thread-auto-blocked">Automatic replies blocked by user</small>':'')+'</div><div class="button-row"><button class="ghost-button" data-nexa-action="message-mark-read" '+(!capabilities.markRead?'disabled':'')+'>Mark read</button><button class="ghost-button" data-nexa-action="message-thread-refresh" '+(state.messageBusy?'disabled':'')+'>↻ Refresh</button><button class="ghost-button" data-nexa-action="message-open-ai">Open in AI Suggestions</button></div></div>':'<div class="conversation-header"><div><span>MESSAGE CENTER</span><h3>Select a conversation</h3><p>Complete history, knowledge-first suggestions, manual sending and user-authorized automatic actions.</p></div></div>';
+  const settings='<div class="message-live-settings"><button class="message-ai-master '+(messagesAiOn?'enabled':'disabled')+'" data-nexa-action="message-ai-toggle" data-testid="messages-ai-master-switch"><span>AI Messages</span><strong>'+(messagesAiOn?'ON':'OFF')+'</strong></button><label><input id="message-realtime-enabled" type="checkbox" '+(String(state.settings&&state.settings.message_realtime_enabled||'1')==='1'?'checked':'')+'> Live refresh</label><label>Every <select id="message-poll-seconds"><option value="3"'+(String(state.settings&&state.settings.message_poll_seconds)==='3'?' selected':'')+'>3 sec</option><option value="5"'+(String(state.settings&&state.settings.message_poll_seconds||'5')==='5'?' selected':'')+'>5 sec</option><option value="10"'+(String(state.settings&&state.settings.message_poll_seconds)==='10'?' selected':'')+'>10 sec</option><option value="15"'+(String(state.settings&&state.settings.message_poll_seconds)==='15'?' selected':'')+'>15 sec</option></select></label><button class="ghost-button" data-nexa-action="message-settings-save">Save</button><span class="live-indicator"><i></i>'+(state.messageBusy?'Synchronizing':'Ready')+'</span><small>'+(messagesAiOn?'Automatic replies may run only when AI Control also authorizes them.':'Inbox remains synchronized, but no automatic customer reply will be sent.')+'</small></div>';
+  return sectionHeader('Messages','Mirror website conversations, prepare replies locally first, and send manually or through explicitly authorized AI Control rules.','<div class="button-row">'+remoteStatusBadge('messages')+'<button class="ghost-button" data-nexa-action="message-tab-knowledge">Knowledge Engine</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync inbox</button></div>')+settings+'<div class="message-workspace"><aside class="message-inbox"><div class="message-inbox-toolbar"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search conversations…"><span>'+rows.length+' threads</span></div><div class="message-thread-list">'+threadCards+'</div>'+renderPagination(page,'messages','message threads')+'</aside><section class="conversation-panel">'+conversationHeader+'<div class="conversation-scroll" id="conversation-scroll">'+renderConversationBubbles()+'</div>'+composer+'</section></div>';
 }
 
 function renderAgenda() {
@@ -879,60 +970,6 @@ const notificationTypeLabels = {
   system_test: ['System notices', 'Permission tests and important Nexa status']
 };
 
-function notificationMetadata(event) {
-  if(!event)return {};
-  if(event.metadata&&typeof event.metadata==='object')return event.metadata;
-  return safeJsonValue(event.metadata_json,{});
-}
-
-function notificationTarget(event) {
-  const metadata=notificationMetadata(event);
-  const entityType=String(event&&event.entity_type||'').toLowerCase();
-  const entityId=String(event&&event.entity_id||'');
-  const threadId=String(metadata.thread_id||metadata.threadId||((entityType==='message'||entityType==='messages')?entityId:'')||'');
-  if(threadId)return {view:'messages',threadId:threadId,label:'Open conversation'};
-  const appointmentId=String(metadata.appointment_id||metadata.appointmentId||((entityType==='appointment'||entityType==='connected-appointment')?entityId:'')||'');
-  if(appointmentId)return {view:'agenda',appointmentId:appointmentId,label:'Open appointment'};
-  const taskId=String(metadata.task_id||((entityType==='task')?entityId:'')||'');
-  if(taskId)return {view:'tasks',taskId:taskId,label:'Open task'};
-  const orderId=String(metadata.order_id||metadata.appointment_id||((entityType==='orders'||entityType==='order'||entityType==='remote_orders')?entityId:'')||'');
-  if(orderId)return {view:'leads',search:orderId,label:'Open lead'};
-  if(['remote_connection','connection','api','sync'].includes(entityType)||String(event&&event.type||'')==='remote_connection')return {view:'sync-inspector',label:'Open diagnostics'};
-  if(entityType==='messages')return {view:'messages',label:'Open Messages'};
-  if(entityType==='agenda'||entityType==='resellers'||entityType==='reseller-appointments')return {view:'agenda',search:entityId,label:'Open Agenda'};
-  if(entityType==='listings')return {view:'connected',search:entityId,label:'Open Connected Business'};
-  return {view:'notifications',label:'Open notification'};
-}
-
-async function openNotificationTarget(event) {
-  if(!event)return;
-  if(event.id)await api.notifications.read(event.id);
-  const target=notificationTarget(event);
-  hidePulseToast();
-  if(target.view==='messages'){
-    state.messageTab='inbox';
-    state.messageDraft='';
-    state.messageDraftMeta=null;
-    if(target.threadId)state.messageThreadId=target.threadId;
-    navigate('messages');
-    if(target.threadId)await loadMessageThread(target.threadId,false);
-    await refreshAll({render:false});
-    return;
-  }
-  if(target.view==='agenda'){
-    if(target.appointmentId){
-      const appointment=state.appointments.find(function findAppointment(row){return String(row.id)===String(target.appointmentId);});
-      if(appointment&&appointment.start_at)state.agendaAnchor=appointment.start_at;
-    }
-    navigate('agenda');
-    if(target.search){state.search=target.search;renderView();}
-    return;
-  }
-  navigate(target.view||'notifications');
-  if(target.search){state.search=target.search;renderView();}
-  await refreshAll({render:false});
-}
-
 function renderSmartNotifications() {
   const settings = state.settings || {};
   const consent = settings.notifications_user_consent === '1';
@@ -943,7 +980,7 @@ function renderSmartNotifications() {
     return '<article class="pulse-event ' + esc(event.severity || 'info') + unreadClass + '" data-notification-id="' + esc(event.id) + '">' +
       '<div class="pulse-event-icon"><img src="assets/nexa-ai-orb.svg" alt=""></div>' +
       '<div class="pulse-event-copy"><div><span>' + esc(String(event.type || '').replaceAll('_', ' ')) + '</span><time>' + formatDate(event.created_at) + '</time></div><strong>' + esc(event.title) + '</strong><p>' + esc(event.body) + '</p></div>' +
-      '<div class="pulse-event-actions"><button class="primary-button notification-open-button" data-nexa-action="notification-open-target" data-notification-id="' + esc(event.id) + '">' + esc(notificationTarget(event).label) + '</button><button class="ghost-button" data-nexa-action="notification-read" data-notification-id="' + esc(event.id) + '">' + (event.read_at ? 'Read' : 'Mark read') + '</button><button class="icon-button" data-nexa-action="notification-dismiss" data-notification-id="' + esc(event.id) + '" aria-label="Dismiss">×</button></div>' +
+      '<div class="pulse-event-actions"><button class="primary-button" data-nexa-action="notification-open" data-notification-id="' + esc(event.id) + '">Open</button><button class="ghost-button" data-nexa-action="notification-read" data-notification-id="' + esc(event.id) + '">' + (event.read_at ? 'Read' : 'Mark read') + '</button><button class="icon-button" data-nexa-action="notification-dismiss" data-notification-id="' + esc(event.id) + '" aria-label="Dismiss">×</button></div>' +
     '</article>';
   }).join('') || emptyMini('Nexa Pulse is quiet', 'New reminders and connected-business updates will appear here.');
   const preferences = state.notificationPreferences.map(function renderPreference(preference) {
@@ -1054,8 +1091,22 @@ function renderAIControl() {
   const activeLabel = enabledMaster ? badge('Authorized and active', 'success') : badge('Disabled', 'warning');
   const timerLabel = automation.timer_active ? badge('Background guard ready', 'info') : badge('Stopped', 'warning');
   const connectedLabel = integration.connected ? badge('Website connected', 'success') : badge('Website not connected', 'warning');
-  const messageSwitchLabel = messageAiInteractionEnabled() ? badge('AI Messages ON', 'success') : badge('AI Messages OFF', 'warning');
-  return sectionHeader('AI Control', 'Give Nexa limited autonomy only inside parameters you explicitly authorize. The independent AI Messages switch must also be ON before Nexa may interact with message threads.', '<div class="button-row">' + activeLabel + messageSwitchLabel + timerLabel + connectedLabel + '</div>') +
+  const readiness = automation.readiness || {};
+  const readinessRows = [
+    ['AI Control authorization', readiness.authorized],
+    ['Automatic messages authorized', readiness.messages_authorized],
+    ['Messages AI switch', readiness.messages_switch_on],
+    ['Website connected', readiness.integration_connected],
+    ['Complete message threads', readiness.full_thread_available],
+    ['Message send endpoint', readiness.message_send_available],
+    ['messages:read scope', readiness.messages_read_scope],
+    ['messages:write scope', readiness.messages_write_scope],
+    ['Message limits available', readiness.rate_limit_available],
+    ['Outside quiet hours', !readiness.in_quiet_hours]
+  ].map(function readinessRow(entry) { return '<div class="automation-readiness-row"><span>' + esc(entry[0]) + '</span>' + badge(entry[1] ? 'Ready' : 'Blocked', entry[1] ? 'success' : 'warning') + '</div>'; }).join('');
+  const lastCycle = automation.last_result || {};
+  const lastCycleText = automationResultMessage(lastCycle);
+  return sectionHeader('AI Control', 'Give Nexa limited autonomy only inside parameters you explicitly authorize. Customer records remain read-only and automatic deletion is impossible.', '<div class="button-row">' + activeLabel + timerLabel + connectedLabel + '</div>') +
     '<form id="automation-form" class="automation-layout" data-nexa-action="automation-save">' +
       '<article class="panel-card autonomy-master"><div class="panel-header"><div><p class="eyebrow">MASTER AUTHORIZATION</p><h2>Guarded automatic actions</h2><p>Nexa can send customer messages and create appointments from verified dealer availability while the program is running.</p></div><div class="autonomy-orb"><img src="assets/nexa-ai-orb.svg" alt="Nexa AI"><span></span><span></span><span></span></div></div>' +
         '<div class="automation-grid">' +
@@ -1065,7 +1116,8 @@ function renderAIControl() {
         '</div>' +
         '<div class="button-row"><button class="primary-button" type="submit" data-nexa-action="automation-save">Save authorization</button><button class="secondary-button" type="button" id="automation-run-now" data-nexa-action="automation-run-now"' + (!enabledMaster ? ' disabled' : '') + '>Run authorized actions now</button><button class="danger-button" type="button" id="automation-pause" data-nexa-action="automation-pause">Emergency pause</button></div>' +
       '</article>' +
-      '<article class="panel-card"><div class="panel-header"><div><p class="eyebrow">AUTOMATIC MESSAGES</p><h3>Customer reply parameters</h3><p>Knowledge Library first. External AI fallback is a separate opt-in. These permissions run only while AI Messages is ON in Messages.</p></div>' + badge(String(summary.messages_sent || 0) + ' sent', 'info') + '</div>' +
+      '<article class="panel-card automation-readiness"><div class="panel-header"><div><p class="eyebrow">LIVE READINESS</p><h3>Why Nexa can or cannot answer</h3><p>Run authorized actions now uses these exact checks and reports per-message reasons instead of a generic not-ready message.</p></div>' + badge(readiness.messages_switch_on ? 'AI Messages ON' : 'AI Messages OFF', readiness.messages_switch_on ? 'success' : 'warning') + '</div><div class="automation-readiness-grid">' + readinessRows + '</div><div class="automation-last-cycle"><b>Last cycle</b><span>' + esc(lastCycleText) + '</span></div></article>' +
+      '<article class="panel-card"><div class="panel-header"><div><p class="eyebrow">AUTOMATIC MESSAGES</p><h3>Customer reply parameters</h3><p>Knowledge Library first. External AI fallback is a separate opt-in.</p></div>' + badge(String(summary.messages_sent || 0) + ' sent', 'info') + '</div>' +
         '<div class="automation-grid">' +
           '<label>Automatic message sending<select name="auto_messages_enabled">' + automationOption('0','Disabled',settings.auto_messages_enabled) + automationOption('1','Enabled',settings.auto_messages_enabled) + '</select></label>' +
           '<label>Response engine<select name="auto_messages_knowledge_only">' + automationOption('1','Knowledge Library only',settings.auto_messages_knowledge_only) + automationOption('0','Knowledge + authorized AI fallback',settings.auto_messages_knowledge_only) + '</select></label>' +
@@ -1110,7 +1162,7 @@ function renderAbout() {
     '<div class="grid split-grid">' +
       '<article class="panel-card"><p class="eyebrow">PRODUCT</p><h2>Nexa Smart Office Bot</h2><p class="muted">Version ' + esc(state.meta && state.meta.version ? state.meta.version : '1.0.0') + '</p><p>Connected messages, automotive knowledge, contacts, leads, calendar, tasks, alerts, backups and controlled AI actions in one Windows desktop application.</p></article>' +
       '<article class="panel-card"><p class="eyebrow">PRIVACY</p><h3>Your business data stays local</h3><p class="muted">The SQLite workspace, automation audit and backups are stored on this computer. External AI receives only the minimum safe context when the user enables fallback.</p></article>' +
-      '<article class="panel-card"><p class="eyebrow">AI CONTROL</p><h3>Guarded automatic actions · ' + (active ? 'Enabled' : 'Disabled') + '</h3><p class="muted">With explicit authorization, Nexa may send messages and create appointments from verified dealer availability. It never changes customer records and has no automatic delete capability.</p><div class="button-row">' + badge(String(autoSettings.auto_messages_enabled || '0') === '1' ? 'Messages authorized' : 'Messages manual', String(autoSettings.auto_messages_enabled || '0') === '1' ? 'success' : 'warning') + badge(messageAiInteractionEnabled() ? 'AI Messages ON' : 'AI Messages OFF', messageAiInteractionEnabled() ? 'success' : 'warning') + badge(String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'Appointments authorized' : 'Appointments manual', String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'success' : 'warning') + '</div></article>' +
+      '<article class="panel-card"><p class="eyebrow">AI CONTROL</p><h3>Guarded automatic actions · ' + (active ? 'Enabled' : 'Disabled') + '</h3><p class="muted">With explicit authorization, Nexa may send messages and create appointments from verified dealer availability. It never changes customer records and has no automatic delete capability.</p><div class="button-row">' + badge(String(autoSettings.auto_messages_enabled || '0') === '1' ? 'Messages authorized' : 'Messages manual', String(autoSettings.auto_messages_enabled || '0') === '1' ? 'success' : 'warning') + badge(String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'Appointments authorized' : 'Appointments manual', String(autoSettings.auto_appointments_enabled || '0') === '1' ? 'success' : 'warning') + '</div></article>' +
       '<article class="panel-card"><p class="eyebrow">SAFETY BOUNDARIES</p><h3>Human-owned business records</h3><p class="muted">Contacts, leads, orders, reseller records and customer profiles remain read-only to automation. Sensitive, legal, financial and dispute messages are escalated for human review.</p></article>' +
       '<article class="panel-card"><p class="eyebrow">DATA LOCATION</p><h3>Local application data</h3><p class="muted">' + esc(state.meta && state.meta.dataPath ? state.meta.dataPath : 'Available after application startup') + '</p></article>' +
     '</div>';
@@ -1231,11 +1283,13 @@ async function sendMessageReply() {
   if(!body){toast('Write or prepare a reply first.','error');return;}
   const confirmed=await confirmAction('Send website reply','Send this reply to the customer now? Nexa will not send anything without this confirmation.');
   if(!confirmed)return;
+  const latest=latestInboundMessage();
   state.messageBusy=true;renderView();
   try {
-    const result=await api.messages.send({thread_id:state.messageThreadId,body:body,user_confirmed:true,draft_id:state.messageDraftMeta&&state.messageDraftMeta.draft_id||null});
+    const result=await api.messages.send({thread_id:state.messageThreadId,body:body,user_confirmed:true,draft_id:state.messageDraftMeta&&state.messageDraftMeta.draft_id||null,reply_to_message_id:latest&&latest.message_id||null});
     state.messageConversation=result.conversation||state.messageConversation;
     state.messageDraft='';state.messageDraftMeta=null;
+    const refreshedKnowledge=await Promise.all([api.messages.knowledgeList(''),api.messages.knowledgeSummary()]);state.messageKnowledge=refreshedKnowledge[0];state.knowledgeSummary=refreshedKnowledge[1];
     toast('Reply sent after user approval.');
   } catch(error) { toast(error.message,'error'); }
   finally { state.messageBusy=false; if(state.view==='messages')renderView(); }
@@ -1268,24 +1322,20 @@ async function saveMessageSettings() {
   toast('Message assistant settings saved.');renderView();
 }
 
-async function toggleMessageAiInteraction() {
-  const nextEnabled=!messageAiInteractionEnabled();
-  const result=await api.messages.aiToggle(nextEnabled);
-  state.settings=result.settings||state.settings;
-  state.automation=result.automation||state.automation;
-  toast(nextEnabled
-    ? 'AI Messages is ON. AI Control permissions, limits and safety rules still apply.'
-    : 'AI Messages is OFF. Nexa will keep reading and notifying, but it will not interact automatically with message threads.');
+
+async function toggleMessagesAI() {
+  const current=String(state.settings&&state.settings.messages_ai_enabled||state.automation&&state.automation.settings&&state.automation.settings.messages_ai_enabled||'1')==='1';
+  const next=current?'0':'1';
+  state.settings=await api.settings.save({messages_ai_enabled:next});
+  state.automation=await api.automation.get();
+  toast(next==='1'?'AI Messages turned ON. Authorized automatic replies may run.':'AI Messages turned OFF. Nexa will keep reading messages but will not reply automatically.',next==='1'?'success':'error');
   renderView();
 }
 
-async function setCurrentThreadAutoReplyBlock(blocked) {
+async function setCurrentThreadAutoReplyBlocked(blocked) {
   if(!state.messageThreadId)return;
-  const conversation=await api.messages.autoReplyBlock(state.messageThreadId,blocked);
-  state.messageConversation=conversation||state.messageConversation;
-  toast(blocked
-    ? 'Automatic AI replies blocked for this conversation. Nexa will still read and review it.'
-    : 'Automatic AI replies allowed for this conversation when AI Messages and AI Control are active.');
+  state.messageConversation=await api.messages.setAutoReplyBlocked(state.messageThreadId,blocked,'Blocked by user in Messages');
+  toast(blocked?'Automatic replies blocked for this conversation. Nexa will continue reading and reviewing it.':'Automatic replies allowed again for this conversation.');
   renderView();
 }
 
@@ -1446,9 +1496,9 @@ function bindViewEvents() {
   const messageSettingsSave=document.querySelector('[data-nexa-action="message-settings-save"]');
   if(messageSettingsSave)messageSettingsSave.addEventListener('click',saveMessageSettings);
   const messageAiToggle=document.querySelector('[data-nexa-action="message-ai-toggle"]');
-  if(messageAiToggle)messageAiToggle.addEventListener('click',function toggleMessagesAi(){toggleMessageAiInteraction().catch(function report(error){toast(error.message,'error');});});
-  const messageAutoReplyBlock=document.getElementById('message-auto-reply-block');
-  if(messageAutoReplyBlock)messageAutoReplyBlock.addEventListener('change',function blockThreadAutoReply(){setCurrentThreadAutoReplyBlock(messageAutoReplyBlock.checked).catch(function report(error){toast(error.message,'error');});});
+  if(messageAiToggle)messageAiToggle.addEventListener('click',function toggleAiMessages(){toggleMessagesAI().catch(function report(error){toast(error.message,'error');});});
+  const messageAutoReplyBlock=document.querySelector('[data-nexa-action="message-auto-reply-block"]');
+  if(messageAutoReplyBlock)messageAutoReplyBlock.addEventListener('change',function toggleThreadAutomation(){setCurrentThreadAutoReplyBlocked(messageAutoReplyBlock.checked).catch(function report(error){toast(error.message,'error');});});
   const messageComposer=document.getElementById('message-composer');
   if(messageComposer)messageComposer.addEventListener('input',function preserveDraft(){state.messageDraft=messageComposer.value;});
   const conversationScroll=document.getElementById('conversation-scroll');
@@ -1550,8 +1600,8 @@ function bindViewEvents() {
         runNow.disabled = true;
         runNow.textContent = 'Running authorized actions…';
         const result = await api.automation.runNow();
-        if (result.skipped) toast('Automatic cycle skipped: ' + String(result.reason || 'not ready') + '.', 'error');
-        else toast('Automatic cycle complete: ' + String(result.messages_sent || 0) + ' messages, ' + String(result.appointments_created || 0) + ' appointments.');
+        const message = automationResultMessage(result);
+        toast(message, result && result.cycle_skipped ? 'error' : (Number(result && result.messages_sent || 0) + Number(result && result.appointments_created || 0) > 0 ? 'success' : 'info'));
         await refreshAll();
       } catch (error) { toast(error.message, 'error'); }
       finally { runNow.disabled = false; runNow.textContent = 'Run authorized actions now'; }
@@ -1716,10 +1766,10 @@ function bindViewEvents() {
       await api.notifications.readAll();
       await refreshAll();
     });
-    document.querySelectorAll('[data-nexa-action="notification-open-target"]').forEach(function bindNotificationOpen(button) {
+    document.querySelectorAll('[data-nexa-action="notification-open"]').forEach(function bindNotificationOpen(button) {
       button.addEventListener('click', async function openNotification() {
-        const event=state.notifications.find(function findEvent(item){return String(item.id)===String(button.dataset.notificationId);});
-        if(event)await openNotificationTarget(event);
+        const event = state.notifications.find(function findNotification(item) { return String(item.id) === String(button.dataset.notificationId); });
+        await openNotificationTarget(event || null);
       });
     });
     document.querySelectorAll('[data-nexa-action="notification-read"]').forEach(function bindNotificationRead(button) {
@@ -1743,7 +1793,7 @@ document.querySelectorAll('.nav-item').forEach(function bindNavigation(button) {
 document.getElementById('refresh-button').addEventListener('click', async function refreshWorkspace() { setLoading(); await refreshAll(); toast('Workspace refreshed.'); });
 document.getElementById('quick-add-button').addEventListener('click', function quickAddTask() { openEntity('task'); });
 document.getElementById('notification-bell').addEventListener('click', function openNotificationCenter() { navigate('notifications'); });
-document.getElementById('pulse-toast-open').addEventListener('click', async function openPulseNotification() { if(state.activePulseEvent)await openNotificationTarget(state.activePulseEvent); });
+document.getElementById('pulse-toast-open').addEventListener('click', async function openPulseNotification() { const event=state.activePulseEvent; hidePulseToast(); await openNotificationTarget(event); await refreshAll({render:false}); });
 document.getElementById('pulse-toast-dismiss').addEventListener('click', async function dismissPulseNotification() { if (state.activePulseEvent && state.activePulseEvent.id) await api.notifications.dismiss(state.activePulseEvent.id); hidePulseToast(); await refreshAll({ render: state.view === 'notifications' }); });
 document.querySelectorAll('[data-close-dialog]').forEach(function bindCloseDialog(button) {
   button.addEventListener('click', function closeDialog() { entityDialog.close(); });
@@ -1769,7 +1819,7 @@ async function initialize() {
         return;
       }
       state.activePulseEvent = event || null;
-      openNotificationTarget(event || {}).catch(function reportNotificationNavigation(error){toast(error.message,'error');});
+      openNotificationTarget(event || null).catch(function navigationError(error) { toast(error.message, 'error'); });
     });
     setLoading();
     await refreshAll();

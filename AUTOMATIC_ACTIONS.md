@@ -1,70 +1,52 @@
-# Guarded automatic actions in Nexa 1.6.1
+# Nexa AI Control and Message Runtime Diagnostics
 
-Nexa provides limited autonomy only inside permissions explicitly granted by the user. It cannot automatically change customer records or delete data.
+Nexa Smart Office Bot 1.6.1 keeps the guarded autonomy introduced in 1.6.0 and adds a second explicit control inside Messages.
 
-## Two independent message gates
+## Two required message controls
 
-Automatic message interaction now requires both controls:
+Automatic customer replies require both:
 
-- **AI Control authorization**: defines allowed actions, confidence, limits, schedules, languages, provider fallback and appointment rules.
-- **AI Messages ON/OFF**: a fast operational switch inside Messages.
+1. AI Control master authorization and Automatic message sending enabled.
+2. **AI Messages ON** in the Messages screen.
 
-Turning **AI Messages OFF** immediately prevents background interaction with message threads. Synchronization, reading, analysis and notifications continue.
+Turning AI Messages OFF does not disconnect the inbox. Nexa continues synchronizing, reading, displaying and analyzing conversations, but it cannot send an automatic reply.
 
 ## Per-conversation block
 
-Every replyable conversation includes:
+The conversation composer includes:
 
-`Block automatic AI replies for this conversation`
+`Block Nexa from replying automatically to this conversation`
 
-When checked:
+When selected, Nexa continues to read the complete thread, refresh it, create notifications and allow manual AI review. Only automatic sending for that thread is blocked. Clearing it reauthorizes that thread, subject to the global controls.
 
-- The thread continues to synchronize.
-- Nexa can display and analyze the messages.
-- Notifications still appear.
-- Manual reply preparation and manual sending remain available.
-- Background automatic replies are blocked.
-- Message-driven automatic confirmations are blocked.
+## Exact Run Now results
 
-The block is stored locally for that thread and remains active after restart.
+`Run authorized actions now` no longer reports a generic `not ready` state for a completed cycle. It distinguishes:
 
-## Why a message may not receive an automatic answer
+- Whole-cycle blockers such as missing authorization or all actions disabled.
+- No unanswered messages.
+- Message-thread loading failures.
+- Messages AI OFF.
+- Per-thread automatic-reply block.
+- Response delay.
+- Quiet hours.
+- Hourly or daily limit.
+- Knowledge confidence below the configured threshold.
+- Missing verified business context.
+- AI fallback disabled or provider unavailable.
+- Safety and human-review rules.
+- Processing or website API errors.
 
-Action History records the exact reason, including:
+The Live Readiness card shows connection, scopes and endpoint capabilities separately from per-message decisions.
 
-- AI Messages switch is off.
-- AI Control is not authorized.
-- Automatic messages are disabled.
-- Conversation is blocked.
-- Thread is read-only or `can_reply` is false.
-- Website send capability is unavailable.
-- Required scope is missing.
-- Message requires human review.
-- Confidence is below the configured threshold.
-- Quiet hours, language or rate limits block the action.
-- The message was already processed.
+## Knowledge behavior
 
-## Knowledge and AI
+Sending a reply no longer teaches Nexa automatically. The Knowledge Engine can be updated only through a deliberate user action. This prevents a customer thread or an unreviewed response from silently changing the business knowledge base.
 
-Nexa searches custom approved knowledge first, then the built-in automotive library. OpenAI or DeepSeek is used only when fallback is authorized and the local result is insufficient. External AI never receives API keys or unnecessary sensitive data.
+## Notification navigation
 
-## Appointments
+Opening an in-app or Windows notification routes to the related conversation, appointment, task, lead, contact, listing or appropriate fallback area.
 
-Appointment automation remains governed by AI Control and verified dealer availability. When AI Messages is off, message-driven appointment interaction is paused. Existing appointments are not changed or deleted.
+## Hard boundaries
 
-## Actionable notifications
-
-Notification metadata now carries a safe destination. Selecting a notification can open:
-
-- The exact message conversation.
-- Agenda for an appointment or reminder.
-- Leads for an order or lead.
-- Tasks.
-- Alerts or Nexa Pulse.
-- API Sync Inspector for connection failures.
-
-A destination failure never deletes or marks the underlying record complete.
-
-## Emergency pause
-
-**Emergency pause** disables the master authorization, automatic messages and automatic appointments without deleting any existing information.
+Nexa does not automatically edit contacts, leads, orders, reseller records or customer profiles. It does not automatically delete messages, appointments, records, files or database content. Sensitive conversations remain subject to human review.

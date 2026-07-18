@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
+const NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 = 'NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -16,7 +17,7 @@ function clamp(value, minimum, maximum) { return Math.min(Math.max(number(value,
 function listFromPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
-  for (const key of ['slots', 'availability', 'items', 'records', 'rows', 'appointments', 'data']) {
+  for (const key of ['slots', 'availability', 'items', 'records', 'rows', 'appointments', 'threads', 'messages', 'data']) {
     if (Array.isArray(payload[key])) return payload[key];
   }
   return [];
@@ -156,6 +157,17 @@ function formatSlot(slot) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(slot.start);
 }
 
+
+function safeDeferredKnowledge(match) {
+  const required = Array.isArray(match && match.requiredContext) ? match.requiredContext : [];
+  if (!required.length) return true;
+  const response = text(match && match.response).toLowerCase();
+  if (!response) return false;
+  const verificationLanguage = /(check|verify|confirm|review|look into|validate|revisar|verificar|confirmar|comprobar|consultar)/.test(response);
+  const riskyCommitment = /(approved|guaranteed|confirmed appointment|your appointment is confirmed|available now|final price|apr is|monthly payment is|aprobado|garantizado|cita confirmada|precio final)/.test(response);
+  return verificationLanguage && !riskyCommitment;
+}
+
 class AutomaticActionsService {
   constructor(options) {
     const input = options || {};
@@ -172,6 +184,46 @@ class AutomaticActionsService {
 
   settings() { return this.database.getSettings(); }
 
+  messageReadiness(settingsInput) {
+    const settings = settingsInput || this.settings();
+    const publicSettings = this.settingsService.getPublicSettings();
+    const integration = this.database.getIntegrationStatus();
+    const map = safeJson(integration.connection_map_json, {});
+    const resources = [].concat(map.available_resources || map.allowed_resources || map.resources || []).map(function normalize(item) {
+      return typeof item === 'string' ? item.toLowerCase() : text(item && (item.resource || item.name)).toLowerCase();
+    }).filter(Boolean);
+    const scopes = safeJson(integration.scopes_json, []);
+    const scopeList = Array.isArray(scopes) ? scopes.map(function lower(item) { return text(item).toLowerCase(); }) : [];
+    const capabilities = map.capabilities && typeof map.capabilities === 'object' ? map.capabilities : {};
+    const fullThread = resources.includes('message-thread') || resources.includes('messages-thread') || Boolean(map.message_threads || capabilities.message_threads);
+    const send = resources.includes('message-send') || resources.includes('messages-send') || Boolean(map.message_send || capabilities.message_send);
+    const readScope = !scopeList.length || scopeList.includes('messages:read');
+    const writeScope = scopeList.includes('messages:write') || Boolean(map.message_send || capabilities.message_send);
+    const preferred = text(publicSettings.preferred_provider || 'openai');
+    const provider = publicSettings.secrets && publicSettings.secrets[preferred] ? publicSettings.secrets[preferred] : {};
+    return {
+      authorized: enabled(settings.auto_actions_enabled) && Boolean(text(settings.auto_actions_consent_at)),
+      master_enabled: enabled(settings.auto_actions_enabled),
+      consent_saved: Boolean(text(settings.auto_actions_consent_at)),
+      messages_authorized: enabled(settings.auto_messages_enabled),
+      messages_switch_on: enabled(settings.messages_ai_enabled),
+      appointments_authorized: enabled(settings.auto_appointments_enabled),
+      integration_connected: Number(integration.connected || 0) === 1,
+      message_list_available: resources.includes('messages') || !resources.length,
+      full_thread_available: fullThread,
+      message_send_available: send,
+      messages_read_scope: readScope,
+      messages_write_scope: writeScope,
+      knowledge_only: enabled(settings.auto_messages_knowledge_only),
+      ai_fallback_enabled: enabled(settings.auto_messages_ai_fallback),
+      preferred_provider: preferred,
+      provider_configured: Boolean(provider && provider.configured),
+      in_quiet_hours: inQuietHours(settings, new Date()),
+      rate_limit_available: this.canSendMore(settings),
+      marker: NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2
+    };
+  }
+
   getState() {
     const settings = this.settingsService.getPublicSettings();
     const summary = this.database.automaticActionSummary();
@@ -185,6 +237,7 @@ class AutomaticActionsService {
       timer_active: Boolean(this.timer),
       last_run_at: this.lastRunAt,
       last_result: this.lastResult,
+      readiness: this.messageReadiness(settings),
       integration: {
         connected: Number(integration.connected || 0) === 1,
         account_type: integration.account_type || '',
@@ -248,13 +301,27 @@ class AutomaticActionsService {
     }
   }
 
+  async refreshMessageMetadata() {
+    if (!this.apiService || typeof this.apiService.fetchResource !== 'function') return { attempted: false, loaded: this.database.listIntegrationCache('messages', '', 100).length, error: '' };
+    try {
+      const response = await this.apiService.fetchResource('messages', { limit: 100 });
+      const items = listFromPayload(response.payload);
+      this.database.replaceIntegrationCache('messages', items);
+      return { attempted: true, loaded: items.length, error: '' };
+    } catch (error) {
+      return { attempted: true, loaded: this.database.listIntegrationCache('messages', '', 100).length, error: error.message };
+    }
+  }
+
   async refreshCandidateThreads(settings) {
+    const metadataResult = await this.refreshMessageMetadata();
     const metadata = this.database.listIntegrationCache('messages', '', 100);
     const unreadOnly = enabled(settings.auto_messages_require_unread);
     const candidates = metadata.filter(function eligible(item) {
       if (Number(item.is_announcement || 0) === 1 || item.can_reply === false || Number(item.can_reply) === 0) return false;
       return !unreadOnly || Number(item.unread_count || 0) > 0;
-    }).slice(0, 20);
+    }).slice(0, 50);
+    const result = { metadata: metadataResult, planned: candidates.length, loaded: 0, failed: 0, errors: [] };
     for (const item of candidates) {
       const threadId = text(item.thread_id || item.id);
       if (!threadId) continue;
@@ -263,8 +330,13 @@ class AutomaticActionsService {
         const payload = response.payload || {};
         const thread = payload.thread && typeof payload.thread === 'object' ? payload.thread : item;
         this.database.saveMessageThreadSnapshot(Object.assign({}, item, thread, { thread_id: threadId }), Array.isArray(payload.messages) ? payload.messages : [], { thread_id: threadId, cursor: payload.next_cursor });
-      } catch (_) { /* A failed thread remains visible for manual review. */ }
+        result.loaded += 1;
+      } catch (error) {
+        result.failed += 1;
+        result.errors.push({ thread_id: threadId, error: error.message });
+      }
     }
+    return result;
   }
 
   canSendMore(settings) {
@@ -276,8 +348,6 @@ class AutomaticActionsService {
   }
 
   async sendAutomaticMessage(threadId, body, sourceMessageId, result, settings, summaryLabel) {
-    if (!enabled(settings.message_ai_interaction_enabled)) return { skipped: true, reason: 'messages_ai_switch_off' };
-    if (this.database.isMessageAutoReplyBlocked(threadId)) return { skipped: true, reason: 'conversation_auto_reply_blocked' };
     const dedupeKey = 'auto-message:' + sourceMessageId;
     if (this.database.hasAutomaticActionEvent(dedupeKey)) return { skipped: true, reason: 'duplicate' };
     const event = this.database.createAutomaticActionEvent({
@@ -389,7 +459,6 @@ class AutomaticActionsService {
   async processMessageCandidate(candidate, settings, slots) {
     const sourceMessageId = text(candidate.inbound_message_id);
     if (!sourceMessageId || this.database.hasAutomaticActionEvent('auto-message:' + sourceMessageId)) return { skipped: true, reason: 'already_processed' };
-    if (!enabled(settings.message_ai_interaction_enabled)) return { skipped: true, reason: 'messages_ai_switch_off' };
     if (enabled(settings.auto_messages_require_unread) && Number(candidate.inbound_is_read || 0) === 1) return { skipped: true, reason: 'read' };
     const delay = clamp(settings.auto_messages_send_delay_seconds, 0, 3600) * 1000;
     if (Date.parse(candidate.inbound_at || '') + delay > Date.now()) return { skipped: true, reason: 'delay' };
@@ -405,10 +474,11 @@ class AutomaticActionsService {
     const conversation = this.database.getMessageConversationContext(candidate.thread_id, 120);
     const appointment = await this.processAppointmentCandidate(candidate, conversation, slots, settings);
     if (appointment.handled) return appointment;
-    if (Number(candidate.auto_reply_blocked || 0) === 1 || this.database.isMessageAutoReplyBlocked(candidate.thread_id)) {
-      return { skipped: true, reason: 'conversation_auto_reply_blocked' };
-    }
-    if (!enabled(settings.auto_messages_enabled) || !this.canSendMore(settings) || inQuietHours(settings, new Date())) return { skipped: true, reason: 'messages_disabled_or_limited' };
+    if (Number(candidate.automation_blocked || 0) === 1) return { skipped: true, reason: 'thread_auto_reply_blocked' };
+    if (!enabled(settings.auto_messages_enabled)) return { skipped: true, reason: 'automatic_messages_disabled' };
+    if (!enabled(settings.messages_ai_enabled)) return { skipped: true, reason: 'messages_ai_switch_off' };
+    if (!this.canSendMore(settings)) return { skipped: true, reason: 'message_limit_reached' };
+    if (inQuietHours(settings, new Date())) return { skipped: true, reason: 'quiet_hours' };
     const languages = parseCsv(settings.auto_messages_languages);
     const providerSettings = this.settingsService.getPublicSettings();
     const previousFallback = providerSettings.message_ai_fallback;
@@ -420,7 +490,7 @@ class AutomaticActionsService {
         if (!match.matched || match.confidence < number(settings.auto_messages_min_confidence, 0.88)) return { skipped: true, reason: 'knowledge_confidence' };
         if (languages.length && !languages.includes(String(match.locale || '').toLowerCase())) return { skipped: true, reason: 'language' };
         if (String(match.safetyLevel || 'standard') !== String(settings.auto_messages_allowed_safety || 'standard')) return { skipped: true, reason: 'safety_level' };
-        if (Array.isArray(match.requiredContext) && match.requiredContext.length) return { skipped: true, reason: 'missing_verified_context' };
+        if (!safeDeferredKnowledge(match)) return { skipped: true, reason: 'missing_verified_context' };
         this.database.incrementKnowledgeUse(match.knowledgeId);
         const draft = this.database.saveMessageDraft({ thread_id: candidate.thread_id, source: 'knowledge-auto', confidence: match.confidence, trigger_text: match.latestMessage, body: match.response });
         result = { engine: 'knowledge', confidence: match.confidence, draft: draft, body: match.response };
@@ -428,7 +498,7 @@ class AutomaticActionsService {
         const match = this.aiService.messageEngine.match(conversation);
         if (match.matched && match.confidence >= number(settings.auto_messages_min_confidence, 0.88)
           && String(match.safetyLevel || 'standard') === String(settings.auto_messages_allowed_safety || 'standard')
-          && (!Array.isArray(match.requiredContext) || match.requiredContext.length === 0)) {
+          && safeDeferredKnowledge(match)) {
           if (languages.length && !languages.includes(String(match.locale || '').toLowerCase())) return { skipped: true, reason: 'language' };
           this.database.incrementKnowledgeUse(match.knowledgeId);
           const draft = this.database.saveMessageDraft({ thread_id: candidate.thread_id, source: 'knowledge-auto', confidence: match.confidence, trigger_text: match.latestMessage, body: match.response });
@@ -447,24 +517,68 @@ class AutomaticActionsService {
   }
 
   async runNow(trigger) {
-    if (this.running) return { skipped: true, reason: 'already_running', last_result: this.lastResult };
+    if (this.running) return { cycle_skipped: true, reason: 'already_running', last_result: this.lastResult, marker: NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 };
     const settings = this.settings();
-    if (!enabled(settings.auto_actions_enabled) || !text(settings.auto_actions_consent_at)) {
-      return { skipped: true, reason: 'not_authorized', state: this.getState() };
+    const readiness = this.messageReadiness(settings);
+    if (!readiness.authorized) {
+      return { cycle_skipped: true, reason: 'not_authorized', readiness: readiness, state: this.getState(), marker: NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 };
+    }
+    if (!enabled(settings.auto_messages_enabled) && !enabled(settings.auto_appointments_enabled)) {
+      return { cycle_skipped: true, reason: 'no_automatic_actions_enabled', readiness: readiness, state: this.getState(), marker: NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 };
     }
     this.running = true;
-    const result = { trigger: trigger || 'manual', started_at: nowIso(), messages_sent: 0, appointments_created: 0, skipped: 0, failed: 0 };
+    const result = {
+      cycle_skipped: false,
+      status: 'completed',
+      trigger: trigger || 'manual',
+      started_at: nowIso(),
+      messages_sent: 0,
+      appointments_created: 0,
+      skipped_count: 0,
+      failed_count: 0,
+      candidate_count: 0,
+      reason_counts: {},
+      readiness: readiness,
+      refresh: null,
+      availability_count: 0,
+      errors: [],
+      marker: NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2
+    };
     try {
-      if (enabled(settings.auto_messages_enabled) || enabled(settings.auto_appointments_enabled)) await this.refreshCandidateThreads(settings);
+      result.refresh = await this.refreshCandidateThreads(settings);
+      if (result.refresh && Array.isArray(result.refresh.errors)) {
+        result.refresh.errors.slice(0, 10).forEach(function addRefreshError(item) {
+          result.errors.push({ phase: 'message-thread', thread_id: text(item && item.thread_id), error: text(item && item.error) });
+        });
+      }
+      if (result.refresh && result.refresh.metadata && result.refresh.metadata.error) {
+        result.errors.push({ phase: 'messages', thread_id: '', error: text(result.refresh.metadata.error) });
+      }
       const slots = enabled(settings.auto_appointments_enabled) ? await this.cacheAvailability(settings) : [];
+      result.availability_count = slots.length;
       const candidates = this.database.listAutomaticMessageCandidates(50);
+      result.candidate_count = candidates.length;
       for (const candidate of candidates) {
-        const action = await this.processMessageCandidate(candidate, settings, slots);
+        let action;
+        try {
+          action = await this.processMessageCandidate(candidate, settings, slots);
+        } catch (error) {
+          action = { failed: true, reason: 'processing_error', error: error.message, thread_id: candidate.thread_id };
+        }
         if (action && action.sent) result.messages_sent += 1;
         else if (action && action.appointment && action.appointment.created) result.appointments_created += 1;
-        else if (action && action.failed) result.failed += 1;
-        else result.skipped += 1;
+        else if (action && action.failed) {
+          result.failed_count += 1;
+          const failedReason = text(action.reason || 'failed');
+          result.reason_counts[failedReason] = Number(result.reason_counts[failedReason] || 0) + 1;
+          if (action.error) result.errors.push({ phase: 'message-processing', thread_id: text(action.thread_id || candidate.thread_id), error: text(action.error) });
+        } else {
+          result.skipped_count += 1;
+          const skippedReason = text(action && action.reason || 'no_action');
+          result.reason_counts[skippedReason] = Number(result.reason_counts[skippedReason] || 0) + 1;
+        }
       }
+      if (!result.candidate_count) result.no_work_reason = result.refresh && result.refresh.failed ? 'message_threads_failed_to_load' : 'no_unanswered_messages';
       result.completed_at = nowIso();
       this.lastRunAt = result.completed_at;
       this.lastResult = result;
@@ -479,10 +593,12 @@ module.exports = {
   AutomaticActionsService,
   NEXA_GUARDED_AUTOMATIC_ACTIONS_V1,
   NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1,
+  NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2,
   availabilityStart,
   classifyRisk,
   inQuietHours,
   isAppointmentIntent,
   normalizeAvailability,
-  parseRequestedDateTime
+  parseRequestedDateTime,
+  safeDeferredKnowledge
 };

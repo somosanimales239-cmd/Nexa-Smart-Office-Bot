@@ -333,7 +333,7 @@ class DatabaseService {
   }
 
   saveSettings(values) {
-    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end', 'message_realtime_enabled', 'message_poll_seconds', 'message_ai_mode', 'message_ai_fallback', 'message_learning_enabled', 'message_send_confirmation', 'message_ai_interaction_enabled', 'auto_actions_enabled', 'auto_actions_consent_at', 'auto_actions_run_interval_seconds', 'auto_messages_enabled', 'auto_messages_knowledge_only', 'auto_messages_ai_fallback', 'auto_messages_min_confidence', 'auto_messages_send_delay_seconds', 'auto_messages_max_per_hour', 'auto_messages_max_per_day', 'auto_messages_quiet_start', 'auto_messages_quiet_end', 'auto_messages_languages', 'auto_messages_require_unread', 'auto_messages_mark_read', 'auto_messages_allowed_safety', 'auto_messages_excluded_intents', 'auto_appointments_enabled', 'auto_appointments_source', 'auto_appointments_offer_slots', 'auto_appointments_duration_minutes', 'auto_appointments_min_notice_hours', 'auto_appointments_max_days', 'auto_appointments_require_contact', 'auto_appointments_create_remote', 'auto_appointments_send_confirmation', 'auto_appointments_timezone', 'auto_appointments_slot_limit', 'auto_actions_no_delete_guard']);
+    const allowed = new Set(['preferred_provider', 'openai_model', 'deepseek_model', 'deepseek_base_url', 'notifications_enabled', 'automatic_backups', 'backup_retention', 'automarket_base_url', 'automarket_sync_enabled', 'automarket_poll_minutes', 'notifications_user_consent', 'notifications_consent_at', 'notifications_sound', 'notifications_minimize_to_tray', 'notifications_start_with_windows', 'notifications_quiet_start', 'notifications_quiet_end', 'message_realtime_enabled', 'message_poll_seconds', 'message_ai_mode', 'message_ai_fallback', 'message_learning_enabled', 'message_send_confirmation', 'messages_ai_enabled', 'auto_actions_enabled', 'auto_actions_consent_at', 'auto_actions_run_interval_seconds', 'auto_messages_enabled', 'auto_messages_knowledge_only', 'auto_messages_ai_fallback', 'auto_messages_min_confidence', 'auto_messages_send_delay_seconds', 'auto_messages_max_per_hour', 'auto_messages_max_per_day', 'auto_messages_quiet_start', 'auto_messages_quiet_end', 'auto_messages_languages', 'auto_messages_require_unread', 'auto_messages_mark_read', 'auto_messages_allowed_safety', 'auto_messages_excluded_intents', 'auto_appointments_enabled', 'auto_appointments_source', 'auto_appointments_offer_slots', 'auto_appointments_duration_minutes', 'auto_appointments_min_notice_hours', 'auto_appointments_max_days', 'auto_appointments_require_contact', 'auto_appointments_create_remote', 'auto_appointments_send_confirmation', 'auto_appointments_timezone', 'auto_appointments_slot_limit', 'auto_actions_no_delete_guard']);
     const statement = this.db.prepare(`
       INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
@@ -476,27 +476,21 @@ class DatabaseService {
     return { thread: thread, messages: messages, drafts: drafts, outbox: outbox };
   }
 
-  setMessageAutoReplyBlocked(threadId, blocked) {
+
+  setMessageThreadAutomationBlocked(threadId, blocked, reason) {
     const wanted = normalizeText(threadId);
     if (!wanted) throw new Error('Message thread ID is required.');
-    const existing = this.db.prepare('SELECT thread_id FROM message_threads WHERE thread_id=?').get(wanted);
+    let existing = this.db.prepare('SELECT * FROM message_threads WHERE thread_id=?').get(wanted);
     if (!existing) {
-      this.db.prepare(`INSERT INTO message_threads(
-        thread_id, subject, context_type, participant_name, participant_type, can_reply, is_announcement,
-        payload_json, auto_reply_blocked, updated_at
-      ) VALUES (?, 'Conversation', '', '', '', 0, 0, '{}', ?, ?)`).run(wanted, blocked ? 1 : 0, nowIso());
-    } else {
-      this.db.prepare('UPDATE message_threads SET auto_reply_blocked=?, updated_at=? WHERE thread_id=?')
-        .run(blocked ? 1 : 0, nowIso(), wanted);
+      const cached = this.findIntegrationCacheItem(['messages'], wanted) || { thread_id: wanted, subject: 'Conversation', can_reply: 1 };
+      this.saveMessageThreadSnapshot(cached, [], { thread_id: wanted });
+      existing = this.db.prepare('SELECT * FROM message_threads WHERE thread_id=?').get(wanted);
     }
-    this.log(blocked ? 'blocked_auto_reply' : 'allowed_auto_reply', 'message_thread', wanted,
-      blocked ? 'Automatic AI replies disabled for this conversation.' : 'Automatic AI replies enabled for this conversation.');
+    const value = blocked ? 1 : 0;
+    this.db.prepare(`UPDATE message_threads SET automation_blocked=?, automation_blocked_at=?, automation_blocked_reason=?, updated_at=? WHERE thread_id=?`)
+      .run(value, value ? nowIso() : null, value ? normalizeText(reason || 'Blocked by user in Messages') : '', nowIso(), wanted);
+    this.log(value ? 'blocked' : 'unblocked', 'message_automatic_reply', wanted, value ? 'Automatic replies disabled for this conversation.' : 'Automatic replies enabled for this conversation.');
     return this.getMessageConversationContext(wanted, 200);
-  }
-
-  isMessageAutoReplyBlocked(threadId) {
-    const row = this.db.prepare('SELECT auto_reply_blocked FROM message_threads WHERE thread_id=?').get(normalizeText(threadId));
-    return Boolean(row && Number(row.auto_reply_blocked || 0) === 1);
   }
 
   saveMessageDraft(values) {
@@ -1003,6 +997,7 @@ class DatabaseService {
       (SELECT is_read FROM message_entries e WHERE e.thread_id=t.thread_id AND lower(e.direction)!='outbound' ORDER BY COALESCE(e.sent_at,e.created_at) DESC LIMIT 1) AS inbound_is_read
       FROM message_threads t
       WHERE t.can_reply=1 AND t.is_announcement=0
+        AND EXISTS (SELECT 1 FROM integration_cache c WHERE c.resource='messages' AND c.item_id=t.thread_id)
       ORDER BY COALESCE(t.last_message_at,t.updated_at) ASC LIMIT ?`).all(safeLimit);
     return rows.filter(function needsReply(row) {
       if (!row.inbound_message_id || !row.inbound_at) return false;

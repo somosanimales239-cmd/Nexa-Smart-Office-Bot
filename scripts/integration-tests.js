@@ -28,6 +28,7 @@ try {
 
   test('database file is created', () => assert.equal(fs.existsSync(dbPath), true));
   test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 8); });
+  test('message automation controls migration is available', () => { const columns=db.db.prepare("PRAGMA table_info(message_threads)").all().map((row)=>row.name); assert(columns.includes('automation_blocked')); assert.equal(db.getSettings().messages_ai_enabled,'1'); });
 
   let contact;
   test('contact can be created', () => { contact = db.saveContact({ name:'Ana Rivera', company:'Rivera LLC', email:'ana@example.com', phone:'555-0101', tags:'VIP' }); assert.equal(contact.name,'Ana Rivera'); });
