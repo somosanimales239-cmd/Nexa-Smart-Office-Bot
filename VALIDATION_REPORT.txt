@@ -1,9 +1,10 @@
-Nexa Smart Office Bot 1.6.0 Validation Report
+Nexa Smart Office Bot 1.6.1 Validation Report
 
 Package feature
-Guarded AI autonomy for messages and appointments
+Messages AI operational switch, per-conversation automatic-reply block and actionable notifications
 
 Preserved platform features
+- Guarded AI Control and explicit authorization
 - 2,880 automotive dealer knowledge records
 - 8,640 built-in response variations
 - Complete website conversation module
@@ -21,16 +22,17 @@ Completed validation
 - 9 real-time messaging tests passed.
 - 10 automotive knowledge library tests passed.
 - Guarded automatic-action integration tests passed.
+- 10 Messages AI switch, thread block and notification-navigation tests passed.
 - Implementation tests passed.
 - Acceptance tests passed.
-- Migration 7 remained additive and idempotent.
-- Automatic actions default to disabled.
-- Explicit user authorization is required before enabling the master switch.
-- Knowledge-first automatic reply and duplicate protection passed.
-- Dealer availability appointment creation and duplicate protection passed.
-- Customer contacts and leads remained unchanged during automatic-action tests.
+- Migration 8 remained additive and idempotent.
+- Existing automatic-message authorization is mirrored into the new Messages switch during upgrade.
+- AI Messages OFF prevented automatic message interaction while synchronization remained available.
+- Per-thread blocking prevented automatic replies without hiding or deleting the conversation.
+- Manual message preparation and manual sending remained available.
+- In-app, toast and Windows notification click routing was verified.
+- Customer contacts, leads, orders and existing appointments remained unchanged.
 - Automatic service exposes no customer-record delete operation.
-- Obsolete website-upgrade warning is absent from the interface.
 
 Build gate
-The Electron UI smoke test and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the full workflow passes.
+Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the complete workflow passes.

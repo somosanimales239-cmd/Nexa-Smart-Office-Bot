@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { registerIpcHandler } = require('./ipc-utils');
 
-const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete, messages:knowledge-toggle, messages:knowledge-summary';
+const MESSAGE_IPC_CONTRACT = 'IPC channels: messages:thread, messages:refresh, messages:draft, messages:send, messages:mark-read, messages:ai-toggle, messages:auto-reply-block, messages:knowledge-list, messages:knowledge-save, messages:knowledge-delete, messages:knowledge-toggle, messages:knowledge-summary';
 
 function threadParts(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
@@ -16,6 +16,7 @@ function registerMessagesIpc(ipcMain, services) {
   const database = services.database;
   const apiService = services.apiService;
   const aiService = services.aiService;
+  const automationService = services.automationService;
 
   registerIpcHandler(ipcMain, 'messages:thread', function getThread(payload) {
     return database.getMessageConversationContext(String(payload && payload.thread_id || ''), Number(payload && payload.limit || 120));
@@ -99,6 +100,24 @@ function registerMessagesIpc(ipcMain, services) {
     const threadId = String(payload && payload.thread_id || '').trim();
     const response = await apiService.markMessageRead(threadId, payload && payload.last_message_id);
     return { marked: true, response: response.payload };
+  });
+
+  registerIpcHandler(ipcMain, 'messages:ai-toggle', function toggleMessageAi(payload) {
+    const enabled = payload && payload.enabled === true;
+    database.saveSettings({ message_ai_interaction_enabled: enabled ? '1' : '0' });
+    database.log(enabled ? 'enabled' : 'disabled', 'message_ai_interaction', null,
+      enabled ? 'Messages AI interaction enabled from the Messages workspace.' : 'Messages AI interaction paused from the Messages workspace.');
+    if (automationService && typeof automationService.restart === 'function') automationService.restart();
+    return {
+      enabled: enabled,
+      settings: services.settingsService.getPublicSettings(),
+      automation: automationService && typeof automationService.getState === 'function' ? automationService.getState() : null
+    };
+  });
+
+  registerIpcHandler(ipcMain, 'messages:auto-reply-block', function blockAutomaticReply(payload) {
+    const threadId = String(payload && payload.thread_id || '').trim();
+    return database.setMessageAutoReplyBlocked(threadId, payload && payload.blocked === true);
   });
 
   registerIpcHandler(ipcMain, 'messages:knowledge-list', function listKnowledge(payload) {

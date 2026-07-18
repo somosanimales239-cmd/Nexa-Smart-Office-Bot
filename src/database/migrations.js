@@ -337,6 +337,17 @@ function applyMigrations(database) {
         const installedAt = nowIso();
         Object.entries(defaults).forEach(function addDefault(entry) { insert.run(entry[0], entry[1], installedAt); });
       }
+    },
+    {
+      id: 8,
+      name: 'NEXA_MESSAGES_AI_SWITCH_AND_THREAD_BLOCK_V1',
+      apply: function installMessageAiControls(database) {
+        addColumnIfMissing(database, 'message_threads', 'auto_reply_blocked', 'INTEGER NOT NULL DEFAULT 0');
+        database.exec('CREATE INDEX IF NOT EXISTS idx_message_threads_auto_reply_blocked ON message_threads(auto_reply_blocked, last_message_at);');
+        const current = database.prepare("SELECT value FROM settings WHERE key='auto_messages_enabled'").get();
+        database.prepare("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('message_ai_interaction_enabled', ?, ?)")
+          .run(current && String(current.value) === '1' ? '1' : '0', nowIso());
+      }
     }
 
   ];

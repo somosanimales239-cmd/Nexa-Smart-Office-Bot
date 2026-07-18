@@ -1,33 +1,20 @@
-# API Sync Inspector
+# API Sync Inspector — Nexa 1.6.1
 
-API Sync Inspector shows whether the connected key loaded usable data, not merely whether authentication succeeded.
+API Sync Inspector shows the status, count, required scope, HTTP result, last success and last error for every connected resource.
 
-Each resource displays:
+Important resources for version 1.6.1 include:
 
-- Resource name.
-- Status: OK, syncing, missing scope or failed.
-- Loaded item count.
-- Required scope.
-- HTTP status.
-- Request duration.
-- Last successful synchronization.
-- Exact last error.
-
-Important resources for version 1.6.0 include:
-
+- `ping`
+- `connection-map`
 - `messages`
 - `message-thread`
 - `message-send`
 - `message-read`
 - `dealer-appointment-availability`
-- `appointment-create` when supported
+- `appointment-create`
+- `orders`
+- `agenda`
+- `listings`
+- `resellers`
 
-Examples:
-
-- `agenda · OK · 84`
-- `orders · OK · 12`
-- `messages · Missing scope · messages:read`
-- `dealer-appointment-availability · OK · 18`
-- `appointment-create · Not advertised`
-
-A partial run keeps previously loaded cache available while identifying the failed resource. AI Control never bypasses a missing resource or scope.
+Messages displays a **Website send ready** badge only when the connection map and scopes allow a real message send. A missing capability does not stop reading or synchronization, but it prevents Nexa from claiming that an outgoing message was sent.

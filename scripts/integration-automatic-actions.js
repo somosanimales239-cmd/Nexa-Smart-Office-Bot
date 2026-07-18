@@ -55,6 +55,7 @@ const service = new AutomaticActionsService({ database, settingsService, apiServ
 function saveBaseSettings(extra) {
   database.saveSettings(Object.assign({
     auto_actions_enabled: '1', auto_actions_consent_at: new Date().toISOString(), auto_actions_run_interval_seconds: '15',
+    message_ai_interaction_enabled: '1',
     auto_messages_enabled: '1', auto_messages_knowledge_only: '1', auto_messages_ai_fallback: '0',
     auto_messages_min_confidence: '0.88', auto_messages_send_delay_seconds: '0', auto_messages_max_per_hour: '20',
     auto_messages_max_per_day: '100', auto_messages_quiet_start: '00:00', auto_messages_quiet_end: '00:00',

@@ -276,6 +276,8 @@ class AutomaticActionsService {
   }
 
   async sendAutomaticMessage(threadId, body, sourceMessageId, result, settings, summaryLabel) {
+    if (!enabled(settings.message_ai_interaction_enabled)) return { skipped: true, reason: 'messages_ai_switch_off' };
+    if (this.database.isMessageAutoReplyBlocked(threadId)) return { skipped: true, reason: 'conversation_auto_reply_blocked' };
     const dedupeKey = 'auto-message:' + sourceMessageId;
     if (this.database.hasAutomaticActionEvent(dedupeKey)) return { skipped: true, reason: 'duplicate' };
     const event = this.database.createAutomaticActionEvent({
@@ -387,6 +389,7 @@ class AutomaticActionsService {
   async processMessageCandidate(candidate, settings, slots) {
     const sourceMessageId = text(candidate.inbound_message_id);
     if (!sourceMessageId || this.database.hasAutomaticActionEvent('auto-message:' + sourceMessageId)) return { skipped: true, reason: 'already_processed' };
+    if (!enabled(settings.message_ai_interaction_enabled)) return { skipped: true, reason: 'messages_ai_switch_off' };
     if (enabled(settings.auto_messages_require_unread) && Number(candidate.inbound_is_read || 0) === 1) return { skipped: true, reason: 'read' };
     const delay = clamp(settings.auto_messages_send_delay_seconds, 0, 3600) * 1000;
     if (Date.parse(candidate.inbound_at || '') + delay > Date.now()) return { skipped: true, reason: 'delay' };
@@ -402,6 +405,9 @@ class AutomaticActionsService {
     const conversation = this.database.getMessageConversationContext(candidate.thread_id, 120);
     const appointment = await this.processAppointmentCandidate(candidate, conversation, slots, settings);
     if (appointment.handled) return appointment;
+    if (Number(candidate.auto_reply_blocked || 0) === 1 || this.database.isMessageAutoReplyBlocked(candidate.thread_id)) {
+      return { skipped: true, reason: 'conversation_auto_reply_blocked' };
+    }
     if (!enabled(settings.auto_messages_enabled) || !this.canSendMore(settings) || inQuietHours(settings, new Date())) return { skipped: true, reason: 'messages_disabled_or_limited' };
     const languages = parseCsv(settings.auto_messages_languages);
     const providerSettings = this.settingsService.getPublicSettings();

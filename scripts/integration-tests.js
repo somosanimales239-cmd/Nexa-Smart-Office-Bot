@@ -27,7 +27,7 @@ try {
   db = new DatabaseService(dbPath);
 
   test('database file is created', () => assert.equal(fs.existsSync(dbPath), true));
-  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 7); });
+  test('migrations are idempotent', () => { db.migrate(); db.migrate(); assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM migrations').get().n, 8); });
 
   let contact;
   test('contact can be created', () => { contact = db.saveContact({ name:'Ana Rivera', company:'Rivera LLC', email:'ana@example.com', phone:'555-0101', tags:'VIP' }); assert.equal(contact.name,'Ana Rivera'); });

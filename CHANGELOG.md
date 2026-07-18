@@ -1,21 +1,25 @@
 # Changelog
 
+## 1.6.1
+
+- Added an independent **AI Messages ON/OFF** switch inside Messages.
+- Required AI Messages and AI Control to both permit automatic interaction.
+- Added a persistent per-conversation **Block automatic AI replies for this conversation** control.
+- Kept blocked conversations readable, synchronized, analyzed and eligible for notifications.
+- Removed the old composer learning checkbox and retained custom knowledge management in Knowledge Engine.
+- Added clear AI Control and website-send readiness badges in Messages.
+- Added direct navigation from notification cards, Nexa Pulse toasts and Windows notifications.
+- Added safe routing to an exact conversation, appointment, lead, task, alert or API diagnostic.
+- Added migration 8 without deleting or replacing existing data.
+- Added a 10-test regression suite for message controls and notification navigation.
+
 ## 1.6.0
 
 - Added AI Control with explicit master authorization and detailed automatic-action parameters.
 - Added guarded automatic customer message sending through the connected website API.
 - Preserved Knowledge Library priority and made external AI fallback a separate opt-in.
-- Added delay, confidence, language, quiet-hours, hourly and daily message controls.
-- Added mandatory human review for legal, emergency, complaint, refund, payment-dispute and financing-approval conversations.
-- Added Dealer Appointment Availability reading and verified-slot matching.
-- Added automatic local calendar appointment creation with duplicate protection.
-- Added optional remote appointment creation only when the website API advertises the capability and the user enables it.
-- Added appointment slot offering and confirmation messages under the user's authorization rules.
-- Added automatic-action event audit history and Emergency pause.
+- Added Dealer Appointment Availability, verified-slot appointment creation, action history and Emergency pause.
 - Added hard protections preventing automatic customer-record changes and automatic deletion.
-- Updated About to describe guarded autonomy.
-- Removed obsolete two-way-chat upgrade warning text from the interface.
-- Added migration 7. Existing local data and custom knowledge are preserved.
 
 ## 1.5.0
 

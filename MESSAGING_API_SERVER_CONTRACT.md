@@ -1,4 +1,4 @@
-# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.0
+# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.1
 
 This contract supports complete conversations, manual or explicitly authorized automatic replies, dealer appointment availability and optional remote appointment creation.
 
@@ -14,6 +14,12 @@ This contract supports complete conversations, manual or explicitly authorized a
 - The server rejects replies when `can_reply` is false.
 - Every send and appointment-create request must support idempotency and be logged.
 - API secrets, password hashes, SMTP secrets and unrelated private fields must never be returned.
+
+## Client-side operational controls
+
+The server authorization is necessary but not sufficient for an automatic reply. Nexa 1.6.1 also requires AI Control authorization, the independent AI Messages switch, and an unblocked conversation. These client controls do not replace server-side scope, ownership, `can_reply`, rate-limit or idempotency enforcement.
+
+When an API response includes safe relationship metadata such as `thread_id`, `order_id`, `appointment_id`, `listing_id` or `context_id`, Nexa may use it only to navigate to the related local view.
 
 ## Connection map advertisement
 

@@ -1,64 +1,70 @@
-# Nexa AI Control and Guarded Automatic Actions
+# Guarded automatic actions in Nexa 1.6.1
 
-Nexa Smart Office Bot 1.6.0 adds optional, user-authorized automatic actions. Every automatic feature is disabled on first installation and remains disabled until the user enables the master authorization and confirms consent inside AI Control.
+Nexa provides limited autonomy only inside permissions explicitly granted by the user. It cannot automatically change customer records or delete data.
 
-## What Nexa may do when authorized
+## Two independent message gates
 
-- Read new customer conversations from the connected website.
-- Search the local Automotive Dealer Knowledge Library first.
-- Use the selected AI provider only when the user separately enables AI fallback.
-- Send a customer reply through the website API when automatic messages are enabled and every configured safety rule passes.
-- Read Dealer Appointment Availability from the website.
-- Offer verified open appointment slots.
-- Create an appointment in Nexa's local calendar when the customer selects an exact available slot.
-- Create the same appointment on the website only when the API advertises `appointment-create` and the user explicitly enables remote appointment creation.
-- Send an appointment confirmation only when automatic messages are also authorized.
-- Record every completed, blocked and failed automatic action in the local audit history.
+Automatic message interaction now requires both controls:
 
-## Hard boundaries
+- **AI Control authorization**: defines allowed actions, confidence, limits, schedules, languages, provider fallback and appointment rules.
+- **AI Messages ON/OFF**: a fast operational switch inside Messages.
 
-These protections are not configurable:
+Turning **AI Messages OFF** immediately prevents background interaction with message threads. Synchronization, reading, analysis and notifications continue.
 
-- Nexa does not automatically edit contacts, leads, orders, reseller records or customer profiles.
-- Nexa does not automatically delete messages, appointments, records, files or database content.
-- Admin announcements and read-only threads are never answered.
-- Sensitive conversations involving legal issues, emergencies, complaints, refund disputes, payment disputes or financing approvals are blocked for human review.
-- Automatic appointment creation uses only a verified available slot and is idempotent to prevent duplicates.
-- The Emergency pause button immediately disables automatic message sending and automatic appointment creation.
+## Per-conversation block
 
-## AI Control parameters
+Every replyable conversation includes:
 
-The user can authorize and configure:
+`Block automatic AI replies for this conversation`
 
-- Master automatic-action switch.
-- Background check interval.
-- Automatic messages on or off.
-- Knowledge-only mode or Knowledge plus AI fallback.
-- Minimum local confidence.
-- Delay before sending.
-- Hourly and daily limits.
-- Unread-only processing.
-- Quiet hours.
-- Allowed languages.
-- Human-review-only intents.
-- Automatic appointments on or off.
-- Slot offering.
-- Appointment duration.
-- Minimum notice.
-- Maximum booking window.
-- Required customer identity.
-- Local-only or website plus local appointment creation.
-- Appointment confirmation messages.
+When checked:
 
-## Website resources
+- The thread continues to synchronize.
+- Nexa can display and analyze the messages.
+- Notifications still appear.
+- Manual reply preparation and manual sending remain available.
+- Background automatic replies are blocked.
+- Message-driven automatic confirmations are blocked.
 
-The connected AutoMarket Pro API should advertise and support the following resources as applicable:
+The block is stored locally for that thread and remains active after restart.
 
-- `messages`
-- `message-thread`
-- `message-send`
-- `message-read`
-- `dealer-appointment-availability`
-- `appointment-create` for optional remote appointment creation
+## Why a message may not receive an automatic answer
 
-The required scopes remain enforced by the website API. Nexa does not bypass API permissions.
+Action History records the exact reason, including:
+
+- AI Messages switch is off.
+- AI Control is not authorized.
+- Automatic messages are disabled.
+- Conversation is blocked.
+- Thread is read-only or `can_reply` is false.
+- Website send capability is unavailable.
+- Required scope is missing.
+- Message requires human review.
+- Confidence is below the configured threshold.
+- Quiet hours, language or rate limits block the action.
+- The message was already processed.
+
+## Knowledge and AI
+
+Nexa searches custom approved knowledge first, then the built-in automotive library. OpenAI or DeepSeek is used only when fallback is authorized and the local result is insufficient. External AI never receives API keys or unnecessary sensitive data.
+
+## Appointments
+
+Appointment automation remains governed by AI Control and verified dealer availability. When AI Messages is off, message-driven appointment interaction is paused. Existing appointments are not changed or deleted.
+
+## Actionable notifications
+
+Notification metadata now carries a safe destination. Selecting a notification can open:
+
+- The exact message conversation.
+- Agenda for an appointment or reminder.
+- Leads for an order or lead.
+- Tasks.
+- Alerts or Nexa Pulse.
+- API Sync Inspector for connection failures.
+
+A destination failure never deletes or marks the underlying record complete.
+
+## Emergency pause
+
+**Emergency pause** disables the master authorization, automatic messages and automatic appointments without deleting any existing information.
