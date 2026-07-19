@@ -1,0 +1,52 @@
+NEXA SMART OFFICE BOT 1.6.7
+Biblioteca profesional bilingue exclusiva para conversaciones de citas
+
+NO INCLUYE NI REQUIERE CAMBIOS EN LA PAGINA WEB.
+
+BIBLIOTECA DE COMUNICACION PARA CITAS
+- Contrato: NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1
+- Idiomas: ingles y espanol
+- 304 expresiones naturales de clientes
+- 34 intenciones de conversacion
+- 72 plantillas profesionales dinamicas
+- Se ejecuta antes del Knowledge automotriz general cuando el tema activo es cita.
+
+MEMORIA Y CONTEXTO
+- Conserva el dia solicitado aunque el cliente diga despues "ese dia".
+- Conserva preferencias como despues de las 7, antes de las 3, manana, tarde o noche.
+- Recuerda las opciones ofrecidas y entiende "la primera", "la segunda", una hora
+  aislada, "me conviene", "that works" y otras respuestas breves.
+- Frases como "algo mas disponible para ese dia" permanecen en el tema de citas.
+- Un cambio de tema explicito permite volver al Knowledge general.
+
+CIERRE PROFESIONAL BASADO EN AGENDA
+- Recomienda el slot verificado que mejor coincide con la solicitud.
+- Ofrece hasta dos alternativas utiles en vez de una lista demasiado larga.
+- Si el siguiente dia no cumple la preferencia horaria, ofrece el horario mas
+  cercano y tambien una fecha posterior que si la cumple.
+- Pregunta por una seleccion clara antes de crear la cita.
+- Filtra conflictos de la Agenda local antes de recomendar un horario.
+- Nunca inventa un slot ni confirma una simple pregunta de disponibilidad.
+
+CORRECCION DE LA CONVERSACION REPORTADA
+- Reconoce "y tienes algo mas disponible para ese dia" como seguimiento de cita.
+- Mantiene lunes como la fecha solicitada y despues de las 7 como preferencia.
+- Si el lunes esta bloqueado, lo explica sin contradecirse.
+- Ofrece la siguiente fecha, recomienda el horario mas cercano y puede presentar
+  una fecha posterior con un slot despues de las 7.
+- Nunca responde con inventario de vehiculos electricos o hibridos en ese contexto.
+- La conversacion completa forma parte de las pruebas permanentes del software.
+
+SEGURIDAD
+- No promete "voy a confirmar y responder mas tarde".
+- Responde inmediatamente con la informacion verificada disponible.
+- No cambia registros de clientes ni elimina datos automaticamente.
+- Las autorizaciones de AI Control y AI Messages siguen siendo obligatorias.
+
+DESPUES DE INSTALAR
+1. Ejecute Test connection.
+2. Ejecute Sync now.
+3. Confirme que Dealer Appointment Availability tenga slots futuros verificados.
+4. Revise Professional Appointment Communication en Knowledge Engine.
+5. Ejecute Run authorized actions now para una primera prueba supervisada.
+

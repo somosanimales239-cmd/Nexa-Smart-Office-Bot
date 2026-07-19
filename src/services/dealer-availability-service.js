@@ -398,6 +398,22 @@ function normalizeAvailability(payload, settings, referenceDate) {
   return Array.from(unique.values()).sort(function sortSlots(a, b) { return a.start - b.start; });
 }
 
+function slotConflictsWithAppointments(slot, appointments) {
+  if (!slot || !(slot.start instanceof Date) || !(slot.end instanceof Date)) return true;
+  return (appointments || []).some(function overlaps(appointment) {
+    if (String(appointment && appointment.status || '').toLowerCase() !== 'scheduled') return false;
+    const start = new Date(appointment.start_at);
+    if (Number.isNaN(start.getTime())) return false;
+    const parsedEnd = appointment.end_at ? new Date(appointment.end_at) : new Date(start.getTime() + 30 * 60000);
+    const end = Number.isNaN(parsedEnd.getTime()) ? new Date(start.getTime() + 30 * 60000) : parsedEnd;
+    return slot.start < end && slot.end > start;
+  });
+}
+
+function filterSlotsAgainstAppointments(slots, appointments) {
+  return (slots || []).filter(function availableLocally(slot) { return !slotConflictsWithAppointments(slot, appointments); });
+}
+
 function availabilityCacheItems(payload) {
   if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) return [];
   const snapshotBody = Array.isArray(payload) ? { verified_open_slots: payload } : payload;
@@ -527,9 +543,11 @@ module.exports = {
   availabilitySlotRecords,
   compactAvailabilityContext,
   dateAvailabilityState,
+  filterSlotsAgainstAppointments,
   dailyScheduleWindow,
   isAppointmentAvailabilityIntent,
   localDateKey,
   normalizeAvailability,
-  parseRequestedDateTime
+  parseRequestedDateTime,
+  slotConflictsWithAppointments
 };

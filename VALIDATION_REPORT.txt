@@ -1,9 +1,9 @@
-Nexa Smart Office Bot 1.6.6 Validation Report
+Nexa Smart Office Bot 1.6.7 Validation Report
 
 Package feature
-Professional bilingual appointment communication using live dealer hours,
-verified appointment options, next-day alternatives, courteous contact closing,
-explicit slot selection and local Agenda conflict protection.
+Dedicated bilingual appointment communication library with topic locking,
+date/time preference memory, Agenda-ranked closing, verified alternatives,
+explicit slot selection and local conflict protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -22,12 +22,19 @@ Validation scope
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 12 automotive Knowledge tests, including live schedules
-- 9 professional appointment communication tests
+- 14 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
 - Implementation and acceptance contracts
 
 Appointment communication regression verified
+- The dedicated library contains 304 English/Spanish phrases, 34 intents and
+  72 dynamic response templates.
+- Active appointment context takes priority over general inventory Knowledge.
+- The reported "algo mas disponible para ese dia" conversation is reproduced
+  exactly and remains inside the appointment flow.
+- Requested day and after-7 preference survive the complete conversation.
+- The nearest next-day slot and a later exact preference match can be offered.
 - The endpoint and dealer-appointment-availability:read scope are discovered.
 - Requests include from=YYYY-MM-DD and days=14.
 - Weekly schedule, blocked/off dates, open dates, booked times and verified slots

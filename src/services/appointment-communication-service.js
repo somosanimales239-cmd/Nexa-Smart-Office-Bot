@@ -8,22 +8,29 @@ const {
   localDateKey,
   parseRequestedDateTime
 } = require('./dealer-availability-service');
+const {
+  appointmentResponse,
+  appointmentTopicActive,
+  classifyAppointmentMessage,
+  conversationTimePreference,
+  hasAppointmentTopicAnchor,
+  isExplicitAppointmentTopicSwitch,
+  normalize: libraryNormalize
+} = require('./appointment-communication-library-service');
 
 const NEXA_PRO_APPOINTMENT_COMMUNICATION_V1 = 'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
-function normalized(value) {
-  return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s:/.-]/g, ' ').replace(/\s+/g, ' ').trim();
-}
+function normalized(value) { return libraryNormalize(value); }
 
 function conversationMessages(conversation) {
   return conversation && Array.isArray(conversation.messages) ? conversation.messages : [];
 }
 
 function detectAppointmentLocale(message, conversation, fallback) {
-  const source = normalized([message].concat(conversationMessages(conversation).slice(-8).map(function body(row) { return row && row.body; })).join(' '));
-  const spanish = ['cita', 'horario', 'disponibilidad', 'manana', 'dia', 'ninguno', 'ninguna', 'conviene', 'puedo', 'quiero', 'gracias', 'dealer', 'visita', 'reservar', 'agendar'];
-  const english = ['appointment', 'schedule', 'availability', 'tomorrow', 'day', 'none', 'works', 'available', 'want', 'thanks', 'dealer', 'visit', 'book'];
+  const source = normalized([message].concat(conversationMessages(conversation).slice(-10).map(function body(row) { return row && row.body; })).join(' '));
+  const spanish = ['cita', 'horario', 'disponibilidad', 'disponible', 'manana', 'dia', 'ninguno', 'conviene', 'puedo', 'quiero', 'gracias', 'visita', 'reservar', 'agendar', 'ese', 'otra'];
+  const english = ['appointment', 'schedule', 'availability', 'available', 'tomorrow', 'day', 'none', 'works', 'want', 'thanks', 'visit', 'book', 'that', 'another'];
   let es = 0;
   let en = 0;
   spanish.forEach(function score(word) { if (new RegExp('\\b' + word + '\\b').test(source)) es += 1; });
@@ -33,44 +40,35 @@ function detectAppointmentLocale(message, conversation, fallback) {
 }
 
 function appointmentConversationActive(conversation, latestMessage) {
-  const rows = conversationMessages(conversation).slice(-14);
-  let removedLatest = false;
-  const previous = rows.slice().reverse().filter(function previousOnly(row) {
-    if (!removedLatest && String(row && row.direction || '').toLowerCase() !== 'outbound' && text(row && row.body) === text(latestMessage)) {
-      removedLatest = true;
-      return false;
-    }
-    return true;
-  }).reverse();
-  return previous.some(function appointmentRow(row) {
+  if (appointmentTopicActive(conversation, latestMessage)) return true;
+  const rows = conversationMessages(conversation).slice(-20);
+  return rows.some(function appointmentRow(row) {
     const body = text(row && row.body);
-    return isAppointmentAvailabilityIntent(body)
-      || /\b(verified (?:appointment )?times?|horarios? verificados?|which one works|cual le conviene|alguno le resulta conveniente|prepare the appointment|prepare la cita)\b/i.test(normalized(body));
+    return body !== text(latestMessage) && isAppointmentAvailabilityIntent(body);
   });
 }
 
-function appointmentFollowUpType(message, hasContext) {
+function appointmentFollowUpType(message, hasContext, locale) {
   if (!hasContext) return 'none';
-  const source = normalized(message);
-  const wantsAlternative = /\b(ningun|ninguno|ninguna|no puedo|no me sirve|no me conviene|otro dia|otra fecha|otro horario|mas tarde|mas temprano|none of those|none work|does not work|doesn t work|another day|another time|different day|different time|later time|earlier time)\b/.test(source);
-  if (wantsAlternative) return 'alternative';
-  const declines = /^(no|nope|nah)[.!\s]*$/.test(source)
-    || /\b(no gracias|no quiero (?:hacer |agendar |reservar )?(?:una )?cita|prefiero no|ya no quiero|dejemoslo asi|no me interesa|don t want (?:an )?appointment|do not want (?:an )?appointment|no appointment|not interested|no thanks|never mind|not right now)\b/.test(source);
-  if (declines) return 'decline';
-  if (/\b(el primero|la primera|primero|first one|the first|el segundo|la segunda|segundo|second one|the second|el tercero|la tercera|tercero|third one|the third)\b/.test(source)) return 'selection';
+  const classified = classifyAppointmentMessage(message, locale || 'en', true);
+  if (['same_day_alternative', 'reject_offered_times'].includes(classified.intent)) return 'same_day_alternative';
+  if (classified.intent === 'next_day_alternative') return 'alternative';
+  if (classified.intent === 'decline_appointment') return 'decline';
+  if (['select_first', 'select_second', 'select_third'].includes(classified.intent)) return 'selection';
+  if (classified.intent === 'accept_recommendation') return 'acceptance';
   if (parseRequestedDateTime(message, new Date()).time) return 'selection';
-  if (/\b(si|yes|perfecto|perfect|me conviene|me sirve|that works|works for me|tomare|i ll take)\b/.test(source)) return 'acceptance';
-  return 'none';
+  return classified.matched ? 'contextual' : 'none';
 }
 
 function lastRequestedDate(conversation, latestMessage, referenceDate) {
-  const rows = conversationMessages(conversation).slice(-16).reverse();
+  const rows = conversationMessages(conversation).slice(-24).reverse();
   let skippedLatest = false;
   for (const row of rows) {
-    if (!row || String(row.direction || '').toLowerCase() === 'outbound') continue;
+    if (!row || normalized(row.direction) === 'outbound') continue;
     const body = text(row.body);
     if (!skippedLatest && body === text(latestMessage)) { skippedLatest = true; continue; }
-    const parsed = parseRequestedDateTime(body, referenceDate);
+    const rowReference = row.sent_at || row.created_at ? new Date(row.sent_at || row.created_at) : referenceDate;
+    const parsed = parseRequestedDateTime(body, Number.isNaN(rowReference.getTime()) ? referenceDate : rowReference);
     if (parsed.date) return parsed.date;
   }
   return null;
@@ -89,48 +87,12 @@ function groupSlotsByDay(slots) {
   }).sort(function sortGroups(a, b) { return a.date - b.date; });
 }
 
-function requestedOrdinal(message) {
-  const source = normalized(message);
-  if (/\b(el primero|la primera|primero|first one|the first)\b/.test(source)) return 0;
-  if (/\b(el segundo|la segunda|segundo|second one|the second)\b/.test(source)) return 1;
-  if (/\b(el tercero|la tercera|tercero|third one|the third)\b/.test(source)) return 2;
+function requestedOrdinal(message, classification) {
+  const intent = classification && classification.intent;
+  if (intent === 'select_first' || /\b(el primero|la primera|primero|first one|the first)\b/.test(normalized(message))) return 0;
+  if (intent === 'select_second' || /\b(el segundo|la segunda|segundo|second one|the second)\b/.test(normalized(message))) return 1;
+  if (intent === 'select_third' || /\b(el tercero|la tercera|tercero|third one|the third)\b/.test(normalized(message))) return 2;
   return null;
-}
-
-function previousOrEarliestDay(conversation, latestMessage, groups, referenceDate) {
-  const previousDate = lastRequestedDate(conversation, latestMessage, referenceDate);
-  if (previousDate) return localDateKey(previousDate);
-  return groups.length ? groups[0].key : '';
-}
-
-function resolveSlotSelection(message, conversation, slots, referenceDate) {
-  const now = referenceDate || new Date();
-  const requested = parseRequestedDateTime(message, now);
-  const groups = groupSlotsByDay(slots);
-  if (requested.date && requested.exact) {
-    const selected = (slots || []).find(function exact(slot) { return Math.abs(slot.start.getTime() - requested.date.getTime()) <= 15 * 60000; }) || null;
-    return { selected: selected, requested: requested, reference_day: localDateKey(requested.date) };
-  }
-  const contextDay = requested.date ? localDateKey(requested.date) : previousOrEarliestDay(conversation, message, groups, now);
-  const daySlots = contextDay ? (groups.find(function sameDay(group) { return group.key === contextDay; }) || {}).slots || [] : [];
-  const ordinal = requestedOrdinal(message);
-  if (ordinal !== null) return { selected: daySlots[ordinal] || null, requested: requested, reference_day: contextDay };
-  if (requested.time) {
-    const pool = daySlots.length ? daySlots : (slots || []);
-    const matching = pool.filter(function sameTime(slot) {
-      return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute;
-    });
-    return { selected: matching.length ? matching[0] : null, requested: requested, reference_day: contextDay };
-  }
-  return { selected: null, requested: requested, reference_day: contextDay };
-}
-
-function explicitBookingCommitment(message, hasContext, followUpType, selected) {
-  if (!selected) return false;
-  const source = normalized(message);
-  if (/\b(quiero (?:hacer |agendar |reservar )?(?:una |la )?cita|agendame|reservame|puede agendar|puedes agendar|hacer una cita|schedule (?:an|the|my) appointment|book (?:an|the|my) appointment|reserve (?:the|this) time|i ll take|tomare)\b/.test(source)) return true;
-  if (/\b(can i schedule|could you schedule|please schedule|me conviene|me sirve|perfecto|that works|works for me)\b/.test(source)) return true;
-  return hasContext && ['selection', 'acceptance'].includes(followUpType);
 }
 
 function formatDate(value, locale) {
@@ -147,103 +109,228 @@ function formatMinutes(value, locale) {
   return formatTime(date, locale);
 }
 
+function lastOfferedGroupKey(conversation, groups, locale) {
+  const outbound = conversationMessages(conversation).slice(-20).reverse().filter(function onlyOutbound(row) { return normalized(row && row.direction) === 'outbound'; });
+  for (const row of outbound) {
+    const body = normalized(row && row.body);
+    for (const group of groups) {
+      if (body.includes(normalized(formatDate(group.date, locale)))) return group.key;
+    }
+    let best = null;
+    groups.forEach(function countTimes(group) {
+      const matches = group.slots.filter(function mentioned(slot) { return body.includes(normalized(formatTime(slot.start, locale))); }).length;
+      if (matches && (!best || matches > best.matches)) best = { key: group.key, matches: matches };
+    });
+    if (best) return best.key;
+  }
+  return '';
+}
+
+function previousOrEarliestDay(conversation, latestMessage, groups, referenceDate, locale) {
+  const offered = lastOfferedGroupKey(conversation, groups, locale);
+  if (offered) return offered;
+  const previousDate = lastRequestedDate(conversation, latestMessage, referenceDate);
+  if (previousDate) return localDateKey(previousDate);
+  return groups.length ? groups[0].key : '';
+}
+
+function slotMinutes(slot) { return slot.start.getHours() * 60 + slot.start.getMinutes(); }
+
+function rankSlotsForPreference(slots, preference, limit) {
+  const source = (slots || []).slice();
+  let matched = source.slice();
+  let preferenceMatched = true;
+  if (preference && preference.type === 'after') {
+    matched = source.filter(function after(slot) { return slotMinutes(slot) >= preference.minutes; }).sort(function closestAfter(a, b) { return a.start - b.start; });
+    if (!matched.length) { preferenceMatched = false; matched = source.sort(function latest(a, b) { return b.start - a.start; }); }
+  } else if (preference && preference.type === 'before') {
+    matched = source.filter(function before(slot) { return slotMinutes(slot) <= preference.minutes; }).sort(function closestBefore(a, b) { return b.start - a.start; });
+    if (!matched.length) { preferenceMatched = false; matched = source.sort(function earliest(a, b) { return a.start - b.start; }); }
+  } else if (preference && preference.type === 'period') {
+    matched = source.filter(function inPeriod(slot) { const minutes = slotMinutes(slot); return minutes >= preference.start && minutes < preference.end; }).sort(function chronological(a, b) { return a.start - b.start; });
+    if (!matched.length) {
+      preferenceMatched = false;
+      const center = (preference.start + preference.end) / 2;
+      matched = source.sort(function nearestPeriod(a, b) { return Math.abs(slotMinutes(a) - center) - Math.abs(slotMinutes(b) - center); });
+    }
+  } else matched.sort(function chronological(a, b) { return a.start - b.start; });
+  return { slots: matched.slice(0, Math.max(1, Number(limit || 3))), preferenceMatched: preferenceMatched };
+}
+
+function previouslyOfferedSlots(conversation, group, locale) {
+  const outbound = conversationMessages(conversation).slice(-12).reverse().find(function appointmentOffer(row) {
+    if (normalized(row && row.direction) !== 'outbound') return false;
+    const body = normalized(row && row.body);
+    return group.slots.some(function hasTime(slot) { return body.includes(normalized(formatTime(slot.start, locale))); });
+  });
+  if (!outbound) return [];
+  const body = normalized(outbound.body);
+  return group.slots.filter(function mentioned(slot) { return body.includes(normalized(formatTime(slot.start, locale))); });
+}
+
+function lastOfferedSlots(conversation, groups, locale) {
+  const allSlots = groups.reduce(function flatten(output, group) { return output.concat(group.slots); }, []);
+  const outbound = conversationMessages(conversation).slice(-16).reverse().find(function appointmentOffer(row) {
+    if (normalized(row && row.direction) !== 'outbound') return false;
+    const body = normalized(row && row.body);
+    return allSlots.some(function hasTime(slot) { return body.includes(normalized(formatTime(slot.start, locale))); });
+  });
+  if (!outbound) return [];
+  const body = normalized(outbound.body);
+  return allSlots.map(function withPosition(slot) {
+    return { slot: slot, position: body.indexOf(normalized(formatTime(slot.start, locale))) };
+  }).filter(function mentioned(item) { return item.position >= 0; })
+    .sort(function responseOrder(a, b) { return a.position - b.position || a.slot.start - b.slot.start; })
+    .filter(function unique(item, index, rows) { return rows.findIndex(function same(candidate) { return candidate.slot.id === item.slot.id; }) === index; })
+    .map(function unwrap(item) { return item.slot; });
+}
+
+function resolveSlotSelection(message, conversation, slots, referenceDate, locale, preference, followUpType, classification) {
+  const now = referenceDate || new Date();
+  const requested = parseRequestedDateTime(message, now);
+  const groups = groupSlotsByDay(slots);
+  if (requested.date && requested.exact) {
+    const selected = (slots || []).find(function exact(slot) { return Math.abs(slot.start.getTime() - requested.date.getTime()) <= 15 * 60000; }) || null;
+    return { selected: selected, requested: requested, reference_day: localDateKey(requested.date) };
+  }
+  const contextDay = requested.date ? localDateKey(requested.date) : previousOrEarliestDay(conversation, message, groups, now, locale);
+  const daySlots = contextDay ? (groups.find(function sameDay(group) { return group.key === contextDay; }) || {}).slots || [] : [];
+  const ranked = rankSlotsForPreference(daySlots.length ? daySlots : slots, preference, 3).slots;
+  const offered = lastOfferedSlots(conversation, groups, locale);
+  const ordinal = requestedOrdinal(message, classification);
+  if (ordinal !== null) return { selected: offered[ordinal] || ranked[ordinal] || null, requested: requested, reference_day: contextDay };
+  if (requested.time) {
+    const pool = daySlots.length ? daySlots : (slots || []);
+    let matching = offered.filter(function offeredTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
+    if (!matching.length) matching = pool.filter(function sameTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
+    if (!matching.length) matching = (slots || []).filter(function anyDaySameTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
+    return { selected: matching.length ? matching[0] : null, requested: requested, reference_day: contextDay };
+  }
+  if (followUpType === 'acceptance') return { selected: offered[0] || ranked[0] || null, requested: requested, reference_day: contextDay };
+  return { selected: null, requested: requested, reference_day: contextDay };
+}
+
+function explicitBookingCommitment(message, hasContext, followUpType, selected, classification) {
+  if (!selected) return false;
+  if (classification && ['select_first', 'select_second', 'select_third', 'accept_recommendation'].includes(classification.intent)) return hasContext;
+  const source = normalized(message);
+  if (/\b(quiero (?:hacer |agendar |reservar )?(?:una |la )?cita|agendame|reservame|puede agendar|puedes agendar|hacer una cita|schedule (?:an|the|my) appointment|book (?:an|the|my) appointment|reserve (?:the|this) time|i ll take|tomare)\b/.test(source)) return true;
+  if (/\b(can i schedule|could you schedule|please schedule|me conviene|me sirve|perfecto|that works|works for me)\b/.test(source)) return true;
+  return hasContext && ['selection', 'acceptance'].includes(followUpType);
+}
+
 function dealerLabel(contact, locale) {
   return text(contact.store_name || contact.dealer_name) || (locale === 'es' ? 'el dealer' : 'the dealer');
 }
 
-function contactClosing(contact, locale) {
-  const name = dealerLabel(contact, locale);
+function contactAction(contact, locale) {
   const methods = [];
   if (contact.phone) methods.push(locale === 'es' ? 'llamarnos al ' + contact.phone : 'call us at ' + contact.phone);
   if (contact.email) methods.push(locale === 'es' ? 'escribir a ' + contact.email : 'email ' + contact.email);
   if (contact.location) methods.push(locale === 'es' ? 'visitarnos en ' + contact.location : 'visit us at ' + contact.location);
   methods.push(locale === 'es' ? 'escribirnos por este mismo chat' : 'message us in this same chat');
-  if (locale === 'es') return 'Entendido, no hay problema y gracias por avisarnos. Si más adelante desea coordinar una visita con ' + name + ', puede ' + methods.join(', ') + '. Con gusto le ayudaremos cuando le resulte conveniente.';
-  return 'Understood—no problem, and thank you for letting us know. If you would like to arrange a visit with ' + name + ' later, you can ' + methods.join(', ') + '. We will be happy to help whenever it is convenient for you.';
+  return methods.join(', ');
+}
+
+function contactClosing(contact, locale, seed) {
+  return appointmentResponse('decline', locale, { dealer: dealerLabel(contact, locale), contact: contactAction(contact, locale) }, seed);
 }
 
 function slotListText(daySlots, locale) {
-  const shown = daySlots.slice(0, 8);
-  let result = shown.map(function time(slot) { return formatTime(slot.start, locale); }).join(', ');
-  if (daySlots.length > shown.length) result += locale === 'es' ? ' y ' + (daySlots.length - shown.length) + ' horarios adicionales' : ' and ' + (daySlots.length - shown.length) + ' additional times';
-  return result;
+  return (daySlots || []).map(function time(slot) { return formatTime(slot.start, locale); }).join(locale === 'es' ? ', ' : ', ');
 }
 
-function dayOffer(payload, group, locale, prefix) {
-  const contact = compactAvailabilityContext(payload, {}, new Date());
-  const label = dealerLabel(contact, locale);
+function dayOffer(payload, group, locale, prefix, options) {
+  const input = options || {};
+  const contact = compactAvailabilityContext(payload, {}, input.referenceDate || new Date());
   const window = dailyScheduleWindow(payload, group.date, group.slots);
   const parts = [];
   if (prefix) parts.push(prefix);
   if (window) {
-    if (window.source === 'verified_slots') {
-      parts.push(locale === 'es'
-        ? 'Los horarios verificados de cita para el ' + formatDate(group.date, locale) + ' están entre ' + formatMinutes(window.start_minutes, locale) + ' y ' + formatMinutes(window.end_minutes, locale) + '.'
-        : 'The verified appointment times for ' + formatDate(group.date, locale) + ' run from ' + formatMinutes(window.start_minutes, locale) + ' to ' + formatMinutes(window.end_minutes, locale) + '.');
-    } else {
-      parts.push(locale === 'es'
-        ? 'El horario de ' + label + ' para el ' + formatDate(group.date, locale) + ' es de ' + formatMinutes(window.start_minutes, locale) + ' a ' + formatMinutes(window.end_minutes, locale) + '.'
-        : label + ' is available on ' + formatDate(group.date, locale) + ' from ' + formatMinutes(window.start_minutes, locale) + ' to ' + formatMinutes(window.end_minutes, locale) + '.');
-    }
+    parts.push(appointmentResponse(window.source === 'verified_slots' ? 'verified_window' : 'dealer_hours', locale, {
+      dealer: dealerLabel(contact, locale), date: formatDate(group.date, locale),
+      start: formatMinutes(window.start_minutes, locale), end: formatMinutes(window.end_minutes, locale)
+    }, group.key));
   }
-  parts.push(locale === 'es'
-    ? 'Las horas disponibles verificadas para cita son: ' + slotListText(group.slots, locale) + '. ¿Le resulta conveniente alguno de estos horarios?'
-    : 'The verified appointment times available are: ' + slotListText(group.slots, locale) + '. Would any of these times be convenient for you?');
-  return parts.join(' ');
+  const ranked = rankSlotsForPreference(group.slots, input.preference, 3);
+  const recommended = ranked.slots[0] || null;
+  const alternatives = ranked.slots.slice(1);
+  if (!recommended) return { response: parts.join(' '), recommendedSlot: null, offeredSlots: [] };
+  const variables = {
+    recommended: formatTime(recommended.start, locale),
+    alternatives: slotListText(alternatives, locale),
+    alternatives_clause: alternatives.length
+      ? (locale === 'es' ? ' También están disponibles ' : ' ') + slotListText(alternatives, locale) + '.'
+      : '',
+    options: slotListText(ranked.slots, locale),
+    future_time: input.futurePreference ? formatTime(input.futurePreference.slot.start, locale) : '',
+    future_date: input.futurePreference ? formatDate(input.futurePreference.group.date, locale) : ''
+  };
+  let responseKey = 'offer_without_preference';
+  if (input.preference && !ranked.preferenceMatched && input.futurePreference) responseKey = 'preference_unavailable_with_future';
+  else if (input.preference && !ranked.preferenceMatched) responseKey = 'preference_unavailable';
+  else if (input.preference && alternatives.length) responseKey = 'offer_with_recommendation';
+  else if (input.preference) responseKey = 'offer_single_recommendation';
+  parts.push(appointmentResponse(responseKey, locale, Object.assign({ preference: input.preference && input.preference.label }, variables), group.key + '|' + text(input.preference && input.preference.source)));
+  return { response: parts.filter(Boolean).join(' '), recommendedSlot: recommended, offeredSlots: ranked.slots };
 }
 
-function nextAvailableGroup(groups, afterDate, excludeFirstWhenUnknown) {
+function nextAvailableGroup(groups, afterDate) {
   if (!groups.length) return null;
   if (afterDate) {
     const wanted = localDateKey(afterDate);
     return groups.find(function later(group) { return group.key > wanted; }) || null;
   }
-  return excludeFirstWhenUnknown && groups.length > 1 ? groups[1] : groups[0];
+  return groups[0];
 }
 
-function unavailableReply(payload, requestedDate, groups, locale, blocked) {
-  const next = nextAvailableGroup(groups, requestedDate, false);
+function noFutureAvailability(payload, prefix, locale, seed) {
+  const contact = compactAvailabilityContext(payload, {}, new Date());
+  const response = appointmentResponse('no_future_slots', locale, { contact: contactAction(contact, locale), dealer: dealerLabel(contact, locale) }, seed);
+  return { response: [prefix, response].filter(Boolean).join(' '), recommendedSlot: null, offeredSlots: [] };
+}
+
+function unavailableReply(payload, requestedDate, groups, locale, blocked, options) {
+  const input = options || {};
+  const next = nextAvailableGroup(groups, requestedDate);
   const dateLabel = requestedDate ? formatDate(requestedDate, locale) : '';
   let prefix = '';
-  if (requestedDate && blocked) {
-    prefix = locale === 'es'
-      ? 'El ' + dateLabel + ' está marcado como día off o fecha bloqueada en el horario verificado.'
-      : dateLabel + ' is marked as a day off or blocked date in the verified schedule.';
-  } else if (requestedDate) {
-    prefix = locale === 'es'
-      ? 'El dealer puede tener horario de atención el ' + dateLabel + ', pero no aparecen horas de cita verificadas disponibles para ese día.'
-      : 'The dealer may have business hours on ' + dateLabel + ', but there are no verified appointment times available that day.';
-  }
+  if (requestedDate && blocked) prefix = appointmentResponse('blocked_day', locale, { date: dateLabel }, localDateKey(requestedDate));
+  else if (requestedDate) prefix = appointmentResponse('no_slots_day', locale, { date: dateLabel }, localDateKey(requestedDate));
   if (next) {
-    const transition = locale === 'es'
-      ? (prefix ? prefix + ' ' : '') + 'El siguiente día con disponibilidad verificada es el ' + formatDate(next.date, locale) + '.'
-      : (prefix ? prefix + ' ' : '') + 'The next day with verified availability is ' + formatDate(next.date, locale) + '.';
-    return dayOffer(payload, next, locale, transition);
+    const transitionKey = input.sameDayExhausted ? 'same_day_none_transition' : 'next_day_transition';
+    const transition = appointmentResponse(transitionKey, locale, { date: formatDate(next.date, locale) }, next.key);
+    let futurePreference = null;
+    if (input.preference && !rankSlotsForPreference(next.slots, input.preference, 3).preferenceMatched) {
+      const laterGroups = groups.filter(function later(group) { return group.key > next.key; });
+      for (const later of laterGroups) {
+        const rankedLater = rankSlotsForPreference(later.slots, input.preference, 3);
+        if (rankedLater.preferenceMatched && rankedLater.slots.length) {
+          futurePreference = { group: later, slot: rankedLater.slots[0] };
+          break;
+        }
+      }
+    }
+    return dayOffer(payload, next, locale, [prefix, transition].filter(Boolean).join(' '), { preference: input.preference, futurePreference: futurePreference, referenceDate: input.referenceDate });
   }
-  const contact = compactAvailabilityContext(payload, {}, new Date());
-  return (prefix ? prefix + ' ' : '') + (locale === 'es'
-    ? 'No aparecen otros horarios verificados en la ventana actual. Puede comunicarse con ' + dealerLabel(contact, locale) + (contact.phone ? ' al ' + contact.phone : '') + ' o escribirnos por este chat para que le ayudemos.'
-    : 'No other verified times appear in the current window. You can contact ' + dealerLabel(contact, locale) + (contact.phone ? ' at ' + contact.phone : '') + ' or message us here so we can help.');
+  return noFutureAvailability(payload, prefix, locale, requestedDate && localDateKey(requestedDate));
 }
 
-function exactAvailableReply(payload, selected, daySlots, locale) {
+function exactAvailableReply(payload, selected, daySlots, locale, referenceDate) {
   const group = { key: localDateKey(selected.start), date: new Date(localDateKey(selected.start) + 'T12:00:00'), slots: daySlots };
   const window = dailyScheduleWindow(payload, group.date, daySlots);
-  const contact = compactAvailabilityContext(payload, {}, new Date());
+  const contact = compactAvailabilityContext(payload, {}, referenceDate || new Date());
   const parts = [];
   if (window) {
-    parts.push(window.source === 'verified_slots'
-      ? (locale === 'es'
-        ? 'Los horarios verificados de cita para ese día están entre ' + formatMinutes(window.start_minutes, locale) + ' y ' + formatMinutes(window.end_minutes, locale) + '.'
-        : 'The verified appointment times that day run from ' + formatMinutes(window.start_minutes, locale) + ' to ' + formatMinutes(window.end_minutes, locale) + '.')
-      : (locale === 'es'
-        ? 'El horario de ' + dealerLabel(contact, locale) + ' ese día es de ' + formatMinutes(window.start_minutes, locale) + ' a ' + formatMinutes(window.end_minutes, locale) + '.'
-        : dealerLabel(contact, locale) + ' is available that day from ' + formatMinutes(window.start_minutes, locale) + ' to ' + formatMinutes(window.end_minutes, locale) + '.'));
+    parts.push(appointmentResponse(window.source === 'verified_slots' ? 'verified_window' : 'dealer_hours', locale, {
+      dealer: dealerLabel(contact, locale), date: formatDate(group.date, locale),
+      start: formatMinutes(window.start_minutes, locale), end: formatMinutes(window.end_minutes, locale)
+    }, group.key));
   }
-  parts.push(locale === 'es'
-    ? 'La hora de las ' + formatTime(selected.start, locale) + ' está disponible y verificada' + (selected.location ? ' en ' + selected.location : '') + '. ¿Desea que prepare la cita?'
-    : formatTime(selected.start, locale) + ' is available and verified' + (selected.location ? ' at ' + selected.location : '') + '. Would you like me to prepare the appointment?');
-  return parts.join(' ');
+  parts.push(appointmentResponse('exact_available', locale, {
+    time: formatTime(selected.start, locale), location: selected.location ? (locale === 'es' ? ' en ' : ' at ') + selected.location : ''
+  }, selected.id));
+  return parts.filter(Boolean).join(' ');
 }
 
 function appointmentConversationPlan(input) {
@@ -253,72 +340,89 @@ function appointmentConversationPlan(input) {
   const conversation = options.conversation || {};
   const message = text(options.message);
   const now = options.referenceDate || new Date();
-  const hasContext = appointmentConversationActive(conversation, message);
-  const followUpType = appointmentFollowUpType(message, hasContext);
-  const directIntent = isAppointmentAvailabilityIntent(message);
   const locale = detectAppointmentLocale(message, conversation, options.locale);
-  const relevant = directIntent || (hasContext && followUpType !== 'none');
-  if (!relevant) return { relevant: false, locale: locale, decision: 'none', response: '' };
+  const hasContext = appointmentConversationActive(conversation, message);
+  const classification = classifyAppointmentMessage(message, locale, hasContext);
+  const followUpType = appointmentFollowUpType(message, hasContext, locale);
+  const directIntent = isAppointmentAvailabilityIntent(message) || hasAppointmentTopicAnchor(message);
+  const relevant = !isExplicitAppointmentTopicSwitch(message) && (directIntent || (hasContext && (classification.matched || followUpType !== 'none')));
+  if (!relevant) return { relevant: false, locale: locale, decision: 'none', response: '', libraryIntent: classification.intent };
   const contact = compactAvailabilityContext(payload, {}, now);
   if (followUpType === 'decline') {
-    return { relevant: true, locale: locale, decision: 'decline', response: contactClosing(contact, locale), shouldCreate: false, selectedSlot: null };
+    return { relevant: true, locale: locale, decision: 'decline', response: contactClosing(contact, locale, message), shouldCreate: false, selectedSlot: null, libraryIntent: classification.intent };
   }
   const groups = groupSlotsByDay(slots);
-  const selection = resolveSlotSelection(message, conversation, slots, now);
+  const preference = conversationTimePreference(conversation, message, locale);
+  const selection = resolveSlotSelection(message, conversation, slots, now, locale, preference, followUpType, classification);
   const requested = selection.requested;
-  const requestedDate = requested.date || lastRequestedDate(conversation, message, now);
-  if (followUpType === 'alternative') {
-    const next = nextAvailableGroup(groups, requestedDate || (groups[0] && groups[0].date), true);
-    if (next) {
-      const prefix = locale === 'es'
-        ? 'Claro, busquemos otra opción. El siguiente día con disponibilidad verificada es el ' + formatDate(next.date, locale) + '.'
-        : 'Of course—let’s find another option. The next day with verified availability is ' + formatDate(next.date, locale) + '.';
-      return { relevant: true, locale: locale, decision: 'offer_next_day', response: dayOffer(payload, next, locale, prefix), shouldCreate: false, selectedSlot: null };
-    }
-    return { relevant: true, locale: locale, decision: 'no_availability', response: unavailableReply(payload, requestedDate, groups, locale, false), shouldCreate: false, selectedSlot: null };
-  }
+  const priorRequestedDate = lastRequestedDate(conversation, message, now);
+  const requestedDate = requested.date || priorRequestedDate;
   if (selection.selected) {
     const daySlots = groups.find(function sameDay(group) { return group.key === localDateKey(selection.selected.start); });
-    const shouldCreate = explicitBookingCommitment(message, hasContext, followUpType, selection.selected);
+    const shouldCreate = explicitBookingCommitment(message, hasContext, followUpType, selection.selected, classification);
     return {
-      relevant: true,
-      locale: locale,
-      decision: shouldCreate ? 'select_slot' : 'exact_available',
-      response: exactAvailableReply(payload, selection.selected, daySlots ? daySlots.slots : [selection.selected], locale),
-      shouldCreate: shouldCreate,
-      selectedSlot: selection.selected,
-      requested: requested
+      relevant: true, locale: locale, decision: shouldCreate ? 'select_slot' : 'exact_available',
+      response: exactAvailableReply(payload, selection.selected, daySlots ? daySlots.slots : [selection.selected], locale, now),
+      shouldCreate: shouldCreate, selectedSlot: selection.selected, requested: requested, preference: preference,
+      libraryIntent: classification.intent
     };
   }
-  if (requested.date) {
-    const requestedKey = localDateKey(requested.date);
-    const group = groups.find(function sameDay(item) { return item.key === requestedKey; });
-    const blocked = dateAvailabilityState(payload, requested.date).blocked;
-    if (group && group.slots.length) {
-      const prefix = requested.exact
-        ? (locale === 'es' ? 'La hora solicitada no está disponible, pero sí hay otras opciones verificadas ese mismo día.' : 'The requested time is not available, but there are other verified options that same day.')
-        : '';
-      return { relevant: true, locale: locale, decision: 'offer_same_day', response: dayOffer(payload, group, locale, prefix), shouldCreate: false, selectedSlot: null, requested: requested };
+  if (followUpType === 'same_day_alternative') {
+    const referenceKey = requestedDate ? localDateKey(requestedDate) : lastOfferedGroupKey(conversation, groups, locale);
+    const referenceGroup = groups.find(function sameDay(group) { return group.key === referenceKey; });
+    const referenceDate = requestedDate || (referenceGroup && referenceGroup.date) || null;
+    const blocked = referenceDate ? dateAvailabilityState(payload, referenceDate).blocked : false;
+    if (referenceGroup && !blocked) {
+      const offeredIds = new Set(previouslyOfferedSlots(conversation, referenceGroup, locale).map(function id(slot) { return slot.id; }));
+      const remaining = referenceGroup.slots.filter(function notOffered(slot) { return !offeredIds.has(slot.id); });
+      if (remaining.length) {
+        const prefix = appointmentResponse('same_day_more_transition', locale, {}, referenceGroup.key);
+        const offer = dayOffer(payload, Object.assign({}, referenceGroup, { slots: remaining }), locale, prefix, { preference: preference, referenceDate: now });
+        return { relevant: true, locale: locale, decision: 'offer_same_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, preference: preference, libraryIntent: classification.intent };
+      }
     }
-    return { relevant: true, locale: locale, decision: blocked ? 'blocked_day' : 'offer_next_day', response: unavailableReply(payload, requested.date, groups, locale, blocked), shouldCreate: false, selectedSlot: null, requested: requested };
+    const unavailable = unavailableReply(payload, referenceDate, groups, locale, blocked, { sameDayExhausted: true, preference: preference, referenceDate: now });
+    return { relevant: true, locale: locale, decision: blocked ? 'blocked_day' : 'offer_next_day', response: unavailable.response, shouldCreate: false, selectedSlot: null, recommendedSlot: unavailable.recommendedSlot, offeredSlots: unavailable.offeredSlots, preference: preference, libraryIntent: classification.intent };
+  }
+  if (followUpType === 'alternative') {
+    const offeredKey = lastOfferedGroupKey(conversation, groups, locale);
+    const afterDate = offeredKey ? new Date(offeredKey + 'T12:00:00') : requestedDate || (groups[0] && groups[0].date);
+    const next = nextAvailableGroup(groups, afterDate);
+    if (next) {
+      const prefix = appointmentResponse('alternative_transition', locale, { date: formatDate(next.date, locale) }, next.key);
+      const offer = dayOffer(payload, next, locale, prefix, { preference: preference, referenceDate: now });
+      return { relevant: true, locale: locale, decision: 'offer_next_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, preference: preference, libraryIntent: classification.intent };
+    }
+    const none = noFutureAvailability(payload, '', locale, message);
+    return { relevant: true, locale: locale, decision: 'no_availability', response: none.response, shouldCreate: false, selectedSlot: null, preference: preference, libraryIntent: classification.intent };
+  }
+  if (requestedDate) {
+    const requestedKey = localDateKey(requestedDate);
+    const group = groups.find(function sameDay(item) { return item.key === requestedKey; });
+    const blocked = dateAvailabilityState(payload, requestedDate).blocked;
+    if (group && group.slots.length && !blocked) {
+      const prefix = requested.exact ? appointmentResponse('requested_time_unavailable', locale, {}, requestedKey) : '';
+      const offer = dayOffer(payload, group, locale, prefix, { preference: preference, referenceDate: now });
+      return { relevant: true, locale: locale, decision: 'offer_same_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
+    }
+    const unavailable = unavailableReply(payload, requestedDate, groups, locale, blocked, { preference: preference, referenceDate: now });
+    return { relevant: true, locale: locale, decision: blocked ? 'blocked_day' : 'offer_next_day', response: unavailable.response, shouldCreate: false, selectedSlot: null, recommendedSlot: unavailable.recommendedSlot, offeredSlots: unavailable.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
   }
   if (groups.length) {
-    return { relevant: true, locale: locale, decision: 'offer_first_day', response: dayOffer(payload, groups[0], locale, ''), shouldCreate: false, selectedSlot: null, requested: requested };
+    const offer = dayOffer(payload, groups[0], locale, '', { preference: preference, referenceDate: now });
+    return { relevant: true, locale: locale, decision: 'offer_first_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
   }
-  return { relevant: true, locale: locale, decision: 'no_availability', response: unavailableReply(payload, null, groups, locale, false), shouldCreate: false, selectedSlot: null, requested: requested };
+  const none = noFutureAvailability(payload, '', locale, message);
+  return { relevant: true, locale: locale, decision: 'no_availability', response: none.response, shouldCreate: false, selectedSlot: null, requested: requested, preference: preference, libraryIntent: classification.intent };
 }
 
 function appointmentConfirmation(slot, locale, payload) {
   const contact = compactAvailabilityContext(payload || [], {}, new Date());
-  const name = dealerLabel(contact, locale);
-  if (locale === 'es') {
-    return 'Su cita quedó programada para el ' + formatDate(slot.start, locale) + ' a las ' + formatTime(slot.start, locale)
-      + (slot.location ? ' en ' + slot.location : contact.location ? ' en ' + contact.location : '')
-      + '. Si necesita cambiarla, comuníquese con ' + name + (contact.phone ? ' al ' + contact.phone : '') + ' o escríbanos por este chat.';
-  }
-  return 'Your appointment is scheduled for ' + formatDate(slot.start, locale) + ' at ' + formatTime(slot.start, locale)
-    + (slot.location ? ' at ' + slot.location : contact.location ? ' at ' + contact.location : '')
-    + '. If you need to change it, contact ' + name + (contact.phone ? ' at ' + contact.phone : '') + ' or message us in this chat.';
+  return appointmentResponse('confirmation', locale, {
+    date: formatDate(slot.start, locale), time: formatTime(slot.start, locale),
+    location: slot.location ? (locale === 'es' ? ' en ' : ' at ') + slot.location : contact.location ? (locale === 'es' ? ' en ' : ' at ') + contact.location : '',
+    contact: contactAction(contact, locale), dealer: dealerLabel(contact, locale)
+  }, slot.id);
 }
 
 module.exports = {
@@ -332,5 +436,6 @@ module.exports = {
   formatDate,
   formatTime,
   groupSlotsByDay,
+  rankSlotsForPreference,
   resolveSlotSelection
 };

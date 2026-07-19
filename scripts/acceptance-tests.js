@@ -15,6 +15,7 @@ const appSource = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
 const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
 const dealerAvailabilityService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-availability-service.js'), 'utf8');
 const appointmentCommunicationService = fs.readFileSync(path.join(root, 'src', 'services', 'appointment-communication-service.js'), 'utf8');
+const appointmentLibraryService = fs.readFileSync(path.join(root, 'src', 'services', 'appointment-communication-library-service.js'), 'utf8');
 assert.equal(preload.includes('integration:inspector'), true);
 assert.equal(preload.includes('integration:items'), true);
 assert.equal(html.includes('data-testid="api-sync-inspector"'), true);
@@ -33,6 +34,9 @@ assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V
 assert.equal(appointmentCommunicationService.includes('NEXA_PRO_APPOINTMENT_COMMUNICATION_V1'), true);
 assert.equal(appointmentCommunicationService.includes('same_day'), true);
 assert.equal(appointmentCommunicationService.includes('next_day'), true);
+assert.equal(appointmentLibraryService.includes('NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1'), true);
+assert.equal(appointmentLibraryService.includes('conversationTimePreference'), true);
+assert.equal(appointmentLibraryService.includes('isExplicitAppointmentTopicSwitch'), true);
 assert.equal(appSource.includes('Live Website Availability'), true);
 assert.equal(appSource.includes('dealer-appointment-availability:read scope'), true);
 

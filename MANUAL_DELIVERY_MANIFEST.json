@@ -1,11 +1,25 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.6.6",
+  "update_version": "1.6.7",
   "minimum_base_version": "1.6.0",
   "delivery_type": "complete_software_source_replacement",
   "website_files_included": false,
   "openai_required": false,
-  "database_migration": "No new schema migration. Existing SQLite data, encrypted keys, conversations, appointments, settings, custom knowledge and the 2,880-record automotive library are preserved.",
+  "database_migration": "No new schema migration. Existing SQLite data, encrypted keys, conversations, appointments, settings, custom knowledge and both built-in Knowledge libraries are preserved.",
+  "appointment_communication_library": {
+    "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
+    "version": "1.0.0",
+    "locales": [
+      "en",
+      "es"
+    ],
+    "phrases": 304,
+    "intents": 34,
+    "response_templates": 72,
+    "topic_lock": true,
+    "date_time_preference_memory": true,
+    "agenda_ranked_closing": true
+  },
   "dealer_availability": {
     "resource": "dealer-appointment-availability",
     "required_scope": "dealer-appointment-availability:read",
@@ -15,7 +29,6 @@
       "listing_id"
     ],
     "live_knowledge": true,
-    "professional_appointment_communication": true,
     "explicit_verified_slot_selection": true,
     "local_agenda_collision_guard": true,
     "remote_appointment_create_optional": true
@@ -34,16 +47,17 @@
     "categories": 9
   },
   "features": [
-    "professional bilingual appointment conversations",
-    "verified dealer daily-hours explanations",
-    "same-day verified time alternatives",
-    "next-available-day offers for blocked, full or rejected days",
-    "courteous decline with website dealer contact data",
-    "contextual short reply and slot selection recognition",
-    "availability questions never create appointments without commitment",
-    "dynamic Knowledge, automatic messages and external AI appointment policy",
-    "local Agenda double-booking protection",
-    "optional remote appointment creation with local Agenda fallback",
+    "dedicated English and Spanish appointment communication library",
+    "304 natural appointment phrases and 34 contextual intents",
+    "72 professional templates filled from live dealer data",
+    "appointment topic locking ahead of general automotive Knowledge",
+    "requested date and time-band preference memory",
+    "same-day and next-day verified alternatives",
+    "cross-day exact time-preference match",
+    "three-option Agenda-ranked closing strategy",
+    "local Agenda conflict filtering before Knowledge recommendations",
+    "explicit verified-slot selection before appointment creation",
+    "courteous decline with website contact data",
     "guarded two-way chat preserved"
   ],
   "files": [
@@ -73,14 +87,14 @@
     },
     {
       "path": "API_SYNC_INSPECTOR.md",
-      "sha256": "3cea79d4021ae6fd105cd658bdf698e0f11c46cb0ceb87ac972ffc66ae6a6a59",
+      "sha256": "f6efdd87ea775377521e7f6a1fa5d1e705fdd1826d78a7fc940f72662049870f",
       "size": 890,
       "operation": "replace_or_create"
     },
     {
       "path": "AUTOMATIC_ACTIONS.md",
-      "sha256": "75880d68571e07c750077b4f6fefc59bc1cafa4dae9a5ea36c5f841bd708ee62",
-      "size": 2347,
+      "sha256": "2baa396522cf676f574dd6e5d527e3b7f80ffa012a7617c6ccf4bfcf96d51bb9",
+      "size": 2721,
       "operation": "replace_or_create"
     },
     {
@@ -91,20 +105,20 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "d9aca9c0f397fbf1b10f8e8fbd1d098da3cf8a68df4ad3c4580c8913fb5c300c",
-      "size": 4390,
+      "sha256": "e91846c7f6882ee7a2fbfc4f4fdeaa826659dddbdcc881ec323615eeb06fb003",
+      "size": 5430,
       "operation": "replace_or_create"
     },
     {
       "path": "CONNECTED_BUSINESS_SETUP.md",
-      "sha256": "bcaa5bac10a90c17efaafccad1ac9da895ee3c0211de76eba0a509522e314fcb",
+      "sha256": "74b33c554b116490d1c7ea08105dfd3a3746621ced39353ce55579a39b3c4dc3",
       "size": 3449,
       "operation": "replace_or_create"
     },
     {
       "path": "INSTALLATION.md",
-      "sha256": "4a37624971ed73cbacd5549e25463eef01cdb25377bd986c3ea988965cde9c10",
-      "size": 2193,
+      "sha256": "56ca25acfd290d809a8aa45d9a7b5aea53ca5e2764f38aaf442e2e5fb27233ad",
+      "size": 2272,
       "operation": "replace_or_create"
     },
     {
@@ -115,7 +129,7 @@
     },
     {
       "path": "MESSAGING_API_SERVER_CONTRACT.md",
-      "sha256": "8f36fe0edab58829c56b611f6da632bc881d342c409eda57127d98c3c5409b24",
+      "sha256": "90c1452817beb91bc004f6961478fb8a5e6da188f4923ec7ea229aead20fdca6",
       "size": 5337,
       "operation": "replace_or_create"
     },
@@ -127,8 +141,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "27c410fed202927e02526a9965a58bcf1a57904644ec1e36d68d903a03a3f357",
-      "size": 5819,
+      "sha256": "c5fa65dbdde62be0426d83bf887e230357dddba3b039a5b2ef799985aa36efbf",
+      "size": 7154,
       "operation": "replace_or_create"
     },
     {
@@ -162,6 +176,12 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "UPDATE_1.6.7_ES.txt",
+      "sha256": "ebde7e09230429edfb349b12f0e566f8286b4ac8e998fdbcc32e37b54e4b5afd",
+      "size": 2591,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_1.6.2.txt",
       "sha256": "2b4fe4f5b3f11167334b0ba3e10d73d1c7b5658de1485393fa74fb57750650c5",
       "size": 1192,
@@ -186,33 +206,39 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "VALIDATION_1.6.7.txt",
+      "sha256": "b74b0ef6cbccf07ef27dd986504a06ac3edef40e38e1a9799343c28b1d9b1391",
+      "size": 2092,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "5307a648db02087e9f74f22243d67452635a544b0ea7c75574e9ae3c55dc588f",
-      "size": 2338,
+      "sha256": "7b21e5c07c204508c54f62119618c2cc837d4e137a5e82f6558ab8bf3bfc22f2",
+      "size": 2796,
       "operation": "replace_or_create"
     },
     {
       "path": "main.js",
-      "sha256": "d23e533d22ac97c0b237ba38f5c739fbe39412c21fc5cd35cdcd100cadf2c94b",
+      "sha256": "27479602d85dafb3eb3b4c014f98ce8865271d774ceb5885e3636f4d34886738",
       "size": 10956,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "b98f6782b7aee6ede3b14ced1cbf1e3815da679d82d98c61c58517f1ab94621f",
-      "size": 1078,
+      "sha256": "428d397a1bd66c5be0e0e1dd48738787928ea529e65faf3009c446a3cd4baa12",
+      "size": 1140,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "d129fa56157b49cada93526ebd9ed4fdfec5870ca7f614d272f685bdda3ac5c1",
+      "sha256": "c3cc861a68e4a94d7581656840a208cc4c25c27baab1155ba52af7e7287b0ded",
       "size": 102947,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "3b8f5cabcb8469531c07e5957f3f80b5d320938c8783b1e3677852c15be03c3b",
-      "size": 3507,
+      "sha256": "b0b3480409c59e2aaca09d8ec471ff05b94a4c0f81baa6b083d02a402de9bb3a",
+      "size": 3502,
       "operation": "replace_or_create"
     },
     {
@@ -223,8 +249,8 @@
     },
     {
       "path": "scripts/acceptance-tests.js",
-      "sha256": "5c9aaf3e8bcf0cf5651cc4363b9a9f3e79bec3cf5e3b6e7a7be675fd886d86de",
-      "size": 3198,
+      "sha256": "0dabcecdc2fc874b59c7abcaa646dc5d89320e2df6741100afb88808e60ab7c8",
+      "size": 3616,
       "operation": "replace_or_create"
     },
     {
@@ -235,32 +261,32 @@
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "19441c11c5c9edde83c535046cfc97933551e2e273d53d08aa3e3adc1514f346",
-      "size": 4496,
+      "sha256": "3254b9709ec8f552a59184ba705a8a03e4aea8a98f5b6b90ccd658770601d09c",
+      "size": 5553,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "5283d2a2f249a021f2508cd4d756b8a03bd39f8c544b3a28f7b473a950f7da39",
+      "sha256": "8d9d41655202d7b451649ea055c83320fc9d94ca2a8918e1f24ec6b3b33e02b1",
       "size": 21314,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-appointment-communication.js",
-      "sha256": "09cc7774ee504feedaff2d95f8c0f6d7917dd9323cc11eb14ee0e1ce5828e43c",
-      "size": 7750,
+      "sha256": "9f6c659118de904dff1670e2e9467301fe185cc146b62a3beaec3bf10393d939",
+      "size": 13616,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automatic-actions.js",
-      "sha256": "0ae216e19c958e0ad643125218376054b54bf794f903e05447369ccafa94737d",
-      "size": 17011,
+      "sha256": "5ed8c37f3c8c2ef50030fcbc33441d208b3945f0d616ef2e2aad377c36a9035e",
+      "size": 17089,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automotive-knowledge-library.js",
-      "sha256": "d71415cf52e6bba73029289cafc5cd2f689839ee1d979573756ebf54c0fa2570",
-      "size": 9562,
+      "sha256": "c910b3c529514fe8aaa5e99c59b216d032bb016158dfbe8327ea992f9493052f",
+      "size": 9627,
       "operation": "replace_or_create"
     },
     {
@@ -307,14 +333,14 @@
     },
     {
       "path": "scripts/validate-delivery.js",
-      "sha256": "73d24a0f523df48258ce773a5b37ee703caae781998354c51341e53a614af617",
-      "size": 2440,
+      "sha256": "79e5f51888bb30cb434e3655a5be39f5aa39c4220cab50f224eec252c4174a9d",
+      "size": 2556,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "972606530d07d2e19b163b9efbadba91d5494828b1789730bb51f791dc996981",
-      "size": 2692,
+      "sha256": "22da8c789c61db1a966c676ed7be553ad6faff9b9ebcb50bef04810a3446a651",
+      "size": 2847,
       "operation": "replace_or_create"
     },
     {
@@ -331,8 +357,8 @@
     },
     {
       "path": "src/app.js",
-      "sha256": "b9e56912da30828623bc023cec90fd5e751f55a94eb4e707d1d00cc439fc7c37",
-      "size": 165413,
+      "sha256": "39ed8b01256c814dde240e9bfbbe80926fe6db430c4581987c8918af9fffb22c",
+      "size": 166453,
       "operation": "replace_or_create"
     },
     {
@@ -345,6 +371,12 @@
       "path": "src/assets/nexa-ai-orb.svg",
       "sha256": "d9c3bc0a7ce46a3f50e851d18de25e65e6927ceafb7157a52ee01f30679f3d17",
       "size": 1576,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/data/appointment-communication-library.json",
+      "sha256": "d08c192f2e67891e4cffe8432f0d6fcf8aebf2cde806ae26ee0632c17c3b8ae2",
+      "size": 21220,
       "operation": "replace_or_create"
     },
     {
@@ -373,7 +405,7 @@
     },
     {
       "path": "src/index.html",
-      "sha256": "63a7ae00e65da4db2820d0f01dcde3d6b293c8dc9f460284064959f8972295c3",
+      "sha256": "c43600fdcfb9be2cb580f6c6c3a2a33a237e3f8f9207c1d688047604122ae974",
       "size": 8392,
       "operation": "replace_or_create"
     },
@@ -469,14 +501,20 @@
     },
     {
       "path": "src/services/ai-service.js",
-      "sha256": "de90e847911afce50d2a63ecde107c26029296a052986773a661541da894bade",
-      "size": 9272,
+      "sha256": "49b19b81bee5c30c63207b0881f8247beed07bccab5fb68f2b9989638b6cb6d8",
+      "size": 9683,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/appointment-communication-library-service.js",
+      "sha256": "9a8bf18605e658fdff67e00f14f00100252cdf20756276d720e0ed3fc9a28614",
+      "size": 9451,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/appointment-communication-service.js",
-      "sha256": "a51f14b066d718f2b39e98741002b2a003509b6cf2874dbb4f72c9f99e3e7eb8",
-      "size": 20483,
+      "sha256": "ffb335ed2c23b7d14b313bd66948b89055ed58192236d4d93275e31800273d77",
+      "size": 27949,
       "operation": "replace_or_create"
     },
     {
@@ -499,8 +537,8 @@
     },
     {
       "path": "src/services/dealer-availability-service.js",
-      "sha256": "dfef095e555a15e8b0ac12b70f37207ca0c9d6eea5b5bca2b1718b293ce43d1a",
-      "size": 26003,
+      "sha256": "489ad467ca273e92873728850facfe0930d74b643e69680d093f3d2f071151d1",
+      "size": 26962,
       "operation": "replace_or_create"
     },
     {
@@ -511,8 +549,8 @@
     },
     {
       "path": "src/services/message-response-engine.js",
-      "sha256": "3f6b09c5ab384b01164c77b68a7ebd4dafd567ab2e840c25f5ec1e06c6980357",
-      "size": 10800,
+      "sha256": "b2789049ad4097feb1764087554cab736ef04d37c212dd074710b54e21aa8f22",
+      "size": 11088,
       "operation": "replace_or_create"
     },
     {

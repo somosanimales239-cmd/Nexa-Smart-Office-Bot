@@ -20,6 +20,8 @@ const requiredFiles = [
   'src/services/automatic-actions-service.js',
   'src/services/dealer-availability-service.js',
   'src/services/appointment-communication-service.js',
+  'src/services/appointment-communication-library-service.js',
+  'src/data/appointment-communication-library.json',
   'src/ipc/foundation-ipc.js',
   'src/ipc/records-ipc.js',
   'src/ipc/agenda-ipc.js',

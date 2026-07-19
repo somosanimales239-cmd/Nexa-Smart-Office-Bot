@@ -1,0 +1,302 @@
+{
+  "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
+  "version": "1.0.0",
+  "description": "Curated English and Spanish communication library for natural, context-aware dealer appointment conversations backed by verified availability.",
+  "supported_locales": ["en", "es"],
+  "locales": {
+    "es": {
+      "topic_anchors": [
+        "cita", "hacer una cita", "agendar", "reservar horario", "programar visita", "coordinar visita",
+        "horario para ir", "hora para ir", "disponibilidad del dealer", "disponibilidad para cita",
+        "prueba de manejo", "visitar el dealer", "ver el vehiculo", "pasar por el dealer"
+      ],
+      "explicit_topic_switches": [
+        "hablando del vehiculo", "sobre el vehiculo", "precio del vehiculo", "inventario del vehiculo",
+        "financiamiento", "credito", "trade in", "valor de intercambio", "otra pregunta que no es la cita"
+      ],
+      "intents": {
+        "appointment_request": [
+          "quiero una cita", "quiero hacer una cita", "quiero agendar una cita", "quiero reservar una cita",
+          "necesito una cita", "puedo hacer una cita", "puedes hacerme una cita", "me puede agendar",
+          "quisiera programar una visita", "quiero ir al dealer", "quiero pasar por el dealer",
+          "cuando puedo ir", "cuando puedo visitar", "me interesa una prueba de manejo"
+        ],
+        "availability_question": [
+          "que horarios tienes", "que horas tienes disponibles", "cuando hay disponibilidad", "hay citas disponibles",
+          "que disponibilidad tienen", "cual es la proxima cita", "cuando tienen espacio", "tienen algo disponible",
+          "puedo tener una cita", "pudiste confirmar la cita", "pudistes confirmar la cita",
+          "confirmaste los horarios", "ya confirmaste la disponibilidad", "que horario pudiera tener disponible"
+        ],
+        "same_day_alternative": [
+          "algo mas disponible para ese dia", "tienes algo mas para ese dia", "hay algo mas ese dia",
+          "otro horario para ese dia", "otra hora para ese dia", "alguna otra hora ese dia",
+          "que mas tienes ese dia", "tienes otro espacio ese dia", "puede ser a otra hora ese dia",
+          "y mas tarde ese dia", "y mas temprano ese dia", "otra opcion el mismo dia",
+          "quiero ese dia pero otra hora", "no a esa hora pero si ese dia", "para ese dia que mas hay"
+        ],
+        "next_day_alternative": [
+          "otro dia", "otra fecha", "el siguiente dia", "proximo dia disponible", "que tienes despues",
+          "cuando seria la proxima disponibilidad", "busca otro dia", "puede ser otro dia", "dame otra fecha",
+          "si ese dia no se puede", "cual es el siguiente dia", "que hay para manana", "que hay la proxima semana"
+        ],
+        "reject_offered_times": [
+          "ninguno me sirve", "ninguno me conviene", "ninguna hora me sirve", "no puedo en esos horarios",
+          "esas horas no me sirven", "no me funciona ninguno", "no puedo a esas horas", "necesito otras opciones",
+          "tienes otras horas", "quiero horarios diferentes", "algo mas tarde", "algo mas temprano"
+        ],
+        "select_first": ["el primero", "la primera opcion", "la primera hora", "me quedo con el primero", "la opcion uno"],
+        "select_second": ["el segundo", "la segunda opcion", "la segunda hora", "me quedo con el segundo", "la opcion dos"],
+        "select_third": ["el tercero", "la tercera opcion", "la tercera hora", "me quedo con el tercero", "la opcion tres"],
+        "accept_recommendation": [
+          "si ese", "si esa", "ese me conviene", "esa me conviene", "ese me sirve", "esa me sirve",
+          "perfecto", "me parece bien", "reservalo", "agendalo", "confirmalo", "puedes reservarlo",
+          "quiero ese horario", "tomare esa hora", "si por favor", "dale"
+        ],
+        "decline_appointment": [
+          "no gracias", "no quiero una cita", "ya no quiero la cita", "prefiero no hacer la cita",
+          "dejemoslo asi", "no me interesa la cita", "no por ahora", "cancelemos la idea",
+          "no voy a ir", "olvida la cita", "mejor no", "ya no hace falta"
+        ],
+        "confirm_status": [
+          "la cita esta confirmada", "confirmaste mi cita", "ya quedo la cita", "esta reservada la hora",
+          "pudiste agendarla", "me confirmas la cita", "cual fue la hora que quedo", "para cuando quedo"
+        ],
+        "reschedule": [
+          "quiero cambiar la cita", "necesito mover la cita", "puedo cambiar la hora", "cambiar la fecha",
+          "reprogramar la cita", "no puedo llegar a esa hora", "quiero otra hora para mi cita"
+        ],
+        "cancel": [
+          "quiero cancelar la cita", "cancela mi cita", "necesito cancelar", "no podre asistir",
+          "elimina la cita", "anula la cita"
+        ],
+        "ask_location": ["donde es la cita", "cual es la direccion", "donde queda el dealer", "a donde tengo que ir"],
+        "ask_contact": ["cual es el telefono", "como los contacto", "a quien llamo", "tienen email", "con quien me comunico"],
+        "ask_duration": ["cuanto dura la cita", "cuanto tiempo toma", "por cuanto tiempo es", "cuanto debo esperar"],
+        "context_reference": [
+          "ese dia", "esa fecha", "esa hora", "ese horario", "la que dijiste", "lo que hablamos",
+          "como te dije", "lo de la cita", "estamos hablando de la cita", "seguimos con la cita",
+          "algo mas disponible", "y que mas tienes", "que otra opcion hay", "pudiste confirmar"
+        ]
+      },
+      "responses": {
+        "dealer_hours": [
+          "El horario verificado de {{dealer}} para {{date}} es de {{start}} a {{end}}.",
+          "Según el horario actualizado del dealer, el {{date}} atienden de {{start}} a {{end}}."
+        ],
+        "verified_window": [
+          "Las horas de cita verificadas para {{date}} están entre {{start}} y {{end}}.",
+          "La Agenda muestra citas verificadas el {{date}} desde {{start}} hasta {{end}}."
+        ],
+        "offer_with_recommendation": [
+          "Según la Agenda, la opción que mejor coincide con lo que pidió es {{recommended}}. También están disponibles {{alternatives}}. ¿Le reservo {{recommended}}?",
+          "La mejor opción disponible para su solicitud es {{recommended}}; además puedo ofrecerle {{alternatives}}. ¿Desea que le asegure el horario de {{recommended}}?"
+        ],
+        "offer_single_recommendation": [
+          "Según la Agenda, el horario verificado disponible que mejor coincide es {{recommended}}. ¿Le reservo esa hora?",
+          "Tengo disponible {{recommended}}, que es la opción más cercana a lo que pidió. ¿Desea que prepare la cita para esa hora?"
+        ],
+        "offer_without_preference": [
+          "La Agenda muestra {{options}}. Para avanzar, le recomiendo {{recommended}}. ¿Le reservo ese horario?",
+          "Tengo disponibles {{options}}. La primera opción que puedo asegurar es {{recommended}}. ¿Le resulta conveniente?"
+        ],
+        "preference_unavailable": [
+          "No hay citas verificadas {{preference}}. La opción más cercana disponible es {{recommended}}.{{alternatives_clause}} ¿Le reservo esa hora?",
+          "La Agenda no tiene espacios {{preference}}, pero el horario disponible más próximo es {{recommended}}.{{alternatives_clause}} ¿Le funciona?"
+        ],
+        "preference_unavailable_with_future": [
+          "No hay citas verificadas {{preference}} en esa fecha. La opción más cercana es {{recommended}}; si desea mantener esa preferencia, también tengo {{future_time}} el {{future_date}}. ¿Cuál de las dos le conviene más?",
+          "Para esa fecha no quedan espacios {{preference}}. Puedo ofrecerle {{recommended}}, o {{future_time}} el {{future_date}} si prefiere conservar ese horario. ¿Cuál desea reservar?"
+        ],
+        "requested_time_unavailable": [
+          "La hora solicitada no está disponible, pero sí tengo alternativas verificadas ese mismo día.",
+          "Ese horario ya no aparece disponible. Revisé el resto del día y encontré estas opciones verificadas."
+        ],
+        "blocked_day": [
+          "El {{date}} está marcado como día off o fecha bloqueada; por eso no puedo ofrecer ninguna hora ese día.",
+          "El dealer tiene el {{date}} bloqueado en su Agenda, así que no sería correcto prometerle un horario para esa fecha."
+        ],
+        "no_slots_day": [
+          "No quedan horas de cita verificadas para el {{date}}.",
+          "La Agenda no muestra espacios verificables para el {{date}}."
+        ],
+        "next_day_transition": [
+          "La siguiente fecha con disponibilidad real es {{date}}.",
+          "Para no dejarle sin opción, revisé la siguiente fecha disponible: {{date}}."
+        ],
+        "same_day_none_transition": [
+          "No hay otro horario disponible ese día. La siguiente fecha con disponibilidad real es {{date}}.",
+          "Ya revisé todo ese día y no quedan más espacios. Puedo ofrecerle la próxima fecha disponible, {{date}}."
+        ],
+        "same_day_more_transition": [
+          "Sí, revisé las demás horas de ese mismo día y encontré estas opciones.",
+          "Claro, manteniendo la misma fecha, todavía puedo ofrecerle estas alternativas verificadas."
+        ],
+        "alternative_transition": [
+          "Claro, busquemos una opción que le convenga mejor. La siguiente fecha disponible es {{date}}.",
+          "No hay problema; descartamos esas horas y continuamos con {{date}}, que es la próxima fecha disponible."
+        ],
+        "exact_available": [
+          "{{time}} está disponible y verificada{{location}}. ¿Desea que prepare la cita?",
+          "La Agenda confirma que {{time}} sigue disponible{{location}}. ¿Le reservo ese horario?"
+        ],
+        "no_future_slots": [
+          "No aparecen otros horarios verificados en la ventana actual. Puedo pedir que el equipo se comunique con usted o puede {{contact}}.",
+          "En este momento la Agenda no muestra otra fecha que pueda prometerle. Si lo prefiere, podemos continuar por este chat o puede {{contact}}."
+        ],
+        "decline": [
+          "Entendido, no hay problema y gracias por avisarnos. Si más adelante desea coordinar una visita con {{dealer}}, puede {{contact}}. Con gusto le ayudaremos cuando le resulte conveniente.",
+          "Por supuesto, dejamos la cita sin programar. Cuando quiera retomarla, puede {{contact}} y con gusto revisaremos la disponibilidad actualizada de {{dealer}}."
+        ],
+        "confirmation": [
+          "Su cita quedó programada para el {{date}} a las {{time}}{{location}}. Si necesita cambiarla, puede {{contact}}.",
+          "Perfecto, la cita está confirmada para el {{date}} a las {{time}}{{location}}. Para cualquier cambio, puede {{contact}}."
+        ]
+      }
+    },
+    "en": {
+      "topic_anchors": [
+        "appointment", "make an appointment", "schedule", "reserve a time", "book a visit", "arrange a visit",
+        "time to come in", "dealer availability", "appointment availability", "test drive", "visit the dealer",
+        "see the vehicle", "stop by the dealer"
+      ],
+      "explicit_topic_switches": [
+        "talking about the vehicle", "about the vehicle", "vehicle price", "vehicle inventory", "financing",
+        "credit", "trade in", "trade value", "another question unrelated to the appointment"
+      ],
+      "intents": {
+        "appointment_request": [
+          "i want an appointment", "i want to make an appointment", "i want to schedule an appointment",
+          "i want to book an appointment", "i need an appointment", "can i make an appointment",
+          "can you schedule me", "please book me", "i would like to arrange a visit", "i want to visit the dealer",
+          "when can i come in", "when can i visit", "i am interested in a test drive"
+        ],
+        "availability_question": [
+          "what times do you have", "what appointment times are available", "when are appointments available",
+          "do you have appointments available", "what availability do you have", "what is the next appointment",
+          "when do you have an opening", "do you have anything available", "can i have an appointment",
+          "were you able to confirm the appointment", "did you confirm the times", "did you check availability"
+        ],
+        "same_day_alternative": [
+          "anything else available that day", "do you have anything else that day", "is there anything else that day",
+          "another time that day", "another hour that day", "any other time that day", "what else do you have that day",
+          "another opening that day", "could it be another time that day", "later that day", "earlier that day",
+          "another option on the same day", "i want that day but another time", "not that time but the same day"
+        ],
+        "next_day_alternative": [
+          "another day", "another date", "the next day", "next available day", "what do you have after that",
+          "when is the next availability", "look for another day", "it can be another day", "give me another date",
+          "if that day does not work", "what is the next day", "what do you have tomorrow", "what about next week"
+        ],
+        "reject_offered_times": [
+          "none of those work", "none are convenient", "none of the times work", "i cannot make those times",
+          "those times do not work", "i cannot come at those times", "i need other options", "do you have other times",
+          "i want different times", "something later", "something earlier"
+        ],
+        "select_first": ["the first one", "first option", "first time", "i will take the first", "option one"],
+        "select_second": ["the second one", "second option", "second time", "i will take the second", "option two"],
+        "select_third": ["the third one", "third option", "third time", "i will take the third", "option three"],
+        "accept_recommendation": [
+          "yes that one", "that works for me", "that time works", "perfect", "sounds good", "book it",
+          "schedule it", "confirm it", "please reserve it", "i want that time", "i will take that time", "yes please"
+        ],
+        "decline_appointment": [
+          "no thanks", "i do not want an appointment", "i no longer want the appointment", "i would rather not schedule",
+          "let us leave it", "not interested in an appointment", "not right now", "forget the appointment",
+          "i am not coming", "never mind", "better not", "i do not need it anymore"
+        ],
+        "confirm_status": [
+          "is the appointment confirmed", "did you confirm my appointment", "is my appointment set",
+          "is the time reserved", "were you able to schedule it", "please confirm the appointment",
+          "what time did we book", "when is my appointment"
+        ],
+        "reschedule": [
+          "i want to change the appointment", "i need to move the appointment", "can i change the time",
+          "change the date", "reschedule the appointment", "i cannot make that time", "i want another time for my appointment"
+        ],
+        "cancel": ["i want to cancel the appointment", "cancel my appointment", "i need to cancel", "i cannot attend", "remove the appointment"],
+        "ask_location": ["where is the appointment", "what is the address", "where is the dealer", "where do i need to go"],
+        "ask_contact": ["what is the phone number", "how do i contact you", "who do i call", "do you have an email"],
+        "ask_duration": ["how long is the appointment", "how much time will it take", "how long should i expect"],
+        "context_reference": [
+          "that day", "that date", "that time", "the one you mentioned", "what we discussed", "as i said",
+          "about the appointment", "we are talking about the appointment", "continue with the appointment",
+          "anything else available", "what other option is there", "were you able to confirm"
+        ]
+      },
+      "responses": {
+        "dealer_hours": [
+          "The verified hours for {{dealer}} on {{date}} are {{start}} to {{end}}.",
+          "According to the dealer's updated schedule, the hours on {{date}} are {{start}} to {{end}}."
+        ],
+        "verified_window": [
+          "Verified appointment times for {{date}} run from {{start}} to {{end}}.",
+          "The Agenda shows verified appointments on {{date}} between {{start}} and {{end}}."
+        ],
+        "offer_with_recommendation": [
+          "According to the Agenda, the option that best matches your request is {{recommended}}. {{alternatives}} are also available. Would you like me to reserve {{recommended}}?",
+          "The best available match for your request is {{recommended}}; I can also offer {{alternatives}}. Shall I secure {{recommended}} for you?"
+        ],
+        "offer_single_recommendation": [
+          "According to the Agenda, the verified time that best matches is {{recommended}}. Would you like me to reserve it?",
+          "{{recommended}} is available and is the closest option to your request. Would you like me to prepare the appointment for that time?"
+        ],
+        "offer_without_preference": [
+          "The Agenda shows {{options}}. To move forward, I recommend {{recommended}}. Would you like me to reserve it?",
+          "I have {{options}} available. The first option I can secure is {{recommended}}. Would that be convenient?"
+        ],
+        "preference_unavailable": [
+          "There are no verified appointments {{preference}}. The closest available option is {{recommended}}.{{alternatives_clause}} Would you like me to reserve it?",
+          "The Agenda has no openings {{preference}}, but the nearest available time is {{recommended}}.{{alternatives_clause}} Would that work for you?"
+        ],
+        "preference_unavailable_with_future": [
+          "There are no verified appointments {{preference}} on that date. The closest option is {{recommended}}; to keep that preference, I also have {{future_time}} on {{future_date}}. Which works better for you?",
+          "No openings remain {{preference}} on that date. I can offer {{recommended}}, or {{future_time}} on {{future_date}} if you prefer to keep that timing. Which would you like to reserve?"
+        ],
+        "requested_time_unavailable": [
+          "The requested time is not available, but I found verified alternatives on the same day.",
+          "That time is no longer available. I checked the rest of the day and found these verified options."
+        ],
+        "blocked_day": [
+          "{{date}} is marked as a day off or blocked date, so I cannot offer an appointment time that day.",
+          "The dealer has {{date}} blocked in the Agenda, so it would not be accurate to promise a time for that date."
+        ],
+        "no_slots_day": [
+          "There are no verified appointment times left for {{date}}.",
+          "The Agenda does not show a verifiable opening for {{date}}."
+        ],
+        "next_day_transition": [
+          "The next date with real availability is {{date}}.",
+          "So I do not leave you without an option, I checked the next available date: {{date}}."
+        ],
+        "same_day_none_transition": [
+          "There is no other time available that day. The next date with real availability is {{date}}.",
+          "I checked the entire day and no other openings remain. I can offer the next available date, {{date}}."
+        ],
+        "same_day_more_transition": [
+          "Yes—I checked the other times on that same day and found these options.",
+          "Of course; keeping the same date, I can still offer these verified alternatives."
+        ],
+        "alternative_transition": [
+          "Of course—let's find an option that works better. The next available date is {{date}}.",
+          "No problem; we can set those times aside and continue with {{date}}, the next available date."
+        ],
+        "exact_available": [
+          "{{time}} is available and verified{{location}}. Would you like me to prepare the appointment?",
+          "The Agenda confirms that {{time}} is still available{{location}}. Shall I reserve it for you?"
+        ],
+        "no_future_slots": [
+          "No other verified times appear in the current window. I can ask the team to contact you, or you can {{contact}}.",
+          "The Agenda does not currently show another date I can promise. We can continue in this chat, or you can {{contact}}."
+        ],
+        "decline": [
+          "Understood—no problem, and thank you for letting us know. If you would like to arrange a visit with {{dealer}} later, you can {{contact}}. We will be happy to help whenever it is convenient for you.",
+          "Of course; we will leave the appointment unscheduled. Whenever you want to revisit it, you can {{contact}}, and we will gladly check {{dealer}}'s current availability."
+        ],
+        "confirmation": [
+          "Your appointment is scheduled for {{date}} at {{time}}{{location}}. If you need to change it, you can {{contact}}.",
+          "Perfect—your appointment is confirmed for {{date}} at {{time}}{{location}}. For any changes, you can {{contact}}."
+        ]
+      }
+    }
+  }
+}

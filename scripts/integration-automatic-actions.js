@@ -162,9 +162,9 @@ async function run() {
   const offerResult = await service.runNow('test-professional-offer');
   assert.equal(offerResult.appointments_created, 0, 'An availability question must not create an appointment.');
   assert.equal(offerResult.messages_sent, 1);
-  assert.match(sentMessages[0].body, /requested time is not available/i);
+  assert.match(sentMessages[0].body, /requested time is not available|time is no longer available/i);
   assert.match(sentMessages[0].body, /10:00 AM/i);
-  assert.match(sentMessages[0].body, /convenient for you/i);
+  assert.match(sentMessages[0].body, /convenient|reserve it|work for you/i);
 
   sentMessages = [];
   saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1' });
@@ -217,7 +217,7 @@ async function run() {
   };
   const declineResult = await service.runNow('test-professional-decline');
   assert.equal(declineResult.messages_sent, 1);
-  assert.match(sentMessages[0].body, /no problem/i);
+  assert.match(sentMessages[0].body, /no problem|leave the appointment unscheduled/i);
   assert.match(sentMessages[0].body, /239-555-0100/);
   assert.match(sentMessages[0].body, /100 Main Street/);
   assert.match(sentMessages[0].body, /same chat/i);

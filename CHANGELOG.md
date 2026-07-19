@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.7
+
+- Added a dedicated bilingual appointment communication library with 304 phrases, 34 intents and 72 dynamic professional templates.
+- Added appointment topic locking so contextual follow-ups cannot be misclassified as vehicle inventory questions.
+- Added structured recovery of requested dates, dealer-restated time preferences, offered options and short slot selections.
+- Added morning, afternoon, evening, before-time and after-time preference ranking.
+- Added a closing strategy that recommends the best verified Agenda slot and limits offers to three useful options.
+- Added cross-day preference handling: the next available day is offered together with a later exact preference match when appropriate.
+- Filtered Knowledge appointment suggestions against scheduled local Agenda conflicts.
+- Added exact regression coverage for the reported Spanish Monday/day-off conversation and its 7:30 PM selection.
+- Added explicit safeguards preventing generic inventory Knowledge from taking over an active appointment conversation.
+
 ## 1.6.6
 
 - Added a professional bilingual appointment conversation planner shared by Knowledge and guarded automatic actions.

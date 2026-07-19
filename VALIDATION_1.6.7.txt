@@ -1,0 +1,41 @@
+Nexa Smart Office Bot 1.6.7 - Validation Summary
+
+Scope: software-only update. No website files are included.
+
+Appointment communication library verified
+- NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1 is present and delivery-required.
+- English and Spanish libraries contain 304 curated phrases total.
+- 34 appointment intents and 72 dynamic response templates are available.
+- Topic locking prevents contextual appointment availability from falling into
+  general vehicle inventory Knowledge.
+- Explicit topic changes remain supported.
+- Date and time-band preferences survive natural conversational follow-ups.
+- The reported July 19 conversation is an exact permanent regression test.
+- "algo mas disponible para ese dia" keeps Monday and after-7 context.
+- A blocked Monday produces verified next-day options and a later matching
+  after-7 option when available.
+- A short 7:30 PM selection resolves to its exact verified slot.
+- Local Agenda conflicts are removed before Knowledge recommends a slot.
+- Ambiguous inventory availability remains outside the appointment topic when
+  no appointment context exists.
+
+Automated validation completed
+- JavaScript syntax and delivery/project contract validation: passed.
+- Core SQLite and business integration tests: 28 passed.
+- API synchronization and notification tests: 22 passed.
+- Real-time conversation tests: 9 passed.
+- Automotive Knowledge library tests: 12 passed.
+- Professional appointment communication tests: 14 passed.
+- Guarded automatic action tests: passed.
+- Implementation and acceptance tests: passed.
+- Nexa contract and baseline tests: passed.
+- git diff whitespace/conflict validation: passed.
+
+Electron UI smoke cannot launch in this restricted root container because
+Chromium process sandbox/socket creation is blocked by the environment. Renderer
+syntax and static UI acceptance checks passed; the normal Windows workflow runs
+the Electron smoke test before packaging installer artifacts.
+
+The update contains no API keys, website credentials, SQLite workspace,
+customer data, node_modules or generated installer binaries.
+

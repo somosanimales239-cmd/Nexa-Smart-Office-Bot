@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const {
+  filterSlotsAgainstAppointments,
   normalizeAvailability
 } = require('./dealer-availability-service');
 const { appointmentConversationPlan } = require('./appointment-communication-service');
@@ -132,10 +133,12 @@ function liveAvailabilityMatch(database, conversation, latestMessage, context) {
   if (!cached.length) return null;
   const settings = typeof database.getSettings === 'function' ? database.getSettings() : {};
   const now = new Date();
-  const slots = normalizeAvailability(cached, Object.assign({}, settings, {
+  const normalizedSlots = normalizeAvailability(cached, Object.assign({}, settings, {
     auto_appointments_min_notice_hours: 0,
     auto_appointments_max_days: Math.max(Number(settings.auto_appointments_max_days || 60), 14)
   }), now);
+  const appointments = typeof database.listAppointments === 'function' ? database.listAppointments('') : [];
+  const slots = filterSlotsAgainstAppointments(normalizedSlots, appointments);
   const plan = appointmentConversationPlan({
     payload: cached,
     slots: slots,
@@ -161,6 +164,7 @@ function liveAvailabilityMatch(database, conversation, latestMessage, context) {
     dynamic: true,
     libraryVersion: 'website-live',
     appointmentDecision: plan.decision,
+    appointmentLibraryIntent: plan.libraryIntent || '',
     response: plan.response
   };
 }

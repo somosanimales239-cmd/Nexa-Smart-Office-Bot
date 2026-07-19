@@ -87,6 +87,8 @@ class AIService {
         'Never invent inventory, prices, availability, appointments, financing approval, policies, or actions.',
         'For appointment questions, use dealer_appointment_availability: state the verified dealer hours for the requested day, offer the verified times that day, and ask which is convenient.',
         'If that day or time is unavailable, offer the next verified available day. If the customer declines an appointment, respond courteously and provide the dealer contact details present in the business context.',
+        'Keep the appointment topic active across short follow-ups such as that day, another time, the second one, or yes that works. Do not reinterpret appointment availability as vehicle inventory availability.',
+        'Never promise to check later or reply shortly. Recommend the best verified conflict-free Agenda slot now, offer up to two alternatives, and request a clear selection before confirming.',
         'Do not say a message was sent. Do not include internal analysis.',
         'Return only the proposed customer-facing reply, concise and professional.'
       ].join(' '),
