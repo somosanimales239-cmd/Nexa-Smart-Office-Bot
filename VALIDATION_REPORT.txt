@@ -1,8 +1,9 @@
-Nexa Smart Office Bot 1.6.5 Validation Report
+Nexa Smart Office Bot 1.6.6 Validation Report
 
 Package feature
-Live dealer appointment availability, dynamic Knowledge, verified appointment
-creation and local Agenda conflict protection.
+Professional bilingual appointment communication using live dealer hours,
+verified appointment options, next-day alternatives, courteous contact closing,
+explicit slot selection and local Agenda conflict protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -21,16 +22,24 @@ Validation scope
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 12 automotive Knowledge tests, including live schedules
-- Guarded automatic actions, including local Agenda collision prevention
+- 9 professional appointment communication tests
+- Guarded automatic actions, including professional offers, cordial declines and
+  local Agenda collision prevention
 - Implementation and acceptance contracts
 
-Availability regression verified
+Appointment communication regression verified
 - The endpoint and dealer-appointment-availability:read scope are discovered.
 - Requests include from=YYYY-MM-DD and days=14.
 - Weekly schedule, blocked/off dates, open dates, booked times and verified slots
   survive the safety filter while undocumented private fields do not.
 - Live website availability is available to Knowledge and safe external AI context.
 - A blocked/off date is never offered.
+- The dealer's verified daily hours and same-day slot options are explained.
+- An unavailable time produces verified same-day alternatives.
+- A rejected set of times or blocked day advances to the next available day.
+- An appointment decline leaves the dealer's verified contact information.
+- A simple availability question cannot create an appointment.
+- A short contextual selection can create only its exact verified slot.
 - A booked or locally occupied time is never used for a new appointment.
 - Authorized appointments are saved to the local Agenda when remote creation is
   unavailable or disabled.

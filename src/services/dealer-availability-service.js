@@ -221,6 +221,98 @@ function scheduleEntryIsOff(entry) {
   return false;
 }
 
+function clockMinutes(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const hour = Math.floor(value);
+    const minute = Math.round((value - hour) * 60);
+    return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 ? hour * 60 + minute : null;
+  }
+  const source = normalized(value);
+  if (!source) return null;
+  const match = source.match(/(?:^|\s)(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s|$)/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const period = match[3] || '';
+  if (period === 'pm' && hour < 12) hour += 12;
+  if (period === 'am' && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function scheduleIntervals(entry, depth) {
+  if (depth > 5 || entry === undefined || entry === null || scheduleEntryIsOff(entry)) return [];
+  if (Array.isArray(entry)) {
+    if (entry.length >= 2 && entry.every(function scalar(item) { return ['string', 'number'].includes(typeof item); })) {
+      const start = clockMinutes(entry[0]);
+      const end = clockMinutes(entry[1]);
+      return start !== null && end !== null && end > start ? [{ start: start, end: end }] : [];
+    }
+    return entry.reduce(function combine(result, item) { return result.concat(scheduleIntervals(item, depth + 1)); }, []);
+  }
+  if (typeof entry === 'string') {
+    const values = entry.match(/\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi) || [];
+    if (values.length >= 2) {
+      const start = clockMinutes(values[0]);
+      const end = clockMinutes(values[1]);
+      return start !== null && end !== null && end > start ? [{ start: start, end: end }] : [];
+    }
+    return [];
+  }
+  if (typeof entry !== 'object') return [];
+  const startValue = entry.open_time !== undefined ? entry.open_time
+    : entry.start_time !== undefined ? entry.start_time
+      : entry.opens_at !== undefined ? entry.opens_at
+        : entry.open !== undefined ? entry.open
+          : entry.start !== undefined ? entry.start
+            : entry.from_time !== undefined ? entry.from_time : entry.from;
+  const endValue = entry.close_time !== undefined ? entry.close_time
+    : entry.end_time !== undefined ? entry.end_time
+      : entry.closes_at !== undefined ? entry.closes_at
+        : entry.close !== undefined ? entry.close
+          : entry.end !== undefined ? entry.end
+            : entry.to_time !== undefined ? entry.to_time : entry.to;
+  const start = clockMinutes(startValue);
+  const end = clockMinutes(endValue);
+  const direct = start !== null && end !== null && end > start ? [{ start: start, end: end }] : [];
+  const nested = ['periods', 'hours', 'intervals', 'ranges', 'times'].reduce(function collect(result, key) {
+    return entry[key] !== undefined ? result.concat(scheduleIntervals(entry[key], depth + 1)) : result;
+  }, []);
+  return direct.concat(nested);
+}
+
+function dailyScheduleWindow(payload, value, slots) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime()) || dateAvailabilityState(payload, date).blocked) return null;
+  const dateKey = localDateKey(date);
+  const specialOpen = collectNamedValues(payload, OPEN_DATE_KEYS, 500).find(function matchingOpenDate(entry) {
+    return entry && typeof entry === 'object' && dateKeyFromValue(entry) === dateKey;
+  });
+  let intervals = scheduleIntervals(specialOpen, 0);
+  let source = intervals.length ? 'special_open_date' : '';
+  if (!intervals.length) {
+    const schedule = firstNamedValue(payload, WEEKLY_SCHEDULE_KEYS);
+    const entry = weekdayScheduleEntry(schedule, date);
+    intervals = scheduleIntervals(entry, 0);
+    if (intervals.length) source = 'weekly_schedule';
+  }
+  if (intervals.length) {
+    return {
+      start_minutes: Math.min.apply(Math, intervals.map(function start(interval) { return interval.start; })),
+      end_minutes: Math.max.apply(Math, intervals.map(function end(interval) { return interval.end; })),
+      source: source,
+      intervals: intervals
+    };
+  }
+  const sameDay = (slots || []).filter(function matchingSlot(slot) {
+    return slot && slot.start instanceof Date && localDateKey(slot.start) === dateKey;
+  });
+  if (!sameDay.length) return null;
+  const startMinutes = Math.min.apply(Math, sameDay.map(function start(slot) { return slot.start.getHours() * 60 + slot.start.getMinutes(); }));
+  const endMinutes = Math.max.apply(Math, sameDay.map(function end(slot) { return slot.end.getHours() * 60 + slot.end.getMinutes(); }));
+  return { start_minutes: startMinutes, end_minutes: endMinutes, source: 'verified_slots', intervals: [] };
+}
+
 function dateAvailabilityState(payload, value) {
   const date = value instanceof Date ? value : new Date(value);
   const key = localDateKey(date);
@@ -325,13 +417,20 @@ function availabilityItemCount(payload) {
 }
 
 function compactAvailabilityContext(payload, settings, referenceDate) {
+  const primaryPayload = Array.isArray(payload)
+    ? (payload.find(function snapshot(item) { return item && item.record_type === 'availability_snapshot'; }) || payload[0] || {})
+    : payload;
   const slots = normalizeAvailability(payload, Object.assign({
     auto_appointments_min_notice_hours: 0,
     auto_appointments_max_days: 365,
     auto_appointments_duration_minutes: 30
   }, settings || {}), referenceDate || new Date()).slice(0, 60);
-  const scalar = function scalar(keys) { return firstNamedValue(payload, new Set(keys)); };
-  const schedule = firstNamedValue(payload, WEEKLY_SCHEDULE_KEYS);
+  const scalar = function scalar(keys) {
+    const wanted = new Set(keys);
+    const preferred = firstNamedValue(primaryPayload, wanted);
+    return preferred === null || preferred === undefined ? firstNamedValue(payload, wanted) : preferred;
+  };
+  const schedule = firstNamedValue(primaryPayload, WEEKLY_SCHEDULE_KEYS) || firstNamedValue(payload, WEEKLY_SCHEDULE_KEYS);
   const blockedDates = Array.from(collectDateKeys(payload, BLOCKED_DATE_KEYS)).sort().slice(0, 120);
   const openDates = Array.from(collectDateKeys(payload, OPEN_DATE_KEYS)).sort().slice(0, 120);
   return {
@@ -343,6 +442,7 @@ function compactAvailabilityContext(payload, settings, referenceDate) {
     store_id: scalar(['store_id']) || null,
     store_name: scalar(['store_name']) || null,
     phone: scalar(['phone', 'dealer_phone', 'store_phone']) || null,
+    email: scalar(['email', 'dealer_email', 'store_email']) || null,
     location: scalar(['location', 'address', 'dealer_location', 'store_location']) || null,
     timezone: scalar(['timezone']) || null,
     slot_minutes: number(scalar(['slot_minutes', 'slot_duration_minutes', 'duration_minutes']), null),
@@ -412,7 +512,7 @@ function parseRequestedDateTime(message, referenceDate) {
 }
 
 function isAppointmentAvailabilityIntent(message) {
-  return /\b(appointment|schedule|available time|opening hours|business hours|book|test drive|cita|agendar|horario|hora disponible|disponibilidad|dias disponibles|reservar|prueba de manejo|dia off)\b/i.test(normalized(message));
+  return /\b(appointments?|schedules?|available times?|opening hours?|business hours?|book|test drive|citas?|agendar|horarios?|horas? disponibles?|disponibilidad|dias? disponibles?|reservar|prueba de manejo|dias? off)\b/i.test(normalized(message));
 }
 
 module.exports = {
@@ -427,6 +527,7 @@ module.exports = {
   availabilitySlotRecords,
   compactAvailabilityContext,
   dateAvailabilityState,
+  dailyScheduleWindow,
   isAppointmentAvailabilityIntent,
   localDateKey,
   normalizeAvailability,

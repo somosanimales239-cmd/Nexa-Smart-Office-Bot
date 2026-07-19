@@ -1,6 +1,6 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.6.5",
+  "update_version": "1.6.6",
   "minimum_base_version": "1.6.0",
   "delivery_type": "complete_software_source_replacement",
   "website_files_included": false,
@@ -15,6 +15,8 @@
       "listing_id"
     ],
     "live_knowledge": true,
+    "professional_appointment_communication": true,
+    "explicit_verified_slot_selection": true,
     "local_agenda_collision_guard": true,
     "remote_appointment_create_optional": true
   },
@@ -32,15 +34,17 @@
     "categories": 9
   },
   "features": [
-    "safe live dealer/store schedule snapshot",
-    "weekly hours, blocked/off dates and special open dates",
-    "booked/unavailable time filtering",
-    "verified open slot appointment matching",
-    "dynamic bilingual Knowledge replies",
-    "safe external AI availability context",
+    "professional bilingual appointment conversations",
+    "verified dealer daily-hours explanations",
+    "same-day verified time alternatives",
+    "next-available-day offers for blocked, full or rejected days",
+    "courteous decline with website dealer contact data",
+    "contextual short reply and slot selection recognition",
+    "availability questions never create appointments without commitment",
+    "dynamic Knowledge, automatic messages and external AI appointment policy",
     "local Agenda double-booking protection",
     "optional remote appointment creation with local Agenda fallback",
-    "guarded automatic messages and two-way chat preserved"
+    "guarded two-way chat preserved"
   ],
   "files": [
     {
@@ -69,7 +73,7 @@
     },
     {
       "path": "API_SYNC_INSPECTOR.md",
-      "sha256": "ce793e59f69b2e35f01e117c477b6da1b7fcd7c5f176d6cd874ca567a05c9b85",
+      "sha256": "3cea79d4021ae6fd105cd658bdf698e0f11c46cb0ceb87ac972ffc66ae6a6a59",
       "size": 890,
       "operation": "replace_or_create"
     },
@@ -87,20 +91,20 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "2cdb30703604b15cf2a7ec78dac06571da1b29bd905708e46d4b77022a60c844",
-      "size": 3660,
+      "sha256": "d9aca9c0f397fbf1b10f8e8fbd1d098da3cf8a68df4ad3c4580c8913fb5c300c",
+      "size": 4390,
       "operation": "replace_or_create"
     },
     {
       "path": "CONNECTED_BUSINESS_SETUP.md",
-      "sha256": "60c69dec227f6579190b31a53cd78e243e1336f025ae64ad05fa75b63729c142",
-      "size": 3316,
+      "sha256": "bcaa5bac10a90c17efaafccad1ac9da895ee3c0211de76eba0a509522e314fcb",
+      "size": 3449,
       "operation": "replace_or_create"
     },
     {
       "path": "INSTALLATION.md",
-      "sha256": "9ec14067880e291ba4825f5f7a08f335d097bcb26ac3db853e17c72114fd7394",
-      "size": 1836,
+      "sha256": "4a37624971ed73cbacd5549e25463eef01cdb25377bd986c3ea988965cde9c10",
+      "size": 2193,
       "operation": "replace_or_create"
     },
     {
@@ -111,7 +115,7 @@
     },
     {
       "path": "MESSAGING_API_SERVER_CONTRACT.md",
-      "sha256": "cc3d168e28fc635ce7da88385913ed174cd177c8d5fdc42cd53cb7a0d2e825a5",
+      "sha256": "8f36fe0edab58829c56b611f6da632bc881d342c409eda57127d98c3c5409b24",
       "size": 5337,
       "operation": "replace_or_create"
     },
@@ -123,8 +127,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "3c89c358490617a238f756418f3b019ad6a16101c13139b2e0474acbceb49bec",
-      "size": 4690,
+      "sha256": "27c410fed202927e02526a9965a58bcf1a57904644ec1e36d68d903a03a3f357",
+      "size": 5819,
       "operation": "replace_or_create"
     },
     {
@@ -152,6 +156,12 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "UPDATE_1.6.6_ES.txt",
+      "sha256": "1de4b2ccd2f373655d8f95bafeb2141761010c16ac7e2573830bdd4aa54c3fb0",
+      "size": 2068,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_1.6.2.txt",
       "sha256": "2b4fe4f5b3f11167334b0ba3e10d73d1c7b5658de1485393fa74fb57750650c5",
       "size": 1192,
@@ -170,33 +180,39 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "VALIDATION_1.6.6.txt",
+      "sha256": "83a2eaf15e9e7c905013859f335164cb4573d082ad3c8fee1c47bfdd1fe4c09b",
+      "size": 1893,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "0e318325f042e9b3231a527c500894b5224cab02d6ec4d601d3604de2dc1ac07",
-      "size": 1714,
+      "sha256": "5307a648db02087e9f74f22243d67452635a544b0ea7c75574e9ae3c55dc588f",
+      "size": 2338,
       "operation": "replace_or_create"
     },
     {
       "path": "main.js",
-      "sha256": "9fbd13b6f74c83e99bd6d1182fb0023cdee18114e33ff5570fa3bcf7ef9606d4",
+      "sha256": "d23e533d22ac97c0b237ba38f5c739fbe39412c21fc5cd35cdcd100cadf2c94b",
       "size": 10956,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "6e91a65ef863b147c6bbf706b26b2b13690c5e141dad9e45cf8d61fcd84eafd9",
-      "size": 1021,
+      "sha256": "b98f6782b7aee6ede3b14ced1cbf1e3815da679d82d98c61c58517f1ab94621f",
+      "size": 1078,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "58fdc495305da5268149308aa27065a2203eb78457945c72700d0a05694e6931",
+      "sha256": "d129fa56157b49cada93526ebd9ed4fdfec5870ca7f614d272f685bdda3ac5c1",
       "size": 102947,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "32f1a5616cf0849b7f533ac1076363251c277a1dc00728ee479b4c28c9527076",
-      "size": 3477,
+      "sha256": "3b8f5cabcb8469531c07e5957f3f80b5d320938c8783b1e3677852c15be03c3b",
+      "size": 3507,
       "operation": "replace_or_create"
     },
     {
@@ -207,8 +223,8 @@
     },
     {
       "path": "scripts/acceptance-tests.js",
-      "sha256": "1347062ab5de5a3c6b2eda3959f9afe408c30612dce21dd482bfdf49669cc0d8",
-      "size": 2806,
+      "sha256": "5c9aaf3e8bcf0cf5651cc4363b9a9f3e79bec3cf5e3b6e7a7be675fd886d86de",
+      "size": 3198,
       "operation": "replace_or_create"
     },
     {
@@ -219,26 +235,32 @@
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "213d5dea65106f8b2856cfd04a72fa224587cae32bd1357a302e2ea206542e16",
-      "size": 3994,
+      "sha256": "19441c11c5c9edde83c535046cfc97933551e2e273d53d08aa3e3adc1514f346",
+      "size": 4496,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "a14c1371c6171a8cc94165b39865de7550a54d2634389959006dd56e85b0df3a",
+      "sha256": "5283d2a2f249a021f2508cd4d756b8a03bd39f8c544b3a28f7b473a950f7da39",
       "size": 21314,
       "operation": "replace_or_create"
     },
     {
+      "path": "scripts/integration-appointment-communication.js",
+      "sha256": "09cc7774ee504feedaff2d95f8c0f6d7917dd9323cc11eb14ee0e1ce5828e43c",
+      "size": 7750,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "scripts/integration-automatic-actions.js",
-      "sha256": "9f9b3a1f42479855f143780f8ee1012f0e7c6c3a952091042651d688fc44f74e",
-      "size": 14000,
+      "sha256": "0ae216e19c958e0ad643125218376054b54bf794f903e05447369ccafa94737d",
+      "size": 17011,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automotive-knowledge-library.js",
-      "sha256": "1f03ba3aca2e04806cd88c8bd9663f80635e25b0e98fb1495ed15eb60f15426b",
-      "size": 9498,
+      "sha256": "d71415cf52e6bba73029289cafc5cd2f689839ee1d979573756ebf54c0fa2570",
+      "size": 9562,
       "operation": "replace_or_create"
     },
     {
@@ -285,14 +307,14 @@
     },
     {
       "path": "scripts/validate-delivery.js",
-      "sha256": "09f391943b663cbbbf6b100b4e5d624693e0af90dd68eb08b5464fb17a3bc2ae",
-      "size": 2385,
+      "sha256": "73d24a0f523df48258ce773a5b37ee703caae781998354c51341e53a614af617",
+      "size": 2440,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "014c70a3d27ce5721ec3af6e08836adc3de5b116c4db0841954067db5a9f1296",
-      "size": 2596,
+      "sha256": "972606530d07d2e19b163b9efbadba91d5494828b1789730bb51f791dc996981",
+      "size": 2692,
       "operation": "replace_or_create"
     },
     {
@@ -309,8 +331,8 @@
     },
     {
       "path": "src/app.js",
-      "sha256": "1ca4b0e9c107b64c93b729733204d30c592736a79785de850d3729d650dd9f07",
-      "size": 165231,
+      "sha256": "b9e56912da30828623bc023cec90fd5e751f55a94eb4e707d1d00cc439fc7c37",
+      "size": 165413,
       "operation": "replace_or_create"
     },
     {
@@ -351,7 +373,7 @@
     },
     {
       "path": "src/index.html",
-      "sha256": "a8e38a9e118caeb4eceeb2f6c58f595dacd37969d72cd49a33645e253aee8290",
+      "sha256": "63a7ae00e65da4db2820d0f01dcde3d6b293c8dc9f460284064959f8972295c3",
       "size": 8392,
       "operation": "replace_or_create"
     },
@@ -447,20 +469,26 @@
     },
     {
       "path": "src/services/ai-service.js",
-      "sha256": "67db2ccd33c5e68747b381a15e22ef781fb08673ea3410c6891c6e1381714a73",
-      "size": 8859,
+      "sha256": "de90e847911afce50d2a63ecde107c26029296a052986773a661541da894bade",
+      "size": 9272,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "src/services/appointment-communication-service.js",
+      "sha256": "a51f14b066d718f2b39e98741002b2a003509b6cf2874dbb4f72c9f99e3e7eb8",
+      "size": 20483,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automarket-api-service.js",
-      "sha256": "14bb29a38d6808c2eda7047e3f1182268f23ad9604234b77d4c984c79fee1215",
-      "size": 37789,
+      "sha256": "8cf3365cb16f8e91b07b979135a1079fa270087c1b8d7172fd871877a651bf3a",
+      "size": 37839,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automatic-actions-service.js",
-      "sha256": "224e51d86ca09f0b85d8f712904665a1a0ac94b753a5ef03c84c2152d6ba1e4f",
-      "size": 34220,
+      "sha256": "f5610a5b97c2a917f9209a6873d3f51448f49a8a9b3591f9f8708000c3b4b0f4",
+      "size": 34533,
       "operation": "replace_or_create"
     },
     {
@@ -471,8 +499,8 @@
     },
     {
       "path": "src/services/dealer-availability-service.js",
-      "sha256": "c1287608b7a6a5cf0b5720c832e3d0d4d319a4e684f7b78f34f632bc6f51d8ad",
-      "size": 20885,
+      "sha256": "dfef095e555a15e8b0ac12b70f37207ca0c9d6eea5b5bca2b1718b293ce43d1a",
+      "size": 26003,
       "operation": "replace_or_create"
     },
     {
@@ -483,8 +511,8 @@
     },
     {
       "path": "src/services/message-response-engine.js",
-      "sha256": "e0d18b8cc706713d23a73827d41eec34df3672ae74fb0cb4da0c05b9f83b009e",
-      "size": 13710,
+      "sha256": "3f6b09c5ab384b01164c77b68a7ebd4dafd567ab2e840c25f5ec1e06c6980357",
+      "size": 10800,
       "operation": "replace_or_create"
     },
     {

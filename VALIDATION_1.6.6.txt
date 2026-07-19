@@ -1,0 +1,37 @@
+Nexa Smart Office Bot 1.6.6 - Validation Summary
+
+Scope: software-only update. No website files are included.
+
+Professional appointment behavior verified
+- Live Knowledge states verified dealer hours for the requested day.
+- An unavailable requested time produces verified same-day alternatives.
+- A blocked/off day produces the next verified available day and its options.
+- Rejecting the offered hours advances to the next available day.
+- Declining the appointment produces a courteous close with dealer contact data.
+- Short contextual follow-ups can select a verified time.
+- An availability question without booking commitment never creates an appointment.
+- Appointment confirmations contain date, time, location and change contact.
+- Local Agenda conflicts remain excluded and rechecked before creation.
+
+Automated validation completed
+- JavaScript syntax and delivery/project contract validation: passed.
+- Core SQLite and business integration tests: 28 passed.
+- API synchronization and notification tests: 22 passed.
+- Real-time conversation tests: 9 passed.
+- Automotive Knowledge library tests: 12 passed.
+- Professional appointment communication tests: 9 passed.
+- Guarded automatic action tests: passed, including professional offer,
+  cordial decline and local Agenda collision protection.
+- Implementation tests: passed.
+- Acceptance tests: passed.
+- Nexa contract and baseline tests: passed.
+- git diff whitespace/conflict validation: passed.
+
+Electron UI smoke cannot launch in this restricted root container because
+Chromium process sandbox/socket creation is blocked by the environment. Renderer
+source syntax and static UI acceptance checks passed; the normal Windows build
+workflow still runs the Electron smoke test before packaging.
+
+The update contains no API keys, website credentials, SQLite workspace,
+customer data, node_modules or generated installer binaries.
+

@@ -85,6 +85,8 @@ class AIService {
         'Use the complete conversation and the safe business context supplied below.',
         'Answer only what is supported by the conversation or business data.',
         'Never invent inventory, prices, availability, appointments, financing approval, policies, or actions.',
+        'For appointment questions, use dealer_appointment_availability: state the verified dealer hours for the requested day, offer the verified times that day, and ask which is convenient.',
+        'If that day or time is unavailable, offer the next verified available day. If the customer declines an appointment, respond courteously and provide the dealer contact details present in the business context.',
         'Do not say a message was sent. Do not include internal analysis.',
         'Return only the proposed customer-facing reply, concise and professional.'
       ].join(' '),

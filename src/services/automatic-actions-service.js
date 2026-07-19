@@ -10,6 +10,7 @@ const {
   normalizeAvailability,
   parseRequestedDateTime
 } = require('./dealer-availability-service');
+const { appointmentConfirmation, appointmentConversationPlan } = require('./appointment-communication-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
@@ -369,28 +370,34 @@ class AutomaticActionsService {
 
   async processAppointmentCandidate(candidate, conversation, slots, settings) {
     const message = text(candidate.inbound_body);
-    if (!enabled(settings.auto_appointments_enabled) || !isAppointmentIntent(message)) return { handled: false };
-    const requested = parseRequestedDateTime(message, new Date());
-    let match = null;
-    if (requested.date && requested.exact) {
-      match = slots.find(function exactSlot(slot) { return Math.abs(slot.start.getTime() - requested.date.getTime()) <= 15 * 60000; }) || null;
-    }
-    if (match) {
-      const created = await this.createAppointmentFromSlot(candidate, conversation, match, settings);
+    if (!enabled(settings.auto_appointments_enabled)) return { handled: false };
+    const availabilityPayload = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
+    const plan = appointmentConversationPlan({
+      payload: availabilityPayload,
+      slots: slots,
+      conversation: conversation,
+      message: message,
+      referenceDate: new Date()
+    });
+    if (!plan.relevant) return { handled: false };
+    if (plan.shouldCreate && plan.selectedSlot) {
+      const created = await this.createAppointmentFromSlot(candidate, conversation, plan.selectedSlot, settings);
       if (created.created && enabled(settings.auto_messages_enabled) && enabled(settings.auto_appointments_send_confirmation) && this.canSendMore(settings)) {
-        const confirmation = 'Your appointment is scheduled for ' + formatSlot(match) + (match.location ? ' at ' + match.location : '') + '. Please let us know if you need to make a change.';
+        const confirmation = appointmentConfirmation(plan.selectedSlot, plan.locale, availabilityPayload);
         await this.sendAutomaticMessage(candidate.thread_id, confirmation, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment confirmation sent');
       }
       return { handled: true, appointment: created };
     }
-    if (enabled(settings.auto_appointments_offer_slots) && enabled(settings.auto_messages_enabled) && slots.length && this.canSendMore(settings)) {
-      const sameDay = requested.date ? slots.filter(function requestedDay(slot) { return slot.start.toDateString() === requested.date.toDateString(); }) : slots;
-      const suggestions = (sameDay.length ? sameDay : slots).slice(0, 3);
-      const body = 'These appointment times are currently available: ' + suggestions.map(formatSlot).join('; ') + '. Which one works best for you?';
-      const sent = await this.sendAutomaticMessage(candidate.thread_id, body, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Available appointment times sent');
-      return { handled: true, offered: sent };
+    const isOffer = !['decline', 'no_availability'].includes(plan.decision);
+    if (isOffer && !enabled(settings.auto_appointments_offer_slots)) return { handled: true, skipped: true, reason: 'appointment_slot_offers_disabled' };
+    if (enabled(settings.auto_messages_enabled) && text(plan.response) && this.canSendMore(settings)) {
+      const summary = plan.decision === 'decline' ? 'Appointment decline answered courteously'
+        : plan.decision === 'offer_next_day' || plan.decision === 'blocked_day' ? 'Next available appointment day sent'
+          : 'Available appointment hours sent';
+      const sent = await this.sendAutomaticMessage(candidate.thread_id, plan.response, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, summary);
+      return { handled: true, offered: sent, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error };
     }
-    return { handled: false };
+    return { handled: false, reason: 'appointment_response_not_authorized' };
   }
 
   async processMessageCandidate(candidate, settings, slots) {

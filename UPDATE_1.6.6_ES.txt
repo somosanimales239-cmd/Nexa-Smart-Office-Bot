@@ -1,0 +1,43 @@
+NEXA SMART OFFICE BOT 1.6.6
+Sistema profesional de comunicacion para citas con disponibilidad verificada
+
+NO INCLUYE NI REQUIERE CAMBIOS EN LA PAGINA WEB.
+
+KNOWLEDGE PROFESIONAL PARA CITAS
+- Usa el snapshot vivo de dealer-appointment-availability.
+- Indica el horario verificado del dealer para el dia consultado.
+- Ofrece las horas verificadas disponibles de ese mismo dia.
+- Si la hora solicitada no esta disponible, ofrece las alternativas del dia y
+  pregunta si alguna le resulta conveniente.
+- Si el dia esta off, bloqueado, lleno o el cliente rechaza sus horarios,
+  presenta el siguiente dia con disponibilidad, su horario y sus opciones.
+- Admite conversaciones en ingles y espanol.
+- Reconoce respuestas cortas dentro del contexto, por ejemplo una hora,
+  "la segunda", "me conviene" o "that works".
+
+CREACION SEGURA DE LA CITA
+- Una pregunta de disponibilidad nunca crea una cita por si sola.
+- Nexa exige intencion clara de reservar y seleccion de un slot verificado.
+- Antes de guardar, vuelve a comprobar conflictos con la Agenda local.
+- Si appointment-create no existe, conserva el flujo autorizado en Agenda local.
+- La confirmacion incluye fecha, hora, ubicacion y una via para solicitar cambios.
+
+SI EL CLIENTE RECHAZA LA CITA
+- Nexa responde cordialmente, sin presionar al cliente.
+- Deja telefono, email y ubicacion cuando esos datos vienen de la pagina.
+- Siempre ofrece continuar la comunicacion por el mismo chat.
+
+INTEGRACION
+- La misma politica se usa en Knowledge Engine, AI Control y mensajes automaticos.
+- El AI externo configurado recibe instrucciones para respetar exclusivamente
+  los horarios y contactos verificados en el contexto seguro.
+- Cada Sync exitoso reemplaza los horarios, dias off y slots anteriores.
+
+DESPUES DE INSTALAR
+1. Abra Connected Business.
+2. Ejecute Test connection.
+3. Ejecute Sync now.
+4. Confirme que dealer-appointment-availability y su scope esten Ready.
+5. En AI Control revise y autorice Automatic Messages y Automatic Appointments.
+6. Use Run authorized actions now para la primera prueba supervisada.
+

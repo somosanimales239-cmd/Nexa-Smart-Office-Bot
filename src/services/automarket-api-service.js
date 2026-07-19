@@ -73,15 +73,15 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   validation: ['id','validation_id','dealer_user_id','store_id','business_name','authorized_representative','phone','email','address','city','state','zip','driver_license_number','dealer_license_number','business_tax_account_number','business_tax_receipt_number','resale_certificate_number','status','submitted_at','reviewed_at','reviewed_by','admin_note'],
   'api-keys-status': ['id','key_id','name','owner_type','owner_id','status','scopes','expires_at','last_used_at','created_at','updated_at'],
   'dealer-appointment-availability': [
-    'id','slot_id','availability_id','record_type','dealer','store','dealer_id','dealer_name','dealer_phone','dealer_location',
-    'reseller_id','store_id','store_name','store_phone','store_location','phone','email','location','address','city','state','zip',
+    'id','slot_id','availability_id','record_type','dealer','store','dealer_id','dealer_name','dealer_phone','dealer_email','dealer_location',
+    'reseller_id','store_id','store_name','store_phone','store_email','store_location','phone','email','location','address','city','state','zip',
     'listing_id','listing_title','listing_url','listing_image_url','assigned_listings','listings','assignment_id','category','price',
     'slot_minutes','slot_duration_minutes','duration_minutes','timezone','weekly_schedule','business_hours','dealer_schedule','availability_schedule',
     'blocked_dates','off_dates','days_off','closed_dates','unavailable_dates','open_dates','available_dates','special_open_dates',
     'available_times','open_times','booked_times','unavailable_times','blocked_times','booked_slots','verified_open_slots','verified_slots','open_slots',
     'available_slots','slots','availability','appointment_availability','dealer_appointment_availability','items','records','rows','data','result',
     'date','appointment_date','open_date','blocked_date','off_date','start_at','starts_at','datetime','date_time','end_at','ends_at',
-    'start_time','appointment_time','time','from_time','open_time','end_time','to_time','close_time','start','end','from','to','open','close','opens_at','closes_at','times','hours','periods',
+    'start_time','appointment_time','time','from_time','open_time','end_time','to_time','close_time','start','end','from','to','open','close','opens_at','closes_at','times','hours','periods','intervals','ranges',
     'available','is_available','enabled','is_open','is_off','day_off','closed','blocked','booked','is_booked','is_blocked','status','state','verified','is_verified',
     'day','weekday','day_of_week','day_number','name','label','recurrence','capacity','notes','created_at','updated_at',
     'monday','tuesday','wednesday','thursday','friday','saturday','sunday','lunes','martes','miercoles','jueves','viernes','sabado','domingo'

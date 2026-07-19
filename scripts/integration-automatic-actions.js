@@ -146,11 +146,27 @@ async function run() {
   availabilityFailure = false;
   sentMessages = [];
   availabilityPayload = {
-    dealer_id: 'dealer-1', dealer_name: 'Main Dealer', store_id: 'store-1', store_name: 'Main dealership', slot_minutes: 30,
+    dealer_id: 'dealer-1', dealer_name: 'Main Dealer', store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', slot_minutes: 30,
     weekly_schedule: {}, blocked_dates: [], open_dates: [tomorrow.toISOString().slice(0, 10)],
     booked_times: [{ date: tomorrow.toISOString().slice(0, 10), start_time: '11:00', status: 'booked' }],
     verified_open_slots: [{ slot_id: 'slot-1', start_at: tomorrow.toISOString(), available: true, location: 'Main dealership' }]
   };
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '0' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-offer', subject: 'Appointment options', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadOffer(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Appointment options', participant_name: 'Customer Offer', customer_phone: '2395550102', can_reply: 1, is_announcement: 0 },
+      messages: [{ message_id: 'inbound-offer', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Customer Offer', body: 'Is there an appointment available on ' + dateText + ' at 11:00 AM?', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
+    };
+  };
+  const offerResult = await service.runNow('test-professional-offer');
+  assert.equal(offerResult.appointments_created, 0, 'An availability question must not create an appointment.');
+  assert.equal(offerResult.messages_sent, 1);
+  assert.match(sentMessages[0].body, /requested time is not available/i);
+  assert.match(sentMessages[0].body, /10:00 AM/i);
+  assert.match(sentMessages[0].body, /convenient for you/i);
+
+  sentMessages = [];
   saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-2', subject: 'Appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
   currentThread = function threadTwo(threadId) {
@@ -185,6 +201,26 @@ async function run() {
   const collisionResult = await service.runNow('test-local-agenda-collision');
   assert.equal(collisionResult.appointments_created, 0);
   assert.equal(database.listAppointments('').length, 1, 'A verified remote slot must not overlap an existing local Agenda appointment.');
+
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-decline', subject: 'Appointment declined', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadDecline(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Appointment declined', participant_name: 'Customer Decline', customer_phone: '2395550103', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'decline-1', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'I would like an appointment.', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
+        { message_id: 'decline-2', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: 'The verified appointment time is 10:00 AM. Would that be convenient?', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'decline-3', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'No thanks, I do not want an appointment.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+      ]
+    };
+  };
+  const declineResult = await service.runNow('test-professional-decline');
+  assert.equal(declineResult.messages_sent, 1);
+  assert.match(sentMessages[0].body, /no problem/i);
+  assert.match(sentMessages[0].body, /239-555-0100/);
+  assert.match(sentMessages[0].body, /100 Main Street/);
+  assert.match(sentMessages[0].body, /same chat/i);
 
   const state = service.getState();
   assert.equal(state.invariants.never_changes_customer_records, true);

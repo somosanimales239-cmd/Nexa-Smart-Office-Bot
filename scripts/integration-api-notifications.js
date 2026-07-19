@@ -96,7 +96,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.5');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.6');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);

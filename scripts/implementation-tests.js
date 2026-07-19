@@ -31,6 +31,7 @@ const notificationService = fs.readFileSync(path.join(root, 'src', 'services', '
 const migrations = fs.readFileSync(path.join(root, 'src', 'database', 'migrations.js'), 'utf8');
 const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
 const dealerAvailabilityService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-availability-service.js'), 'utf8');
+const appointmentCommunicationService = fs.readFileSync(path.join(root, 'src', 'services', 'appointment-communication-service.js'), 'utf8');
 const automationIpc = fs.readFileSync(path.join(root, 'src', 'ipc', 'automation-ipc.js'), 'utf8');
 assert.equal(integrationIpc.includes('integration:inspector'), true);
 assert.equal(integrationIpc.includes('integration:items'), true);
@@ -45,6 +46,9 @@ assert.equal(automationService.includes('NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2'),
 assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);
 assert.equal(dealerAvailabilityService.includes('blocked_dates'), true);
 assert.equal(dealerAvailabilityService.includes('verified_open_slots'), true);
+assert.equal(appointmentCommunicationService.includes('NEXA_PRO_APPOINTMENT_COMMUNICATION_V1'), true);
+assert.equal(appointmentCommunicationService.includes('offer_next_day'), true);
+assert.equal(appointmentCommunicationService.includes('contactClosing'), true);
 assert.equal(automationService.includes('cycle_skipped'), true);
 assert.equal(automationIpc.includes('Explicit user authorization'), true);
 assert.equal(automationService.includes('deleteContact'), false);
@@ -54,4 +58,5 @@ assert.equal(appSource.includes('NEXA_MESSAGES_AI_MASTER_SWITCH_V1'), true);
 assert.equal(appSource.includes('NEXA_NOTIFICATION_DEEP_LINK_V1'), true);
 assert.equal(appSource.includes('messages-ai-master-switch'), true);
 assert.equal(appSource.includes('Block Nexa from replying automatically to this conversation'), true);
+assert.equal(appSource.includes('A cordial decline includes dealer contact information.'), true);
 console.log('Implementation tests passed.');

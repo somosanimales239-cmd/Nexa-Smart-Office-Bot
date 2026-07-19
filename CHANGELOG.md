@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.6
+
+- Added a professional bilingual appointment conversation planner shared by Knowledge and guarded automatic actions.
+- Added verified daily-hours explanations, same-day slot alternatives and automatic next-available-day offers.
+- Added courteous appointment-decline replies with dealer contact information from the live website snapshot.
+- Required explicit booking intent plus an exact verified slot before creating a local Agenda appointment.
+- Added contextual recognition for short customer follow-ups without treating unrelated short messages as appointment intent.
+- Expanded regression coverage for offers, blocked days, rejections, contact closings, slot selection and non-creation from availability questions.
+
 ## 1.6.5
 
 - Added full discovery and synchronization for `dealer-appointment-availability` with the `dealer-appointment-availability:read` scope.

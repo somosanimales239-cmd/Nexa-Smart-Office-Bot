@@ -163,7 +163,8 @@ test('live website availability becomes dynamic Knowledge and respects a blocked
   assert.equal(match.dynamic, true);
   assert.equal(match.libraryVersion, 'website-live');
   assert.match(match.response, /día off|fecha bloqueada/i);
-  assert.match(match.response, /próximos horarios verificados/i);
+  assert.match(match.response, /siguiente día con disponibilidad verificada/i);
+  assert.match(match.response, /horas disponibles verificadas/i);
 });
 
 test('live website Knowledge confirms only an exact verified open slot', function () {
@@ -179,7 +180,7 @@ test('live website Knowledge confirms only an exact verified open slot', functio
   );
   const match = new MessageResponseEngine(database).match(database.getMessageConversationContext('live-exact-slot', 20));
   assert.equal(match.dynamic, true);
-  assert.match(match.response, /verified appointment time is available/i);
+  assert.match(match.response, /available and verified/i);
   assert.match(match.response, /Main showroom/i);
 });
 

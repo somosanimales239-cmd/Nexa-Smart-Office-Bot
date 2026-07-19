@@ -9,7 +9,7 @@ const sources = [
   'main.js', 'preload.js', 'src/index.html', 'src/app.js',
   'src/database/migrations.js', 'src/services/settings-service.js',
   'src/services/backup-service.js', 'src/services/openai-provider.js',
-  'src/services/deepseek-provider.js', 'src/services/automarket-api-service.js', 'src/services/notification-service.js', 'src/services/automatic-actions-service.js', 'src/services/dealer-availability-service.js', 'src/ipc/foundation-ipc.js',
+  'src/services/deepseek-provider.js', 'src/services/automarket-api-service.js', 'src/services/notification-service.js', 'src/services/automatic-actions-service.js', 'src/services/dealer-availability-service.js', 'src/services/appointment-communication-service.js', 'src/ipc/foundation-ipc.js',
   'src/ipc/records-ipc.js', 'src/ipc/agenda-ipc.js', 'src/ipc/ai-ipc.js', 'src/ipc/integrations-ipc.js', 'src/ipc/notifications-ipc.js', 'src/ipc/automation-ipc.js',
   'src/modules/contacts.js', 'src/modules/leads.js', 'src/modules/tasks.js',
   'src/modules/agenda.js', 'src/modules/notifications.js', 'src/modules/ai.js'
@@ -52,6 +52,7 @@ const requiredMarkers = [
   'automation:save',
   'dealer-appointment-availability',
   'NEXA_LIVE_DEALER_AVAILABILITY_V1',
+  'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1',
   'ai-control'
 ];
 const failures = requiredMarkers.filter(function missingMarker(marker) {
