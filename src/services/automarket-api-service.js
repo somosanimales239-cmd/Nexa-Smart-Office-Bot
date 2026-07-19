@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const DEFAULT_TIMEOUT_MS = 20000;
 const AUTOMARKET_API_CONTRACT = 'NEXA_AUTOMARKET_API_V1';
 const NEXA_API_SYNC_INSPECTOR_V1 = 'NEXA_API_SYNC_INSPECTOR_V1';
+const CLIENT_VERSION = require('../../package.json').version;
 
 const ACCOUNT_RESOURCE_PLANS = Object.freeze({
   dealer: Object.freeze([
@@ -50,7 +51,7 @@ const SAFE_RESOURCES = new Set([
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_threads','message_send','message_read','dealer_appointment_availability','appointment_create'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer_appointment_availability','appointment_create'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
@@ -222,6 +223,16 @@ function unwrapPayload(payload) {
   return payload;
 }
 
+function unwrapDiscoveryPayload(resource, payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  if (resource !== 'ping' && resource !== 'connection-map') return unwrapPayload(payload);
+  const nested = unwrapPayload(payload);
+  if (!nested || typeof nested !== 'object' || Array.isArray(nested) || nested === payload) return payload;
+  // Some website versions advertise scopes/endpoints beside `data`; merge both
+  // shapes and let the resource allowlist discard everything else.
+  return Object.assign({}, payload, nested);
+}
+
 function normalizeAccountType(value) {
   const text = String(value || '').trim().toLowerCase();
   if (text.includes('reseller')) return 'reseller';
@@ -273,12 +284,64 @@ function normalizeScopes() {
   return Array.from(new Set(scopes));
 }
 
+function capabilityValueEnabled(value, expectedResource) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value === null || value === undefined) return false;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized || ['0','false','disabled','blocked','no','off','unavailable','null'].includes(normalized)) return false;
+  if (['1','true','enabled','ready','yes','on','available','active'].includes(normalized)) return true;
+  if (!expectedResource) return false;
+  const resource = normalizeResourceName(normalized);
+  if (resource === expectedResource) return true;
+  const queryMatch = normalized.match(/[?&]resource=([^&#]+)/i);
+  if (queryMatch && normalizeResourceName(decodeURIComponent(queryMatch[1])) === expectedResource) return true;
+  return normalized.includes('resource=' + expectedResource)
+    || normalized.endsWith('/' + expectedResource)
+    || normalized.endsWith('=' + expectedResource);
+}
+
+function capabilityState(map, names, expectedResource) {
+  const source = map && typeof map === 'object' ? map : {};
+  const containers = [
+    source,
+    source.capabilities && typeof source.capabilities === 'object' && !Array.isArray(source.capabilities) ? source.capabilities : {},
+    source.message_capabilities && typeof source.message_capabilities === 'object' && !Array.isArray(source.message_capabilities) ? source.message_capabilities : {}
+  ];
+  let advertised = false;
+  let enabled = false;
+  let disabled = false;
+  containers.forEach(function inspect(container) {
+    names.forEach(function inspectName(name) {
+      if (!Object.prototype.hasOwnProperty.call(container, name)) return;
+      advertised = true;
+      if (capabilityValueEnabled(container[name], expectedResource)) enabled = true;
+      else disabled = true;
+    });
+  });
+  const namedCapabilities = new Set(normalizeStringArray(source.capabilities).concat(normalizeStringArray(source.message_capabilities)).map(function normalizeName(name) {
+    return String(name).toLowerCase().replaceAll('-', '_');
+  }));
+  if (names.some(function hasNamed(name) { return namedCapabilities.has(name); })) {
+    advertised = true;
+    enabled = true;
+  }
+  return { advertised: advertised, enabled: enabled && !disabled };
+}
+
 function extractAvailableResources(connectionMap) {
   const map = connectionMap && typeof connectionMap === 'object' ? connectionMap : {};
   const sources = [map.available_resources, map.allowed_resources, map.resources, map.endpoints, map.allowed_endpoints];
   const resources = sources.reduce(function combine(result, source) {
     return result.concat(normalizeStringArray(source));
   }, []).map(normalizeResourceName).filter(function safe(resource) { return SAFE_RESOURCES.has(resource); });
+  const endpointFields = [
+    ['message_thread_endpoint','message-thread'], ['messages_thread_endpoint','message-thread'],
+    ['message_send_endpoint','message-send'], ['messages_send_endpoint','message-send'],
+    ['message_read_endpoint','message-read'], ['messages_read_endpoint','message-read']
+  ];
+  endpointFields.forEach(function addEndpoint(entry) {
+    if (capabilityValueEnabled(map[entry[0]], entry[1])) resources.push(entry[1]);
+  });
   return Array.from(new Set(resources));
 }
 
@@ -308,25 +371,22 @@ function deriveMessageCapabilities(identity, connectionMap) {
     normalizeStringArray(source.available_resources).map(normalizeResourceName)
   ));
   const scopes = new Set(normalizeScopes(source.scopes, source.allowed_scopes, source.permissions, map.scopes, map.allowed_scopes, map.permissions));
-  const capabilities = map.capabilities && typeof map.capabilities === 'object' ? map.capabilities : {};
-  const capabilityNames = new Set(normalizeStringArray(map.capabilities).map(function normalizeCapability(capability) {
-    return capability.toLowerCase().replaceAll('-', '_');
-  }));
-  const capabilityEnabled = function capabilityEnabled(names) {
-    return names.some(function enabledCapability(name) {
-      return map[name] === true || Number(map[name]) === 1 || capabilities[name] === true || Number(capabilities[name]) === 1 || capabilityNames.has(name);
-    });
-  };
-  const fullThread = resources.has('message-thread') || capabilityEnabled(['message_threads', 'message_thread']);
-  const send = resources.has('message-send') || capabilityEnabled(['message_send']);
-  const markRead = resources.has('message-read') || capabilityEnabled(['message_read']);
+  const threadState = capabilityState(map, ['message_threads','message_thread','message_thread_endpoint','messages_thread_endpoint'], 'message-thread');
+  const sendState = capabilityState(map, ['message_send','message_send_endpoint','messages_send_endpoint','messages_write_enabled','two_way_chat','two_way_chat_enabled'], 'message-send');
+  const readEndpointState = capabilityState(map, ['message_read','message_read_endpoint','messages_read_endpoint'], 'message-read');
+  const readScopeState = capabilityState(map, ['messages_read_enabled'], null);
+  const fullThread = threadState.advertised ? threadState.enabled : resources.has('message-thread');
+  const send = sendState.advertised ? sendState.enabled : resources.has('message-send');
+  const markRead = readEndpointState.advertised ? readEndpointState.enabled : resources.has('message-read');
   const scopesAdvertised = scopes.size > 0;
   return {
-    read: !scopesAdvertised || scopes.has('messages:read'),
+    read: scopesAdvertised ? scopes.has('messages:read') : (readScopeState.advertised ? readScopeState.enabled : true),
     write: scopesAdvertised ? scopes.has('messages:write') : send,
     fullThread: fullThread,
     send: send,
     markRead: markRead,
+    twoWayChat: fullThread && send && markRead
+      && (scopesAdvertised ? scopes.has('messages:read') && scopes.has('messages:write') : send),
     scopesAdvertised: scopesAdvertised,
     scopes: Array.from(scopes),
     resources: Array.from(resources)
@@ -410,7 +470,7 @@ class AutoMarketApiService {
         Accept: 'application/json',
         Authorization: 'Bearer ' + apiKey,
         'X-Nexa-Api-Key': apiKey,
-        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/1.6.2'
+        'X-Nexa-Client': 'Nexa-Smart-Office-Bot/' + CLIENT_VERSION
       };
       if (method !== 'GET') headers['Content-Type'] = 'application/json';
       if (requestOptions.idempotencyKey) headers['Idempotency-Key'] = String(requestOptions.idempotencyKey);
@@ -443,7 +503,7 @@ class AutoMarketApiService {
           retryable: response.status === 408 || response.status === 429 || response.status >= 500
         });
       }
-      const unwrappedPayload = unwrapPayload(payload);
+      const unwrappedPayload = unwrapDiscoveryPayload(resourceName, payload);
       const safePayload = sanitizeResourcePayload(resourceName, unwrappedPayload);
       return {
         resource: resourceName,
@@ -505,7 +565,12 @@ class AutoMarketApiService {
   async fetchMessageThread(threadId, options) {
     const wanted = String(threadId || '').trim();
     if (!wanted) throw new AutoMarketApiError('Message thread ID is required.', { resource: 'message-thread' });
-    const query = { thread_id: wanted, limit: Math.min(Math.max(Number(options && options.limit || 100), 1), 200) };
+    const query = {
+      thread_id: wanted,
+      limit: Math.min(Math.max(Number(options && options.limit || 100), 1), 200),
+      // Thread synchronization is read-only. Read state changes only through message-read.
+      mark_read: options && options.markRead === true ? 1 : 0
+    };
     if (options && options.after) query.after = String(options.after);
     if (options && options.cursor) query.cursor = String(options.cursor);
     return this.request('message-thread', query, { timeoutMs: 30000 });
@@ -522,7 +587,10 @@ class AutoMarketApiService {
       method: 'POST',
       timeoutMs: 30000,
       idempotencyKey: clientId,
-      body: { thread_id: wanted, body: text, client_message_id: clientId, reply_to_message_id: replyToMessageId || null }
+      body: Object.assign(
+        { thread_id: wanted, message: text },
+        replyToMessageId ? { reply_to_message_id: String(replyToMessageId) } : {}
+      )
     });
   }
 

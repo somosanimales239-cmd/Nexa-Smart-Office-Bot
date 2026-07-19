@@ -164,8 +164,8 @@ function safeDeferredKnowledge(match) {
   if (!required.length) return true;
   const response = text(match && match.response).toLowerCase();
   if (!response) return false;
-  const verificationLanguage = /(check|verify|confirm|review|look into|validate|revisar|verificar|confirmar|comprobar|consultar)/.test(response);
-  const riskyCommitment = /(approved|guaranteed|confirmed appointment|your appointment is confirmed|available now|final price|apr is|monthly payment is|aprobado|garantizado|cita confirmada|precio final)/.test(response);
+  const verificationLanguage = /\b(check|verify|confirm|review|look into|validate|revisar|verificar|confirmar|comprobar|consultar)\b/.test(response);
+  const riskyCommitment = /\b(approved|guaranteed|confirmed appointment|your appointment is confirmed|available now|final price|apr is|monthly payment is|aprobado|garantizado|cita confirmada|precio final)\b/.test(response);
   return verificationLanguage && !riskyCommitment;
 }
 
@@ -206,6 +206,7 @@ class AutomaticActionsService {
       full_thread_available: messageCapabilities.fullThread,
       message_send_available: messageCapabilities.send,
       message_read_available: messageCapabilities.markRead,
+      two_way_chat_ready: messageCapabilities.twoWayChat,
       messages_read_scope: messageCapabilities.read,
       messages_write_scope: messageCapabilities.write,
       message_scopes_advertised: messageCapabilities.scopesAdvertised,
@@ -321,7 +322,7 @@ class AutomaticActionsService {
       const threadId = text(item.thread_id || item.id);
       if (!threadId) continue;
       try {
-        const response = await this.apiService.fetchMessageThread(threadId, { limit: 120 });
+        const response = await this.apiService.fetchMessageThread(threadId, { limit: 120, markRead: false });
         const payload = response.payload || {};
         const thread = payload.thread && typeof payload.thread === 'object' ? payload.thread : item;
         this.database.saveMessageThreadSnapshot(Object.assign({}, item, thread, { thread_id: threadId }), Array.isArray(payload.messages) ? payload.messages : [], { thread_id: threadId, cursor: payload.next_cursor });
@@ -573,7 +574,11 @@ class AutomaticActionsService {
           result.reason_counts[skippedReason] = Number(result.reason_counts[skippedReason] || 0) + 1;
         }
       }
-      if (!result.candidate_count) result.no_work_reason = result.refresh && result.refresh.failed ? 'message_threads_failed_to_load' : 'no_unanswered_messages';
+      if (!result.candidate_count) {
+        result.no_work_reason = result.refresh && result.refresh.failed
+          ? 'message_threads_failed_to_load'
+          : (enabled(settings.auto_messages_require_unread) ? 'no_unread_replyable_messages' : 'no_unanswered_messages');
+      }
       result.completed_at = nowIso();
       this.lastRunAt = result.completed_at;
       this.lastResult = result;

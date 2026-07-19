@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
-    "application_version": "1.6.2",
-    "workspace_revision": "1.0.35",
+    "application_version": "1.6.4",
+    "workspace_revision": "1.0.36",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -25,6 +25,6 @@
         "SBO-13-messages-ai-runtime-controls",
         "SBO-14-connection-map-message-capabilities"
     ],
-    "version": "1.6.2",
-    "updated_at": "2026-07-18 18:14:59"
+    "version": "1.6.4",
+    "updated_at": "2026-07-18 20:15:39"
 }

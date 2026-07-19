@@ -1,0 +1,35 @@
+NEXA SMART OFFICE BOT 1.6.3
+Correccion de respuestas automaticas que desaparecian al marcarse leidas
+
+CAUSA CORREGIDA
+- Consultar message-thread marcaba el hilo como leido en el sitio web.
+- Si el primer intento se omitia por demora, confianza local o configuracion,
+  los ciclos siguientes ya no veian el mensaje como pendiente.
+- Dos expresiones del control de contexto contenian caracteres incorrectos y
+  podian rechazar respuestas seguras de verificacion.
+
+QUE CAMBIA
+- Toda sincronizacion de conversaciones usa mark_read=0.
+- El estado leido solo cambia mediante message-read, despues de una respuesta
+  o cuando el usuario pulsa la accion correspondiente.
+- AI Control explica cuando el filtro Require unread message no encuentra hilos.
+- Version del programa: 1.6.3.
+
+CONFIGURACION PARA QUE DEEPSEEK RESPONDA
+1. Abre AI Control.
+2. Automatic message sending: Enabled.
+3. Response engine: Knowledge + authorized AI fallback.
+4. External AI fallback: Enabled.
+5. Para recuperar un mensaje que ya quedo marcado como leido, cambia
+   Require unread message a No durante la prueba.
+6. Marca la casilla de autorizacion y pulsa Save authorization.
+7. Pulsa Run authorized actions now.
+
+Despues de contestar el mensaje antiguo puedes volver Require unread message a
+Yes si deseas que Nexa ignore mensajes que una persona ya abrio.
+
+IMPORTANTE
+La insignia DeepSeek configured confirma que la clave funciona, pero por
+seguridad no autoriza por si sola el envio automatico a un proveedor externo.
+Las dos opciones del paso 3 y 4 deben estar habilitadas expresamente.
+

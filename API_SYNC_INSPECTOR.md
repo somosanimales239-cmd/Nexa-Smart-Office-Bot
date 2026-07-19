@@ -13,7 +13,7 @@ Each resource displays:
 - Last successful synchronization.
 - Exact last error.
 
-Important resources for version 1.6.2 include:
+Important resources for version 1.6.4 include:
 
 - `messages`
 - `message-thread`

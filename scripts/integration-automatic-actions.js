@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, parseRequestedDateTime } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-auto-actions-'));
@@ -72,6 +72,8 @@ function saveBaseSettings(extra) {
 }
 
 async function run() {
+  assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
+  assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
   assert.equal(database.getSettings().auto_actions_no_delete_guard, '1');
   assert.equal(typeof service.deleteContact, 'undefined');
@@ -106,7 +108,7 @@ async function run() {
   assert.equal(database.listContacts().length, contactsBefore, 'Automation must never change contacts.');
   assert.equal(database.listLeads().length, leadsBefore, 'Automation must never change leads.');
   assert.equal(duplicate.cycle_skipped, false, 'A completed cycle with no work must not be reported as not ready.');
-  assert.equal(duplicate.no_work_reason, 'no_unanswered_messages');
+  assert.equal(duplicate.no_work_reason, 'no_unread_replyable_messages');
 
   saveBaseSettings({ messages_ai_enabled: '0' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-switch', subject: 'Switch', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);

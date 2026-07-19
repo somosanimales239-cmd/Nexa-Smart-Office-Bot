@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.4
+
+- Added compatibility with the website's current `messages_write_enabled`, `message_send_endpoint` and `two_way_chat_enabled` discovery fields.
+- Merged safe top-level and nested `data` discovery values before capability detection.
+- Changed the message-send JSON payload to the website contract: `thread_id` plus `message`.
+- Kept both `Authorization: Bearer` and `X-Nexa-Api-Key` on every request.
+- Invalidated the stored ping/connection-map when a new URL or API key is saved.
+
+## 1.6.3
+
+- Prevented background conversation synchronization from silently marking website messages as read.
+- Kept unread messages eligible for later automatic attempts when the first response engine pass is delayed or skipped.
+- Added an exact diagnostic for the `Require unread message` filter and recovery of already-read unanswered threads.
+- Preserved the website API `message_capabilities` contract.
+
 ## 1.6.2
 
 - Fixed the connection-map sanitizer so safe message scopes and endpoint advertisements are not discarded.

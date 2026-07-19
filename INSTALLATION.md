@@ -1,13 +1,13 @@
-# Nexa Smart Office Bot 1.6.2 Installation
+# Nexa Smart Office Bot 1.6.4 Installation
 
 This is one complete source replacement for the existing Nexa Smart Office Bot project.
 
 1. Open Manual Delivery in Nexa App Builder Pro.
 2. Select the existing Nexa Smart Office Bot project.
 3. Create a new manual delivery.
-4. Upload the single ZIP for version 1.6.2.
+4. Upload the single ZIP for version 1.6.4.
 5. Apply staged files once.
-6. Confirm the application version is 1.6.2.
+6. Confirm the application version is 1.6.4.
 7. Run Local build validation.
 8. When validation is green, select Push to GitHub and Build.
 

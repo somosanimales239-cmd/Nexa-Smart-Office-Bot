@@ -1,6 +1,6 @@
 {
     "name": "nexa-smart-office-bot",
-    "version": "1.6.2",
+    "version": "1.6.4",
     "description": "Local-first smart office assistant with guarded user-authorized automatic messages and appointments, a 2,880-record automotive dealer knowledge library, full AutoMarket Pro conversations, API sync, contacts, leads, agenda and notifications.",
     "main": "main.js",
     "author": "Nexa",

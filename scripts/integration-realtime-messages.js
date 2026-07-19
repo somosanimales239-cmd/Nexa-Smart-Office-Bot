@@ -45,7 +45,7 @@ const requests = [];
 global.fetch = async function fakeFetch(url, options) {
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
-  requests.push({ resource: resource, method: options.method, headers: options.headers, body: options.body ? JSON.parse(options.body) : null });
+  requests.push({ resource: resource, method: options.method, headers: options.headers, query: Object.fromEntries(parsed.searchParams.entries()), body: options.body ? JSON.parse(options.body) : null });
   if (resource === 'message-thread') {
     return {
       ok: true,
@@ -68,7 +68,7 @@ global.fetch = async function fakeFetch(url, options) {
       status: 201,
       text: async function text() {
         const body = options.body ? JSON.parse(options.body) : {};
-        return JSON.stringify({ data: { message_id: 'remote-' + body.client_message_id, thread_id: body.thread_id, body: body.body, direction: 'outbound', sender_type: 'dealer', sent_at: '2026-07-17T12:02:00Z', status: 'sent' } });
+        return JSON.stringify({ data: { message_id: 'remote-client-1', thread_id: body.thread_id, body: body.message, direction: 'outbound', sender_type: 'dealer', sent_at: '2026-07-17T12:02:00Z', status: 'sent' } });
       }
     };
   }
@@ -101,6 +101,8 @@ const engine = new MessageResponseEngine(database);
     assert.equal(response.payload.messages.length, 2);
     assert.equal(response.payload.messages[0].body, 'Is this trailer still available?');
     assert.equal(response.payload.messages[0].private_secret, undefined);
+    const request = requests.find(function find(item) { return item.resource === 'message-thread'; });
+    assert.equal(request.query.mark_read, '0', 'Synchronizing a conversation must not mark it read.');
     database.saveMessageThreadSnapshot(response.payload.thread, response.payload.messages, { thread_id: 'thread-1' });
     const conversation = database.getMessageConversationContext('thread-1', 100);
     assert.equal(conversation.messages.length, 2);
@@ -148,6 +150,8 @@ const engine = new MessageResponseEngine(database);
     assert.equal(request.headers.Authorization, 'Bearer test-message-key');
     assert.equal(request.headers['Idempotency-Key'], 'client-1');
     assert.equal(request.body.thread_id, 'thread-1');
+    assert.equal(request.body.message, 'Yes, it is available.');
+    assert.equal(Object.prototype.hasOwnProperty.call(request.body, 'body'), false);
   });
 
   await test('outbox and sent draft state are durable', function () {

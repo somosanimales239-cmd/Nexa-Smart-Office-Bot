@@ -26,7 +26,8 @@ function registerMessagesIpc(ipcMain, services) {
     const response = await apiService.fetchMessageThread(threadId, {
       limit: Number(payload && payload.limit || 120),
       cursor: payload && payload.cursor,
-      after: payload && payload.after
+      after: payload && payload.after,
+      markRead: false
     });
     const parts = threadParts(response.payload);
     if (!parts.thread.thread_id) parts.thread.thread_id = threadId;

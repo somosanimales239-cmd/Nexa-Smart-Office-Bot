@@ -44,9 +44,34 @@ function registerIntegrationsIpc(ipcMain, services) {
   registerIpcHandler(ipcMain, 'integration:save', function saveIntegration(payload) {
     const input = Object.assign({}, payload || {});
     const key = typeof input.automarket_api_key === 'string' ? input.automarket_api_key : '';
+    const previousSettings = settingsService.getPublicSettings();
+    const previousUrl = String(previousSettings.automarket_base_url || '').trim();
+    const nextUrl = Object.prototype.hasOwnProperty.call(input, 'automarket_base_url')
+      ? String(input.automarket_base_url || '').trim()
+      : previousUrl;
     delete input.automarket_api_key;
     database.saveSettings(input);
     if (key.trim()) settingsService.saveSecret('automarket', key);
+    if (key.trim() || nextUrl !== previousUrl) {
+      // A new key or website must never inherit a cached discovery contract.
+      database.replaceIntegrationCache('ping', []);
+      database.replaceIntegrationCache('connection-map', []);
+      database.saveIntegrationStatus({
+        connected: 0,
+        account_type: null,
+        account_id: null,
+        store_id: null,
+        owner_type: null,
+        owner_id: null,
+        user_id: null,
+        api_version: null,
+        scopes_json: '[]',
+        connection_map_json: '{}',
+        sync_state: 'credentials_changed',
+        last_attempt_at: null,
+        last_error: 'Connection settings changed. Run Test connection and Sync now.'
+      });
+    }
     return settingsService.getPublicSettings();
   });
 

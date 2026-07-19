@@ -286,6 +286,7 @@ function automationReasonLabel(reason) {
     not_authorized: 'AI Control authorization is not active',
     no_automatic_actions_enabled: 'both automatic messages and appointments are disabled',
     no_unanswered_messages: 'no unanswered customer messages were found',
+    no_unread_replyable_messages: 'no unread replyable customer messages were found; to recover an already-read unanswered message, temporarily set Require unread message to No',
     message_threads_failed_to_load: 'the message list loaded but complete threads could not be read',
     already_processed: 'the message was already processed',
     read: 'the latest customer message is already marked read',
@@ -1119,10 +1120,12 @@ function renderAIControl() {
     ['Automatic messages authorized', readiness.messages_authorized],
     ['Messages AI switch', readiness.messages_switch_on],
     ['Website connected', readiness.integration_connected],
-    ['Complete message threads', readiness.full_thread_available],
+    ['message-thread endpoint', readiness.full_thread_available],
     ['Message send endpoint', readiness.message_send_available],
+    ['message-read endpoint', readiness.message_read_available],
     ['messages:read scope', readiness.messages_read_scope],
     ['messages:write scope', readiness.messages_write_scope],
+    ['Two-way chat', readiness.two_way_chat_ready],
     ['Message limits available', readiness.rate_limit_available],
     ['Outside quiet hours', !readiness.in_quiet_hours]
   ].map(function readinessRow(entry) { return '<div class="automation-readiness-row"><span>' + esc(entry[0]) + '</span>' + badge(entry[1] ? 'Ready' : 'Blocked', entry[1] ? 'success' : 'warning') + '</div>'; }).join('');

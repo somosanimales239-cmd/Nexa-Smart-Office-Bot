@@ -1,0 +1,43 @@
+NEXA SMART OFFICE BOT 1.6.4
+Actualizacion exclusiva del software para el contrato actual de la pagina
+
+NO INCLUYE NI REQUIERE CAMBIOS EN LA PAGINA WEB.
+
+CONEXION
+- Acepta la URL base publica y agrega /api/v1/index.php.
+- Ejecuta ping y despues connection-map.
+- Envia en todas las solicitudes:
+  Authorization: Bearer API_KEY
+  X-Nexa-Api-Key: API_KEY
+
+DISCOVERY COMPATIBLE
+- scopes
+- allowed_scopes
+- permissions
+- available_resources
+- endpoints
+- allowed_endpoints
+- messages_write_enabled
+- message_send_endpoint
+- two_way_chat_enabled
+
+ENDPOINTS Y ALIASES
+- message-thread / messages-thread
+- message-send / messages-send
+- message-read / messages-read
+
+ENVIO
+POST ?resource=message-send
+JSON: { "thread_id": ID, "message": "Texto" }
+
+CACHE
+Cuando se guarda una URL o API Key nueva, Nexa elimina inmediatamente el ping
+y connection-map anteriores y deja la conexion pendiente de una prueba nueva.
+Test connection y Sync now guardan solamente el contrato recibido de la key
+actual.
+
+RESPUESTAS AUTOMATICAS
+La sincronizacion de una conversacion usa mark_read=0. El mensaje no desaparece
+como leido durante el analisis. Para usar DeepSeek automaticamente deben estar
+habilitados Knowledge + authorized AI fallback y External AI fallback.
+

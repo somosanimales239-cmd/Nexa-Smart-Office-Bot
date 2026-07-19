@@ -1,4 +1,4 @@
-# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.2
+# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.4
 
 This contract supports complete conversations, manual or explicitly authorized automatic replies, dealer appointment availability and optional remote appointment creation.
 
@@ -44,6 +44,11 @@ Capabilities may also be advertised:
 }
 ```
 
+Nexa also accepts the current website discovery fields `messages_write_enabled`,
+`message_send_endpoint` and `two_way_chat_enabled`, whether they are returned
+inside `data` or beside it. Endpoint lists may use the plural aliases
+`messages-thread`, `messages-send` and `messages-read`.
+
 Omit `appointment-create` or set its capability to false when remote creation is unavailable. Nexa will still create a local calendar appointment from verified availability when the user authorizes that behavior.
 
 ## Read a complete conversation
@@ -60,6 +65,7 @@ The response should contain a safe `thread` object and a `messages` array with m
 ```http
 POST /api/v1/index.php?resource=message-send
 Authorization: Bearer API_KEY
+X-Nexa-Api-Key: API_KEY
 Content-Type: application/json
 Idempotency-Key: CLIENT_MESSAGE_ID
 ```
@@ -67,9 +73,7 @@ Idempotency-Key: CLIENT_MESSAGE_ID
 ```json
 {
   "thread_id": "thread-123",
-  "body": "Yes, I can help with that.",
-  "client_message_id": "unique-client-message-id",
-  "reply_to_message_id": "message-88"
+  "message": "Yes, I can help with that."
 }
 ```
 

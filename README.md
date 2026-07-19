@@ -1,8 +1,22 @@
-# Nexa Smart Office Bot 1.6.2
+# Nexa Smart Office Bot 1.6.4
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.2
+## New in 1.6.4
+
+- Matches the current website connection contract without requiring any website-file changes.
+- Reads scopes and endpoints from both nested `data` and top-level discovery fields.
+- Supports `messages_write_enabled`, `message_send_endpoint`, `two_way_chat_enabled` and their endpoint aliases.
+- Sends replies as `POST resource=message-send` with `{ thread_id, message }` and both authentication headers.
+- Clears the old cached discovery contract whenever a new URL or API key is saved.
+
+## Existing 1.6.3 improvements
+
+- Conversation synchronization no longer marks customer messages read; only the explicit **Mark read** action or a completed automatic reply changes read state.
+- A failed, delayed or low-confidence first pass no longer makes the unread message disappear from later automatic cycles.
+- AI Control now explains when **Require unread message** is filtering an already-read thread.
+
+## Existing 1.6.2 improvements
 
 - Fixed false `Message send endpoint` and `messages:write scope` blocks caused by the connection-map safety filter removing valid capability fields.
 - Preserved and normalized `scopes`, `allowed_scopes`, `permissions`, `endpoints` and `allowed_endpoints` from the safe connection contract.

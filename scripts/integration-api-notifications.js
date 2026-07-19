@@ -14,6 +14,7 @@ const {
   stableHash
 } = require('../src/services/automarket-api-service');
 const { NotificationService } = require('../src/services/notification-service');
+const { registerIntegrationsIpc } = require('../src/ipc/integrations-ipc');
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-full-api-sync-'));
 const db = new DatabaseService(path.join(tempDir, 'test.sqlite'));
@@ -55,7 +56,16 @@ settingsService.saveSettings({
 const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read'];
 const responses = {
   ping: { ok: true, data: { account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1' } },
-  'connection-map': { ok: true, data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', scopes: dealerScopes.slice(), available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers'], endpoints: ['messages-thread','messages-send','messages-read'] } },
+  'connection-map': {
+    ok: true,
+    allowed_scopes: dealerScopes.slice(),
+    permissions: dealerScopes.slice(),
+    allowed_endpoints: ['messages-thread','messages-send','messages-read'],
+    messages_write_enabled: true,
+    message_send_endpoint: 'message-send',
+    two_way_chat_enabled: true,
+    data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers'] }
+  },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
   'dealer-summary': { ok: true, data: { total_listings: 5, active_listings: 4, unreviewed_orders: 1, agenda_contacts: 2, unread_messages: 2 } },
   orders: { ok: true, data: [{ order_id: 'order-1', customer_name: 'Customer One', customer_phone: '(786) 555-3333', status: 'unreviewed', created_at: '2026-07-17T10:00:00Z' }] },
@@ -74,7 +84,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.2');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.4');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
@@ -143,14 +153,18 @@ const notificationService = new NotificationService({
     assert.equal(result.identity.account_type, 'dealer');
     assert.equal(result.identity.scopes.includes('messages:write'), true);
     assert.equal(result.identity.available_resources.includes('message-send'), true);
-    assert.deepEqual(result.connectionMap.scopes, dealerScopes);
-    assert.deepEqual(result.connectionMap.endpoints, ['messages-thread','messages-send','messages-read']);
+    assert.deepEqual(result.connectionMap.allowed_scopes, dealerScopes);
+    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read']);
+    assert.equal(result.connectionMap.messages_write_enabled, true);
+    assert.equal(result.connectionMap.message_send_endpoint, 'message-send');
+    assert.equal(result.connectionMap.two_way_chat_enabled, true);
     const messageCapabilities = deriveMessageCapabilities(result.identity, result.connectionMap);
     assert.equal(messageCapabilities.fullThread, true);
     assert.equal(messageCapabilities.send, true);
     assert.equal(messageCapabilities.markRead, true);
     assert.equal(messageCapabilities.read, true);
     assert.equal(messageCapabilities.write, true);
+    assert.equal(messageCapabilities.twoWayChat, true);
     assert.deepEqual(requestedResources, ['ping','connection-map']);
     assert(result.resources.some((entry)=>entry.resource === 'agenda'));
   });
@@ -212,15 +226,18 @@ const notificationService = new NotificationService({
     delete forcedFailures.messages;
   });
   await test('missing scope is recorded without making the forbidden HTTP request', async function () {
-    const originalScopes = responses['connection-map'].data.scopes;
-    responses['connection-map'].data.scopes = dealerScopes.filter((scope)=>scope !== 'messages:read');
+    const originalAllowedScopes = responses['connection-map'].allowed_scopes;
+    const originalPermissions = responses['connection-map'].permissions;
+    responses['connection-map'].allowed_scopes = dealerScopes.filter((scope)=>scope !== 'messages:read');
+    responses['connection-map'].permissions = dealerScopes.filter((scope)=>scope !== 'messages:read');
     requestedResources = [];
     const result = await notificationService.syncAutoMarket(true);
     assert.equal(result.partial, true);
     assert.equal(requestedResources.includes('messages'), false);
     assert.equal(db.getIntegrationResourceStatus('messages').allowed, 0);
     assert.equal(db.getIntegrationResourceStatus('messages').status, 'forbidden');
-    responses['connection-map'].data.scopes = originalScopes;
+    responses['connection-map'].allowed_scopes = originalAllowedScopes;
+    responses['connection-map'].permissions = originalPermissions;
   });
   await test('connected appointments create bounded 24-hour or 2-hour reminders', async function () {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -238,6 +255,22 @@ const notificationService = new NotificationService({
     assert.equal(db.getSettings().notifications_user_consent,'1');
     await notificationService.testNotification();
     assert(FakeNotification.shown.length >= 1);
+  });
+  await test('saving a new API key invalidates only the cached discovery contract', async function () {
+    db.replaceIntegrationCache('messages', [{ thread_id:'keep-thread', subject:'Keep synchronized message cache' }]);
+    db.replaceIntegrationCache('ping', [{ status:'old' }]);
+    db.replaceIntegrationCache('connection-map', [{ scopes:['messages:read'] }]);
+    db.saveIntegrationStatus({ connected:1, scopes_json:'["messages:read"]', connection_map_json:'{"old":true}', sync_state:'ready' });
+    const handlers = {};
+    registerIntegrationsIpc({ handle(channel, handler) { handlers[channel] = handler; } }, { database:db, settingsService, apiService, notificationService });
+    const saved = await handlers['integration:save']({}, { automarket_base_url:'https://example.com', automarket_api_key:'new-key-with-write' });
+    assert.equal(saved.ok, true);
+    assert.equal(db.integrationCacheCount('ping'), 0);
+    assert.equal(db.integrationCacheCount('connection-map'), 0);
+    assert.equal(db.integrationCacheCount('messages'), 1, 'Changing credentials must not delete local conversation history.');
+    assert.equal(db.getIntegrationStatus().connected, 0);
+    assert.equal(db.getIntegrationStatus().connection_map_json, '{}');
+    assert.equal(db.getIntegrationStatus().sync_state, 'credentials_changed');
   });
   await test('API key is never exposed by public settings or connected cache', function () {
     const settings = settingsService.getPublicSettings();

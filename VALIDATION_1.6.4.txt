@@ -1,0 +1,29 @@
+Nexa Smart Office Bot 1.6.4 - Validation Summary
+
+Scope: software-only update. No website files are included.
+
+Verified contract behavior
+- Base domain normalized to /api/v1/index.php.
+- Requests execute ping before connection-map.
+- Authorization and X-Nexa-Api-Key headers are both present.
+- Safe discovery fields are merged from top-level and nested data responses.
+- allowed_scopes, permissions, endpoints and allowed_endpoints are preserved.
+- messages_write_enabled, message_send_endpoint and two_way_chat_enabled are preserved.
+- Singular and plural message endpoint aliases normalize correctly.
+- New URL/API key invalidates the old cached discovery contract.
+- message-send uses POST with thread_id and message.
+- Conversation synchronization sends mark_read=0.
+
+Automated validation completed
+- Core integration tests: 28 passed.
+- API synchronization and notification tests: 21 passed.
+- Real-time conversation tests: 9 passed.
+- Automotive knowledge library tests: 10 passed.
+- Guarded automatic action tests: passed.
+- Implementation tests: passed.
+- Acceptance tests: passed.
+- git diff whitespace/conflict validation: passed.
+
+The update contains no API keys, website credentials, SQLite workspace,
+customer data, node_modules or generated installer binaries.
+
