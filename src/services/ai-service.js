@@ -102,7 +102,7 @@ class AIService {
     const allowFallback = input && input.force_ai_fallback === true ? true : String(settings.message_ai_fallback || '1') === '1';
     const localMatch = this.messageEngine.match(conversation);
     if (mode !== 'ai_only' && localMatch.matched) {
-      this.database.incrementKnowledgeUse(localMatch.knowledgeId);
+      if (!localMatch.dynamic) this.database.incrementKnowledgeUse(localMatch.knowledgeId);
       const savedLocal = this.database.saveMessageDraft({
         thread_id: threadId,
         source: 'knowledge',

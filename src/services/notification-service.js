@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { resourcePlan, stableHash } = require('./automarket-api-service');
+const { availabilityCacheItems, availabilityItemCount } = require('./dealer-availability-service');
 
 const NEXA_SMART_NOTIFICATIONS_V1 = 'NEXA_SMART_NOTIFICATIONS_V1';
 const NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2 = 'NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2';
@@ -20,7 +21,8 @@ function listFromPayload(payload) {
   if (!payload || typeof payload !== 'object') return [];
   for (const key of [
     'items', 'records', 'rows', 'listings', 'orders', 'contacts', 'agenda', 'messages', 'threads', 'resellers',
-    'appointments', 'assignments', 'stores', 'users', 'validations', 'api_keys', 'slots', 'availability', 'data'
+    'appointments', 'assignments', 'stores', 'users', 'validations', 'api_keys', 'verified_open_slots', 'open_slots',
+    'available_slots', 'slots', 'availability', 'dealer_appointment_availability', 'data'
   ]) {
     if (Array.isArray(payload[key])) return payload[key];
   }
@@ -28,13 +30,15 @@ function listFromPayload(payload) {
 }
 
 function cacheItemsFromPayload(resource, payload) {
+  if (resource === 'dealer-appointment-availability') return availabilityCacheItems(payload);
   const list = listFromPayload(payload);
   if (list.length) return list;
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) return [payload];
   return [];
 }
 
-function resourceItemCount(payload) {
+function resourceItemCount(payload, resource) {
+  if (resource === 'dealer-appointment-availability') return availabilityItemCount(payload);
   if (Array.isArray(payload)) return payload.length;
   const list = listFromPayload(payload);
   if (list.length) return list.length;
@@ -282,7 +286,7 @@ class NotificationService {
       required_scope: '',
       allowed: 1,
       status: 'ok',
-      item_count: response.resource === 'ping' || response.resource === 'connection-map' ? 1 : resourceItemCount(response.payload),
+      item_count: response.resource === 'ping' || response.resource === 'connection-map' ? 1 : resourceItemCount(response.payload, response.resource),
       http_status: response.status,
       last_error: '',
       last_started_at: response.receivedAt,
@@ -392,7 +396,7 @@ class NotificationService {
           changes.push.apply(changes, resourceChanges);
           const cacheItems = cacheItemsFromPayload(resource, response.payload);
           this.database.replaceIntegrationCache(resource, cacheItems);
-          const count = resourceItemCount(response.payload);
+          const count = resourceItemCount(response.payload, resource);
           this.database.saveIntegrationResourceStatus({
             resource: resource,
             account_type: identity.account_type,
@@ -566,7 +570,7 @@ class NotificationService {
     this.database.saveIntegrationSnapshot({
       resource: resource,
       payload_hash: currentHash,
-      item_count: resourceItemCount(payload),
+      item_count: resourceItemCount(payload, resource),
       payload_json: JSON.stringify(payload || null),
       last_checked_at: nowIso(),
       last_changed_at: previous && previous.payload_hash === currentHash ? previous.last_changed_at : nowIso()

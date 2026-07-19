@@ -1,6 +1,12 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {
+  dateAvailabilityState,
+  isAppointmentAvailabilityIntent,
+  normalizeAvailability,
+  parseRequestedDateTime
+} = require('./dealer-availability-service');
 
 const NEXA_KNOWLEDGE_FIRST_MESSAGE_ENGINE_V2 = 'NEXA_KNOWLEDGE_FIRST_MESSAGE_ENGINE_V2';
 const NEXA_AUTOMOTIVE_KNOWLEDGE_LIBRARY_V1 = 'NEXA_AUTOMOTIVE_KNOWLEDGE_LIBRARY_V1';
@@ -122,6 +128,78 @@ function selectResponseVariant(record, conversation, latestMessage) {
   return String(variants[deterministicIndex(seed, variants.length)] || record.response || '');
 }
 
+function formatLiveSlot(slot, locale) {
+  return new Intl.DateTimeFormat(locale === 'es' ? 'es-US' : 'en-US', {
+    dateStyle: 'medium', timeStyle: 'short'
+  }).format(slot.start);
+}
+
+function liveAvailabilityMatch(database, conversation, latestMessage, context) {
+  if (!isAppointmentAvailabilityIntent(latestMessage) || !database || typeof database.listIntegrationCache !== 'function') return null;
+  const cached = database.listIntegrationCache('dealer-appointment-availability', '', 500);
+  if (!cached.length) return null;
+  const settings = typeof database.getSettings === 'function' ? database.getSettings() : {};
+  const now = new Date();
+  const slots = normalizeAvailability(cached, Object.assign({}, settings, {
+    auto_appointments_min_notice_hours: 0,
+    auto_appointments_max_days: Math.max(Number(settings.auto_appointments_max_days || 60), 14)
+  }), now);
+  const requested = parseRequestedDateTime(latestMessage, now);
+  const locale = context.locale;
+  const requestedDaySlots = requested.date ? slots.filter(function sameDay(slot) {
+    return slot.start.toDateString() === requested.date.toDateString();
+  }) : [];
+  const nextSlots = (requestedDaySlots.length ? requestedDaySlots : slots).slice(0, 3);
+  const formatted = nextSlots.map(function display(slot) { return formatLiveSlot(slot, locale); });
+  const dateState = requested.date ? dateAvailabilityState(cached, requested.date) : { blocked: false, reason: '' };
+  let response = '';
+  if (requested.date && dateState.blocked) {
+    if (locale === 'es') response = 'Ese día aparece como día off o fecha bloqueada en el horario verificado del dealer.';
+    else response = 'That day is marked as a day off or blocked date in the dealer’s verified schedule.';
+    if (formatted.length) response += locale === 'es' ? ' Los próximos horarios verificados son: ' + formatted.join('; ') + '.' : ' The next verified times are: ' + formatted.join('; ') + '.';
+  } else if (requested.date && requested.exact) {
+    const exact = requestedDaySlots.find(function sameTime(slot) {
+      return Math.abs(slot.start.getTime() - requested.date.getTime()) <= 15 * 60000;
+    });
+    if (exact) {
+      response = locale === 'es'
+        ? 'Sí, hay un horario verificado disponible el ' + formatLiveSlot(exact, locale) + (exact.location ? ' en ' + exact.location : '') + '. ¿Desea que prepare la cita?'
+        : 'Yes, a verified appointment time is available on ' + formatLiveSlot(exact, locale) + (exact.location ? ' at ' + exact.location : '') + '. Would you like me to prepare the appointment?';
+    } else {
+      response = locale === 'es'
+        ? 'Esa hora no aparece disponible en el horario verificado del dealer.'
+        : 'That time is not shown as available in the dealer’s verified schedule.';
+      if (formatted.length) response += locale === 'es' ? ' Las opciones verificadas más cercanas son: ' + formatted.join('; ') + '.' : ' The nearest verified options are: ' + formatted.join('; ') + '.';
+    }
+  } else if (requested.date) {
+    response = formatted.length
+      ? (locale === 'es' ? 'Los horarios verificados disponibles para ese día son: ' : 'The verified times available that day are: ') + formatted.join('; ') + '.'
+      : (locale === 'es' ? 'Ese día no muestra horarios abiertos verificados en la información actual del dealer.' : 'That day currently shows no verified open appointment times in the dealer data.');
+  } else {
+    response = formatted.length
+      ? (locale === 'es' ? 'Los próximos horarios verificados disponibles del dealer son: ' : 'The dealer’s next verified available times are: ') + formatted.join('; ') + '.'
+      : (locale === 'es' ? 'El dealer no tiene horarios abiertos verificados publicados en este momento.' : 'The dealer currently has no verified open appointment times published.');
+  }
+  if (!response) return null;
+  return {
+    matched: true,
+    confidence: 1,
+    latestMessage: latestMessage,
+    knowledgeId: 'live-dealer-appointment-availability',
+    label: 'Live dealer appointment availability',
+    category: 'Live website availability',
+    intentKey: 'live_appointment_availability',
+    locale: locale,
+    dealerSegment: context.segment,
+    safetyLevel: 'standard',
+    requiredContext: [],
+    builtIn: false,
+    dynamic: true,
+    libraryVersion: 'website-live',
+    response: response
+  };
+}
+
 class MessageResponseEngine {
   constructor(database) {
     this.database = database;
@@ -154,6 +232,8 @@ class MessageResponseEngine {
     const latest = this.latestInbound(conversation);
     const text = latest ? String(latest.body || '') : '';
     const context = { locale: detectLocale(text), segment: inferDealerSegment(conversation) };
+    const liveMatch = liveAvailabilityMatch(this.database, conversation, text, context);
+    if (liveMatch) return liveMatch;
     const records = this.records().filter(function languageFirst(row) {
       return !row.locale || String(row.locale) === 'auto' || String(row.locale) === context.locale;
     });
@@ -195,5 +275,6 @@ module.exports = {
   normalize,
   scoreKnowledge,
   selectResponseVariant,
+  liveAvailabilityMatch,
   tokens
 };

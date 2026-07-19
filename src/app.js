@@ -496,6 +496,26 @@ function integrationRemote(resource) {
   return Array.isArray(remote[resource]) ? remote[resource] : [];
 }
 
+function availabilitySnapshotRemote() {
+  return integrationRemote('dealer-appointment-availability').find(function findSnapshot(item) {
+    return item && (item.record_type === 'availability_snapshot' || Array.isArray(item.verified_open_slots) || item.weekly_schedule || item.blocked_dates || item.off_dates);
+  }) || null;
+}
+
+function availabilitySlotsRemote() {
+  const rows = integrationRemote('dealer-appointment-availability');
+  const direct = rows.filter(function isSlot(item) {
+    return item && item.record_type !== 'availability_snapshot' && (item.start_at || item.datetime || ((item.date || item.appointment_date) && (item.start_time || item.appointment_time || item.time)));
+  });
+  if (direct.length) return direct;
+  const snapshot = availabilitySnapshotRemote();
+  if (!snapshot) return [];
+  for (const key of ['verified_open_slots','open_slots','available_slots','slots','availability']) {
+    if (Array.isArray(snapshot[key])) return snapshot[key];
+  }
+  return [];
+}
+
 function integrationResourceStatus(resource) {
   const integration = state.integration || {};
   const resources = Array.isArray(integration.resources) ? integration.resources : [];
@@ -694,6 +714,11 @@ function renderConversationBubbles() {
 
 function renderKnowledgeCenter() {
   const summary=state.knowledgeSummary||{};
+  const liveSnapshot=availabilitySnapshotRemote();
+  const liveSlots=availabilitySlotsRemote();
+  const blockedDates=liveSnapshot&&Array.isArray(liveSnapshot.blocked_dates)?liveSnapshot.blocked_dates:liveSnapshot&&Array.isArray(liveSnapshot.off_dates)?liveSnapshot.off_dates:[];
+  const openDates=liveSnapshot&&Array.isArray(liveSnapshot.open_dates)?liveSnapshot.open_dates:[];
+  const liveKnowledge=liveSnapshot?'<article class="panel-card"><div class="panel-header"><div><h3>Live Website Availability</h3><p>Dynamic Knowledge from dealer-appointment-availability. It is replaced on every successful sync.</p></div>'+badge('Verified website data','success')+'</div><div class="knowledge-summary-grid"><article><span>Dealer / Store</span><strong>'+esc(liveSnapshot.dealer_name||liveSnapshot.store_name||liveSnapshot.dealer_id||liveSnapshot.store_id||'Connected dealer')+'</strong><small>'+esc(liveSnapshot.location||liveSnapshot.address||'Location supplied by website')+'</small></article><article><span>Verified open slots</span><strong>'+esc(liveSlots.length)+'</strong><small>Used for replies and appointments</small></article><article><span>Blocked / off dates</span><strong>'+esc(blockedDates.length)+'</strong><small>Never offered as available</small></article><article><span>Special open dates</span><strong>'+esc(openDates.length)+'</strong><small>Overrides the regular weekly day</small></article></div></article>':'';
   const filtered=state.messageKnowledge.filter(function filterKnowledge(row){return remoteMatches(row,state.search); });
   const page=paginateItems(filtered,'message-knowledge');
   const rows=page.items.map(function knowledgeRow(row){
@@ -706,7 +731,7 @@ function renderKnowledgeCenter() {
   }).join('')||emptyMini('No matching knowledge','Try another phrase or create a custom approved response.');
   const summaryCards='<div class="knowledge-summary-grid"><article><span>Built-in library</span><strong>'+esc(summary.built_in||0)+'</strong><small>Installed for every user</small></article><article><span>Natural variants</span><strong>'+esc(summary.response_variants||0)+'</strong><small>Three approved variations per built-in record</small></article><article><span>Dealer types</span><strong>'+esc(summary.dealer_segments||0)+'</strong><small>Auto, truck, motorcycle, RV, trailer, marine and more</small></article><article><span>Languages</span><strong>'+esc(summary.languages||0)+'</strong><small>English and Spanish</small></article></div>';
   const safety='<div class="knowledge-safety-note"><b>Automotive safety guard</b><span>The built-in library never promises financing approval, unverified inventory, discounts, appointments, warranties, legal outcomes, or sensitive-document handling. Nexa escalates those cases or asks for verified data.</span></div>';
-  return summaryCards+safety+'<div class="message-knowledge-layout"><article class="panel-card"><div class="panel-header"><div><h3>Custom business knowledge</h3><p>Add dealership-specific policies or teach Nexa from a reply you reviewed and approved.</p></div>'+badge('Knowledge first','success')+'</div><div class="form-grid"><label>Label<input id="knowledge-label" value="Approved customer reply"></label><label>Category<input id="knowledge-category" value="Custom dealership knowledge"></label><label class="span-2">Customer words or intent<textarea id="knowledge-triggers" placeholder="Example: what are your hours, when are you open"></textarea></label><label class="span-2">Approved response<textarea id="knowledge-response" placeholder="Write the response Nexa may suggest when this intent matches."></textarea></label></div><div class="dialog-actions"><button class="primary-button" data-nexa-action="message-knowledge-save">Save custom knowledge</button></div></article><article class="panel-card"><div class="panel-header"><div><h3>Automotive Dealer Library</h3><p>'+filtered.length+' matching of '+state.messageKnowledge.length+' total records · Library '+esc(summary.library_version||'1.0.0')+'</p></div></div><div class="message-inbox-toolbar knowledge-search"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search category, intent, vehicle type, English or Spanish…"><span>40 per page</span></div><div class="knowledge-list">'+rows+'</div>'+renderPagination(page,'message-knowledge','knowledge records')+'</article></div>';
+  return liveKnowledge+summaryCards+safety+'<div class="message-knowledge-layout"><article class="panel-card"><div class="panel-header"><div><h3>Custom business knowledge</h3><p>Add dealership-specific policies or teach Nexa from a reply you reviewed and approved.</p></div>'+badge('Knowledge first','success')+'</div><div class="form-grid"><label>Label<input id="knowledge-label" value="Approved customer reply"></label><label>Category<input id="knowledge-category" value="Custom dealership knowledge"></label><label class="span-2">Customer words or intent<textarea id="knowledge-triggers" placeholder="Example: what are your hours, when are you open"></textarea></label><label class="span-2">Approved response<textarea id="knowledge-response" placeholder="Write the response Nexa may suggest when this intent matches."></textarea></label></div><div class="dialog-actions"><button class="primary-button" data-nexa-action="message-knowledge-save">Save custom knowledge</button></div></article><article class="panel-card"><div class="panel-header"><div><h3>Automotive Dealer Library</h3><p>'+filtered.length+' matching of '+state.messageKnowledge.length+' total records · Library '+esc(summary.library_version||'1.0.0')+'</p></div></div><div class="message-inbox-toolbar knowledge-search"><input id="view-search" data-nexa-action="message-search" type="search" value="'+esc(state.search)+'" placeholder="Search category, intent, vehicle type, English or Spanish…"><span>40 per page</span></div><div class="knowledge-list">'+rows+'</div>'+renderPagination(page,'message-knowledge','knowledge records')+'</article></div>';
 }
 
 function renderMessages() {
@@ -1105,7 +1130,7 @@ function renderAIControl() {
   const enabledMaster = String(settings.auto_actions_enabled || '0') === '1';
   const actions = Array.isArray(summary.recent) ? summary.recent : [];
   const page = paginateItems(actions, 'automatic-actions');
-  const availability = integrationRemote('dealer-appointment-availability');
+  const availability = availabilitySlotsRemote();
   const rows = page.items.map(function actionRow(row) {
     let payload = {};
     try { payload = JSON.parse(row.payload_json || '{}'); } catch (_) { payload = {}; }
@@ -1126,6 +1151,8 @@ function renderAIControl() {
     ['messages:read scope', readiness.messages_read_scope],
     ['messages:write scope', readiness.messages_write_scope],
     ['Two-way chat', readiness.two_way_chat_ready],
+    ['Dealer availability endpoint', readiness.dealer_availability_endpoint],
+    ['dealer-appointment-availability:read scope', readiness.dealer_availability_scope],
     ['Message limits available', readiness.rate_limit_available],
     ['Outside quiet hours', !readiness.in_quiet_hours]
   ].map(function readinessRow(entry) { return '<div class="automation-readiness-row"><span>' + esc(entry[0]) + '</span>' + badge(entry[1] ? 'Ready' : 'Blocked', entry[1] ? 'success' : 'warning') + '</div>'; }).join('');

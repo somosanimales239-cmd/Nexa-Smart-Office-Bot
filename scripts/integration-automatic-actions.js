@@ -14,6 +14,7 @@ let sentMessages = [];
 let currentThread = null;
 let availabilityPayload = { slots: [] };
 let availabilityFailure = false;
+let lastAvailabilityQuery = null;
 const apiService = {
   async fetchResource(resource) {
     if (resource !== 'messages') throw new Error('Unsupported test resource: ' + resource);
@@ -27,7 +28,7 @@ const apiService = {
     return { payload: { message_id: 'remote-' + sentMessages.length, thread_id: threadId, body, direction: 'outbound', sent_at: new Date().toISOString(), status: 'sent' } };
   },
   async markMessageRead() { return { payload: { status: 'read' } }; },
-  async fetchDealerAppointmentAvailability() { if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { payload: availabilityPayload }; },
+  async fetchDealerAppointmentAvailability(query) { lastAvailabilityQuery = query; if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { payload: availabilityPayload }; },
   async createRemoteAppointment() { return { payload: { appointment_id: 'remote-appt-1' } }; }
 };
 const settingsService = {
@@ -144,7 +145,12 @@ async function run() {
   assert.equal(nestedSlots.length, 1, 'Dealer Appointment Availability embedded in reseller data must remain usable.');
   availabilityFailure = false;
   sentMessages = [];
-  availabilityPayload = { slots: [{ slot_id: 'slot-1', start_at: tomorrow.toISOString(), available: true, duration_minutes: 30, location: 'Main dealership' }] };
+  availabilityPayload = {
+    dealer_id: 'dealer-1', dealer_name: 'Main Dealer', store_id: 'store-1', store_name: 'Main dealership', slot_minutes: 30,
+    weekly_schedule: {}, blocked_dates: [], open_dates: [tomorrow.toISOString().slice(0, 10)],
+    booked_times: [{ date: tomorrow.toISOString().slice(0, 10), start_time: '11:00', status: 'booked' }],
+    verified_open_slots: [{ slot_id: 'slot-1', start_at: tomorrow.toISOString(), available: true, location: 'Main dealership' }]
+  };
   saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-2', subject: 'Appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
   currentThread = function threadTwo(threadId) {
@@ -155,6 +161,12 @@ async function run() {
   };
   const appointmentResult = await service.runNow('test-appointment');
   assert.equal(appointmentResult.appointments_created, 1);
+  assert.match(lastAvailabilityQuery.from, /^20\d{2}-\d{2}-\d{2}$/);
+  assert.equal(lastAvailabilityQuery.days, 14);
+  assert.equal(lastAvailabilityQuery.store_id, undefined, 'A reseller/unknown test account must not be restricted to a dealer store.');
+  const availabilityCache = database.listIntegrationCache('dealer-appointment-availability', '', 20);
+  assert(availabilityCache.some((item) => item.record_type === 'availability_snapshot'));
+  assert(availabilityCache.some((item) => item.slot_id === 'slot-1'));
   const appointments = database.listAppointments('Customer Two');
   assert.equal(appointments.length, 1);
   assert.equal(appointments[0].source_type, 'automatic-message');
@@ -162,6 +174,17 @@ async function run() {
   assert.equal(appointments[0].created_by, 'nexa-automatic-actions');
   await service.runNow('test-appointment-duplicate');
   assert.equal(database.listAppointments('Customer Two').length, 1, 'Automatic appointment must not duplicate.');
+
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-3', subject: 'Conflicting appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadThree(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Conflicting appointment', participant_name: 'Customer Three', customer_phone: '2395550101', can_reply: 1, is_announcement: 0 },
+      messages: [{ message_id: 'inbound-3', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Customer Three', body: 'Can I schedule an appointment on ' + dateText + ' at 10:00 AM?', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
+    };
+  };
+  const collisionResult = await service.runNow('test-local-agenda-collision');
+  assert.equal(collisionResult.appointments_created, 0);
+  assert.equal(database.listAppointments('').length, 1, 'A verified remote slot must not overlap an existing local Agenda appointment.');
 
   const state = service.getState();
   assert.equal(state.invariants.never_changes_customer_records, true);

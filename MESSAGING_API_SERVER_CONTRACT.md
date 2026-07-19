@@ -1,4 +1,4 @@
-# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.4
+# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.5
 
 This contract supports complete conversations, manual or explicitly authorized automatic replies, dealer appointment availability and optional remote appointment creation.
 
@@ -8,6 +8,7 @@ This contract supports complete conversations, manual or explicitly authorized a
 - Dealer and reseller keys may access only their authorized account and store.
 - `messages:read` is required to list and read conversations.
 - `messages:write` is required to send replies and mark threads read.
+- `dealer-appointment-availability:read` is required to read verified dealer schedules.
 - The appointment availability endpoint must return only the authorized dealer's schedule.
 - Remote appointment creation requires an appointment-write capability or scope enforced by the server.
 - Admin announcements are read-only.
@@ -97,8 +98,9 @@ Content-Type: application/json
 ## Read Dealer Appointment Availability
 
 ```http
-GET /api/v1/index.php?resource=dealer-appointment-availability&limit=50
+GET /api/v1/index.php?resource=dealer-appointment-availability&from=2026-07-19&days=14
 Authorization: Bearer API_KEY
+X-Nexa-Api-Key: API_KEY
 ```
 
 Recommended response:
@@ -106,7 +108,23 @@ Recommended response:
 ```json
 {
   "data": {
-    "slots": [
+    "dealer_id": "dealer-7",
+    "dealer_name": "Demo Dealer",
+    "store_id": "store-7",
+    "store_name": "Demo Motors",
+    "phone": "2395550100",
+    "location": "Naples, FL",
+    "slot_minutes": 30,
+    "weekly_schedule": {
+      "monday": { "open": "09:00", "close": "17:00" },
+      "sunday": { "is_off": true }
+    },
+    "blocked_dates": ["2026-07-21"],
+    "open_dates": ["2026-07-19"],
+    "booked_times": [
+      { "date": "2026-07-19", "start_time": "11:00", "status": "booked" }
+    ],
+    "verified_open_slots": [
       {
         "slot_id": "slot-20260720-1000",
         "store_id": "store-7",
@@ -122,7 +140,7 @@ Recommended response:
 }
 ```
 
-Blocked, booked, closed or unavailable slots must not be returned as available.
+Optional query parameters are `store_id` and `listing_id`. Blocked, booked, closed or unavailable slots must not be returned as available.
 
 ## Optional remote appointment creation
 

@@ -2,6 +2,14 @@
 
 const crypto = require('node:crypto');
 const { deriveMessageCapabilities } = require('./automarket-api-service');
+const {
+  availabilityCacheItems,
+  availabilityStart,
+  isAppointmentAvailabilityIntent,
+  localDateKey,
+  normalizeAvailability,
+  parseRequestedDateTime
+} = require('./dealer-availability-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
@@ -18,113 +26,14 @@ function clamp(value, minimum, maximum) { return Math.min(Math.max(number(value,
 function listFromPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
-  for (const key of ['slots', 'availability', 'items', 'records', 'rows', 'appointments', 'threads', 'messages', 'data']) {
+  for (const key of ['verified_open_slots', 'open_slots', 'available_slots', 'slots', 'availability', 'dealer_appointment_availability', 'items', 'records', 'rows', 'appointments', 'threads', 'messages', 'data']) {
     if (Array.isArray(payload[key])) return payload[key];
   }
   return [];
 }
 
-function nestedAvailability(record) {
-  if (!record || typeof record !== 'object') return [];
-  for (const key of ['dealer_appointment_availability', 'appointment_availability', 'available_slots', 'availability', 'slots']) {
-    if (Array.isArray(record[key])) return record[key];
-  }
-  return [];
-}
-
-function availabilityStart(slot) {
-  if (!slot || typeof slot !== 'object') return null;
-  const direct = text(slot.start_at || slot.starts_at || slot.datetime);
-  if (direct) {
-    const parsed = new Date(direct);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  const date = text(slot.appointment_date || slot.date);
-  const time = text(slot.start_time || slot.appointment_time || slot.time);
-  if (!date) return null;
-  const parsed = new Date(time ? date + ' ' + time : date);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function slotIdentity(slot, index) {
-  return text(slot && (slot.slot_id || slot.availability_id || slot.id)) || crypto.createHash('sha256').update(JSON.stringify(slot || {}) + ':' + index).digest('hex').slice(0, 24);
-}
-
-function normalizeAvailability(payload, settings, referenceDate) {
-  const now = referenceDate || new Date();
-  const minNotice = clamp(settings.auto_appointments_min_notice_hours, 0, 168) * 3600000;
-  const maxDate = new Date(now.getTime() + clamp(settings.auto_appointments_max_days, 1, 365) * 86400000);
-  return listFromPayload(payload).map(function mapSlot(slot, index) {
-    const start = availabilityStart(slot);
-    if (!start) return null;
-    const status = text(slot.status).toLowerCase();
-    const isAvailable = slot.available === undefined ? !['unavailable', 'blocked', 'booked', 'closed', 'disabled'].includes(status) : Boolean(Number(slot.available) || slot.available === true || String(slot.available).toLowerCase() === 'true');
-    if (!isAvailable || start.getTime() < now.getTime() + minNotice || start > maxDate) return null;
-    const duration = clamp(slot.duration_minutes || settings.auto_appointments_duration_minutes, 10, 480);
-    const end = slot.end_at ? new Date(slot.end_at) : new Date(start.getTime() + duration * 60000);
-    return {
-      id: slotIdentity(slot, index),
-      start: start,
-      end: Number.isNaN(end.getTime()) ? new Date(start.getTime() + duration * 60000) : end,
-      location: text(slot.location || slot.address),
-      raw: slot
-    };
-  }).filter(Boolean).sort(function sortSlots(a, b) { return a.start - b.start; });
-}
-
-const WEEKDAYS = {
-  sunday: 0, domingo: 0, monday: 1, lunes: 1, tuesday: 2, martes: 2, wednesday: 3, miercoles: 3,
-  thursday: 4, jueves: 4, friday: 5, viernes: 5, saturday: 6, sabado: 6
-};
-
-function parseTimeParts(message) {
-  const source = text(message).toLowerCase();
-  const match = source.match(/(?:\bat\s+|\ba\s+las?\s+|\b)(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i)
-    || source.match(/\b(\d{1,2}):(\d{2})\b/);
-  if (!match) return null;
-  let hour = Number(match[1]);
-  const minute = Number(match[2] || 0);
-  const period = text(match[3]).replaceAll('.', '').toLowerCase();
-  if (period === 'pm' && hour < 12) hour += 12;
-  if (period === 'am' && hour === 12) hour = 0;
-  if (hour > 23 || minute > 59) return null;
-  return { hour: hour, minute: minute };
-}
-
-function parseRequestedDateTime(message, referenceDate) {
-  const source = text(message).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const now = referenceDate ? new Date(referenceDate) : new Date();
-  let date = null;
-  const iso = source.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
-  const slash = source.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}|\d{2}))?\b/);
-  if (iso) date = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  else if (slash) {
-    let year = slash[3] ? Number(slash[3]) : now.getFullYear();
-    if (year < 100) year += 2000;
-    date = new Date(year, Number(slash[1]) - 1, Number(slash[2]));
-  } else if (/\b(tomorrow|manana)\b/.test(source)) {
-    date = new Date(now); date.setDate(date.getDate() + 1);
-  } else if (/\b(today|hoy)\b/.test(source)) {
-    date = new Date(now);
-  } else {
-    for (const pair of Object.entries(WEEKDAYS)) {
-      if (new RegExp('\\b' + pair[0] + '\\b').test(source)) {
-        date = new Date(now);
-        let add = (pair[1] - date.getDay() + 7) % 7;
-        if (add === 0) add = 7;
-        date.setDate(date.getDate() + add);
-        break;
-      }
-    }
-  }
-  const time = parseTimeParts(source);
-  if (!date) return { date: null, time: time, exact: false };
-  date.setHours(time ? time.hour : 0, time ? time.minute : 0, 0, 0);
-  return { date: date, time: time, exact: Boolean(time) };
-}
-
 function isAppointmentIntent(message) {
-  return /\b(appointment|schedule|availability|available time|book|test drive|cita|agendar|disponibilidad|hora disponible|reservar|prueba de manejo)\b/i.test(text(message));
+  return isAppointmentAvailabilityIntent(message);
 }
 
 function classifyRisk(message, excludedIntents) {
@@ -156,6 +65,18 @@ function inQuietHours(settings, date) {
 
 function formatSlot(slot) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(slot.start);
+}
+
+function slotConflictsWithLocalAgenda(slot, appointments) {
+  if (!slot || !(slot.start instanceof Date) || !(slot.end instanceof Date)) return true;
+  return (appointments || []).some(function overlaps(appointment) {
+    if (String(appointment.status || '').toLowerCase() !== 'scheduled') return false;
+    const start = new Date(appointment.start_at);
+    if (Number.isNaN(start.getTime())) return false;
+    const end = appointment.end_at ? new Date(appointment.end_at) : new Date(start.getTime() + 30 * 60000);
+    const safeEnd = Number.isNaN(end.getTime()) ? new Date(start.getTime() + 30 * 60000) : end;
+    return slot.start < safeEnd && slot.end > start;
+  });
 }
 
 
@@ -192,6 +113,8 @@ class AutomaticActionsService {
     const map = safeJson(integration.connection_map_json, {});
     const scopes = safeJson(integration.scopes_json, []);
     const messageCapabilities = deriveMessageCapabilities({ scopes: scopes }, map);
+    const advertisedResources = new Set(messageCapabilities.resources.map(function normalizeResource(resource) { return String(resource || '').toLowerCase(); }));
+    const advertisedScopes = new Set(scopes.map(function normalizeScope(scope) { return String(scope || '').toLowerCase(); }));
     const preferred = text(publicSettings.preferred_provider || 'openai');
     const provider = publicSettings.secrets && publicSettings.secrets[preferred] ? publicSettings.secrets[preferred] : {};
     return {
@@ -210,6 +133,8 @@ class AutomaticActionsService {
       messages_read_scope: messageCapabilities.read,
       messages_write_scope: messageCapabilities.write,
       message_scopes_advertised: messageCapabilities.scopesAdvertised,
+      dealer_availability_endpoint: advertisedResources.has('dealer-appointment-availability'),
+      dealer_availability_scope: advertisedScopes.has('dealer-appointment-availability:read'),
       knowledge_only: enabled(settings.auto_messages_knowledge_only),
       ai_fallback_enabled: enabled(settings.auto_messages_ai_fallback),
       preferred_provider: preferred,
@@ -278,22 +203,37 @@ class AutomaticActionsService {
 
   async cacheAvailability(settings) {
     try {
-      const response = await this.apiService.fetchDealerAppointmentAvailability({ limit: clamp(settings.auto_appointments_slot_limit, 1, 100) });
-      const items = listFromPayload(response.payload);
+      const integration = this.database.getIntegrationStatus();
+      const query = {
+        from: localDateKey(new Date()),
+        days: 14,
+        limit: clamp(settings.auto_appointments_slot_limit, 1, 100)
+      };
+      if (String(integration.account_type || '').toLowerCase() === 'dealer' && text(integration.store_id)) query.store_id = text(integration.store_id);
+      const response = await this.apiService.fetchDealerAppointmentAvailability(query);
+      const items = availabilityCacheItems(response.payload);
       this.database.replaceIntegrationCache('dealer-appointment-availability', items);
-      return normalizeAvailability(response.payload, settings, new Date());
+      const localAppointments = this.database.listAppointments('');
+      return normalizeAvailability(response.payload, settings, new Date()).filter(function noLocalConflict(slot) {
+        return !slotConflictsWithLocalAgenda(slot, localAppointments);
+      });
     } catch (error) {
-      const cached = this.database.listIntegrationCache('dealer-appointment-availability', '', 100);
-      if (cached.length) return normalizeAvailability(cached, settings, new Date());
-      const resellerSlots = [];
+      const cached = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
+      const localAppointments = this.database.listAppointments('');
+      if (cached.length) return normalizeAvailability(cached, settings, new Date()).filter(function noCachedConflict(slot) {
+        return !slotConflictsWithLocalAgenda(slot, localAppointments);
+      });
+      const resellerAvailability = [];
       for (const resource of ['resellers', 'reseller-profile', 'reseller-summary']) {
         const rows = this.database.listIntegrationCache(resource, '', 100);
         rows.forEach(function collect(row) {
           const payload = safeJson(row.payload_json, row);
-          resellerSlots.push.apply(resellerSlots, nestedAvailability(payload));
+          resellerAvailability.push(payload);
         });
       }
-      return normalizeAvailability(resellerSlots, settings, new Date());
+      return normalizeAvailability(resellerAvailability, settings, new Date()).filter(function noEmbeddedConflict(slot) {
+        return !slotConflictsWithLocalAgenda(slot, localAppointments);
+      });
     }
   }
 
@@ -384,6 +324,7 @@ class AutomaticActionsService {
     const sourceMessageId = text(candidate.inbound_message_id);
     const dedupeKey = 'auto-appointment:' + sourceMessageId + ':' + slot.id;
     if (this.database.hasAutomaticActionEvent(dedupeKey) || this.database.findAppointmentBySource('automatic-message', sourceMessageId)) return { skipped: true, reason: 'duplicate' };
+    if (slotConflictsWithLocalAgenda(slot, this.database.listAppointments(''))) return { skipped: true, reason: 'local_agenda_conflict' };
     const event = this.database.createAutomaticActionEvent({
       dedupe_key: dedupeKey, action_type: 'appointment_create', source_type: 'message', source_id: sourceMessageId,
       thread_id: candidate.thread_id, status: 'pending', engine: 'availability', confidence: 1,
@@ -487,7 +428,7 @@ class AutomaticActionsService {
         if (languages.length && !languages.includes(String(match.locale || '').toLowerCase())) return { skipped: true, reason: 'language' };
         if (String(match.safetyLevel || 'standard') !== String(settings.auto_messages_allowed_safety || 'standard')) return { skipped: true, reason: 'safety_level' };
         if (!safeDeferredKnowledge(match)) return { skipped: true, reason: 'missing_verified_context' };
-        this.database.incrementKnowledgeUse(match.knowledgeId);
+        if (!match.dynamic) this.database.incrementKnowledgeUse(match.knowledgeId);
         const draft = this.database.saveMessageDraft({ thread_id: candidate.thread_id, source: 'knowledge-auto', confidence: match.confidence, trigger_text: match.latestMessage, body: match.response });
         result = { engine: 'knowledge', confidence: match.confidence, draft: draft, body: match.response };
       } else {
@@ -496,7 +437,7 @@ class AutomaticActionsService {
           && String(match.safetyLevel || 'standard') === String(settings.auto_messages_allowed_safety || 'standard')
           && safeDeferredKnowledge(match)) {
           if (languages.length && !languages.includes(String(match.locale || '').toLowerCase())) return { skipped: true, reason: 'language' };
-          this.database.incrementKnowledgeUse(match.knowledgeId);
+          if (!match.dynamic) this.database.incrementKnowledgeUse(match.knowledgeId);
           const draft = this.database.saveMessageDraft({ thread_id: candidate.thread_id, source: 'knowledge-auto', confidence: match.confidence, trigger_text: match.latestMessage, body: match.response });
           result = { engine: 'knowledge', confidence: match.confidence, draft: draft, body: match.response };
         } else {

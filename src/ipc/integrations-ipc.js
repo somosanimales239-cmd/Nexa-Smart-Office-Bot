@@ -138,7 +138,7 @@ function registerIntegrationsIpc(ipcMain, services) {
       database.saveIntegrationSnapshot({
         resource: resource,
         payload_hash: stableHash(response.payload),
-        item_count: resourceItemCount(response.payload),
+        item_count: resourceItemCount(response.payload, resource),
         payload_json: JSON.stringify(response.payload || null),
         last_checked_at: response.receivedAt,
         last_changed_at: response.receivedAt
@@ -146,7 +146,7 @@ function registerIntegrationsIpc(ipcMain, services) {
       database.saveIntegrationResourceStatus({
         resource: resource,
         status: 'ok',
-        item_count: resourceItemCount(response.payload),
+        item_count: resourceItemCount(response.payload, resource),
         http_status: response.status,
         last_error: '',
         last_started_at: startedAt,

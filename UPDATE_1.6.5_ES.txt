@@ -1,0 +1,47 @@
+NEXA SMART OFFICE BOT 1.6.5
+Actualizacion exclusiva del software para disponibilidad verificada del dealer
+
+NO INCLUYE NI REQUIERE CAMBIOS EN LA PAGINA WEB.
+
+NUEVO CONTRATO LEIDO
+- Recurso: dealer-appointment-availability
+- Scope requerido: dealer-appointment-availability:read
+- Solicitud: GET ?resource=dealer-appointment-availability&from=YYYY-MM-DD&days=14
+- Filtros opcionales compatibles: store_id y listing_id
+
+DATOS CONSERVADOS EN NEXA
+- Dealer / Store ID y nombre
+- Telefono y ubicacion
+- Duracion de cada slot
+- Horario semanal
+- Fechas bloqueadas y dias off
+- Fechas especiales abiertas
+- Horas disponibles
+- Horas reservadas, bloqueadas o no disponibles
+- Slots abiertos verificados
+- Listings asignados a la key reseller
+
+KNOWLEDGE
+- El snapshot del website se reemplaza despues de cada Sync exitoso.
+- Knowledge Engine usa estos datos dinamicos para preguntas de citas y horarios.
+- Puede indicar que una fecha es dia off o esta bloqueada.
+- Solo confirma una hora exacta cuando existe como slot abierto verificado.
+- La informacion tambien entra al contexto seguro del proveedor AI configurado.
+
+APPOINTMENTS Y AGENDA
+- Nexa filtra slots ocupados o no disponibles.
+- Tambien compara los slots con citas Scheduled de la Agenda local.
+- Antes de crear una cita, vuelve a comprobar que no exista un conflicto local.
+- Si appointment-create no existe, la cita autorizada se guarda en la Agenda local.
+- La creacion remota continua siendo opcional y esta apagada por defecto.
+
+DESPUES DE INSTALAR
+1. Cree o rote la API Key con dealer-appointment-availability:read.
+2. Abra Connected Business.
+3. Ejecute Test connection.
+4. Ejecute Sync now.
+5. En AI Control confirme:
+   Dealer availability endpoint                 Ready
+   dealer-appointment-availability:read scope   Ready
+6. Abra Messages -> Knowledge Engine y confirme Live Website Availability.
+

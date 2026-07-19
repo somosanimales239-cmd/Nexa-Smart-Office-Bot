@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { applyMigrations } = require('./migrations');
+const { compactAvailabilityContext } = require('../services/dealer-availability-service');
 
 const nowIso = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
@@ -378,6 +379,7 @@ class DatabaseService {
       || this.listIntegrationCache('admin-summary', '', 1)[0]
       || {};
     const connectedListings = this.listIntegrationCache('listings', '', 30).concat(this.listIntegrationCache('reseller-listings', '', 30));
+    const dealerAvailability = this.listIntegrationCache('dealer-appointment-availability', '', 500);
     return {
       summary: this.dashboardSummary(),
       alerts: this.listAlerts().slice(0, 20),
@@ -393,6 +395,9 @@ class DatabaseService {
         summary: connectedSummary,
         recent_orders: this.listIntegrationCache('orders', '', 40),
         reseller_appointments: this.listIntegrationCache('reseller-appointments', '', 15),
+        dealer_appointment_availability: dealerAvailability.length
+          ? compactAvailabilityContext(dealerAvailability, this.getSettings(), new Date())
+          : null,
         agenda_contacts: this.listIntegrationCache('agenda', '', 15),
         unread_message_threads: this.listIntegrationCache('messages', '', 40).filter(function unread(item) { return Number(item.unread_count || 0) > 0 || Number(item.is_announcement || 0) === 1; }),
         listings_needing_attention: connectedListings.filter(function needsAttention(item) {

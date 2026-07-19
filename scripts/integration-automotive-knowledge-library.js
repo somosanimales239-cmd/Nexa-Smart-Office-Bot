@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
 const { MessageResponseEngine, detectLocale, inferDealerSegment } = require('../src/services/message-response-engine');
+const { availabilityCacheItems } = require('../src/services/dealer-availability-service');
 const manifest = require('../src/data/automotive-dealer-library-manifest.json');
 const library = require('../src/data/automotive-dealer-knowledge-library.json');
 
@@ -138,6 +139,50 @@ test('organic response variants are deterministic and not always identical', fun
   assert.ok(unique.size >= 6);
 });
 
+test('live website availability becomes dynamic Knowledge and respects a blocked day', function () {
+  const offDate = new Date();
+  offDate.setDate(offDate.getDate() + 1);
+  offDate.setHours(0, 0, 0, 0);
+  const openDate = new Date(offDate);
+  openDate.setDate(openDate.getDate() + 1);
+  openDate.setHours(10, 0, 0, 0);
+  const key = function dateKey(value) { return value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0'); };
+  const payload = {
+    dealer_id: 'dealer-live', dealer_name: 'Live Dealer', store_name: 'Live Store', slot_minutes: 30,
+    blocked_dates: [key(offDate)], open_dates: [key(openDate)],
+    verified_open_slots: [{ slot_id: 'live-slot', start_at: openDate.toISOString(), available: true, location: 'Main showroom' }]
+  };
+  database.replaceIntegrationCache('dealer-appointment-availability', availabilityCacheItems(payload));
+  database.saveMessageThreadSnapshot(
+    { thread_id: 'live-off-date', subject: 'Cita', can_reply: 1 },
+    [{ message_id: 'live-off-1', direction: 'inbound', sender_type: 'customer', body: '¿Tienen cita mañana?', sent_at: new Date().toISOString() }],
+    { thread_id: 'live-off-date' }
+  );
+  const match = new MessageResponseEngine(database).match(database.getMessageConversationContext('live-off-date', 20));
+  assert.equal(match.matched, true);
+  assert.equal(match.dynamic, true);
+  assert.equal(match.libraryVersion, 'website-live');
+  assert.match(match.response, /día off|fecha bloqueada/i);
+  assert.match(match.response, /próximos horarios verificados/i);
+});
+
+test('live website Knowledge confirms only an exact verified open slot', function () {
+  const cached = database.listIntegrationCache('dealer-appointment-availability', '', 20);
+  const snapshot = cached.find(function find(item) { return item.record_type === 'availability_snapshot'; });
+  const slot = snapshot.verified_open_slots[0];
+  const date = new Date(slot.start_at);
+  const requestDate = String(date.getMonth() + 1).padStart(2, '0') + '/' + String(date.getDate()).padStart(2, '0') + '/' + date.getFullYear();
+  database.saveMessageThreadSnapshot(
+    { thread_id: 'live-exact-slot', subject: 'Appointment', can_reply: 1 },
+    [{ message_id: 'live-exact-1', direction: 'inbound', sender_type: 'customer', body: 'Can I schedule an appointment on ' + requestDate + ' at 10:00 AM?', sent_at: new Date().toISOString() }],
+    { thread_id: 'live-exact-slot' }
+  );
+  const match = new MessageResponseEngine(database).match(database.getMessageConversationContext('live-exact-slot', 20));
+  assert.equal(match.dynamic, true);
+  assert.match(match.response, /verified appointment time is available/i);
+  assert.match(match.response, /Main showroom/i);
+});
+
 database.close();
-console.log('Automotive dealer knowledge library tests: ' + passed + '/10 passed.');
+console.log('Automotive dealer knowledge library tests: ' + passed + '/12 passed.');
 if (process.exitCode) process.exit(process.exitCode);

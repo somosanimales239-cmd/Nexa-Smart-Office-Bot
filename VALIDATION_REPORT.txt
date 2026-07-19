@@ -1,13 +1,14 @@
-Nexa Smart Office Bot 1.6.1 Validation Report
+Nexa Smart Office Bot 1.6.5 Validation Report
 
 Package feature
-Messages AI runtime control, exact automation diagnostics, per-thread reply blocking and notification deep links
+Live dealer appointment availability, dynamic Knowledge, verified appointment
+creation and local Agenda conflict protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
 - 2,880 automotive dealer knowledge records
 - 8,640 built-in response variations
-- Complete website conversation module
+- Complete website conversation module and two-way messaging
 - Contacts, leads, orders, agenda, tasks and notifications
 - Installer, Portable and Windows ZIP targets
 
@@ -16,21 +17,24 @@ Validation scope
 - Nexa contract gate
 - JavaScript syntax
 - 28 core SQLite and business integration tests
-- API synchronization and notifications
+- 22 API synchronization and notification tests
 - Complete workspace reflection
-- Real-time messaging
-- Automotive knowledge library
-- Guarded automatic actions
+- 9 real-time messaging tests
+- 12 automotive Knowledge tests, including live schedules
+- Guarded automatic actions, including local Agenda collision prevention
 - Implementation and acceptance contracts
 
-Regression verified
-- A completed cycle with skipped individual messages is not reported as a skipped or unready whole cycle.
-- Messages AI OFF prevents automatic sends while message reading and caching remain active.
-- Per-thread block prevents automatic replies without deleting or hiding the conversation.
-- Stale threads absent from the current website message resource are not processed.
-- Notification targets route to the related application area.
-- Customer contacts and leads remain unchanged during automatic-action tests.
-- The automatic service exposes no customer-record delete operation.
+Availability regression verified
+- The endpoint and dealer-appointment-availability:read scope are discovered.
+- Requests include from=YYYY-MM-DD and days=14.
+- Weekly schedule, blocked/off dates, open dates, booked times and verified slots
+  survive the safety filter while undocumented private fields do not.
+- Live website availability is available to Knowledge and safe external AI context.
+- A blocked/off date is never offered.
+- A booked or locally occupied time is never used for a new appointment.
+- Authorized appointments are saved to the local Agenda when remote creation is
+  unavailable or disabled.
 
 Build gate
-Electron UI smoke and Windows packaging remain mandatory in GitHub Actions. Installer, Portable and Windows ZIP are not published unless the full workflow passes.
+Electron UI smoke and Windows packaging remain mandatory in GitHub Actions.
+Installer, Portable and Windows ZIP are not published unless the workflow passes.

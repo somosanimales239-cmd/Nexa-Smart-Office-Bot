@@ -30,6 +30,7 @@ const apiService = fs.readFileSync(path.join(root, 'src', 'services', 'automarke
 const notificationService = fs.readFileSync(path.join(root, 'src', 'services', 'notification-service.js'), 'utf8');
 const migrations = fs.readFileSync(path.join(root, 'src', 'database', 'migrations.js'), 'utf8');
 const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
+const dealerAvailabilityService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-availability-service.js'), 'utf8');
 const automationIpc = fs.readFileSync(path.join(root, 'src', 'ipc', 'automation-ipc.js'), 'utf8');
 assert.equal(integrationIpc.includes('integration:inspector'), true);
 assert.equal(integrationIpc.includes('integration:items'), true);
@@ -41,6 +42,9 @@ assert.equal(migrations.includes('automatic_action_events'), true);
 assert.equal(automationService.includes('NEXA_GUARDED_AUTOMATIC_ACTIONS_V1'), true);
 assert.equal(automationService.includes('NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1'), true);
 assert.equal(automationService.includes('NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2'), true);
+assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);
+assert.equal(dealerAvailabilityService.includes('blocked_dates'), true);
+assert.equal(dealerAvailabilityService.includes('verified_open_slots'), true);
 assert.equal(automationService.includes('cycle_skipped'), true);
 assert.equal(automationIpc.includes('Explicit user authorization'), true);
 assert.equal(automationService.includes('deleteContact'), false);

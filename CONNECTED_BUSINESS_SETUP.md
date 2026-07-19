@@ -34,7 +34,10 @@ Nexa performs this sequence:
 - `agenda:read`
 - `messages:read`
 - `resellers:read`
+- `dealer-appointment-availability:read`
 - `messages:write` for manual or authorized automatic replies
+
+Recommended reseller keys should include `reseller-profile:read`, `reseller:read`, `reseller-listings:read`, `reseller-appointments:read`, `agenda:read`, `messages:read`, `messages:write` and `dealer-appointment-availability:read`.
 
 The website may require a separate appointment-write scope for optional remote appointment creation.
 
@@ -49,7 +52,7 @@ For complete conversations and replies, the website should advertise:
 
 Nexa stores authorized conversation bodies locally and never includes API keys in AI context.
 
-Nexa 1.6.4 also accepts `endpoints` / `allowed_endpoints`, `messages_write_enabled`, `message_send_endpoint`, `two_way_chat_enabled` and the plural aliases `messages-thread`, `messages-send` and `messages-read`. Scopes are compared case-insensitively. Saving a new URL or API key invalidates the cached discovery contract; run **Test connection** and **Sync now** to load the current key.
+Nexa 1.6.5 also accepts `endpoints` / `allowed_endpoints`, `messages_write_enabled`, `message_send_endpoint`, `two_way_chat_enabled` and the plural aliases `messages-thread`, `messages-send` and `messages-read`. It discovers `dealer-appointment-availability`, requires `dealer-appointment-availability:read`, and synchronizes a rolling 14-day verified schedule. Scopes are compared case-insensitively. Saving a new URL or API key invalidates the cached discovery contract; run **Test connection** and **Sync now** to load the current key.
 
 ## Dealer Appointment Availability
 
@@ -57,7 +60,7 @@ AI Control reads:
 
 - `dealer-appointment-availability`
 
-The endpoint should expose only verified open slots belonging to the connected dealer. Nexa can create a local calendar appointment from an exact selected slot after the user authorizes automatic appointments.
+Nexa calls `GET resource=dealer-appointment-availability&from=YYYY-MM-DD&days=14`. The endpoint should expose only the connected dealer's verified schedule, including weekly hours, blocked/off dates, special open dates and verified open slots. Reseller keys may also return assigned listings. Nexa can create a local calendar appointment from an exact selected slot after the user authorizes automatic appointments.
 
 For optional website-side creation, the connection map must advertise:
 

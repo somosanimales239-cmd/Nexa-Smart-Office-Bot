@@ -53,7 +53,11 @@ settingsService.saveSettings({
   automarket_max_items: '100'
 });
 
-const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read'];
+const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read', 'dealer-appointment-availability:read'];
+const openSlotDate = new Date(Date.now() + 2 * 86400000);
+openSlotDate.setHours(10, 0, 0, 0);
+const blockedDate = new Date(Date.now() + 3 * 86400000);
+const dateKey = function dateKey(value) { return value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0'); };
 const responses = {
   ping: { ok: true, data: { account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1' } },
   'connection-map': {
@@ -64,7 +68,7 @@ const responses = {
     messages_write_enabled: true,
     message_send_endpoint: 'message-send',
     two_way_chat_enabled: true,
-    data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers'] }
+    data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers','dealer-appointment-availability'] }
   },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
   'dealer-summary': { ok: true, data: { total_listings: 5, active_listings: 4, unreviewed_orders: 1, agenda_contacts: 2, unread_messages: 2 } },
@@ -75,19 +79,28 @@ const responses = {
     { contact_id: 'agenda-1', name: 'Agenda Contact', phone: '786-555-3333', email: 'contact@example.com', location: 'Miami', last_seen_at: '2026-07-17T11:00:00Z' },
     { contact_id: 'agenda-2', name: 'Second Contact', phone: '+1 (239) 555-0100', email: 'second@example.com', location: 'Naples', last_seen_at: '2026-07-16T11:00:00Z' }
   ] },
-  resellers: { ok: true, data: [{ reseller_id: 'reseller-1', reseller_name: 'Reseller One', status: 'active', appointment_count: 1, last_activity: '2026-07-17T09:00:00Z' }] }
+  resellers: { ok: true, data: [{ reseller_id: 'reseller-1', reseller_name: 'Reseller One', status: 'active', appointment_count: 1, last_activity: '2026-07-17T09:00:00Z' }] },
+  'dealer-appointment-availability': { ok: true, data: {
+    dealer_id: 'dealer-7', dealer_name: 'Demo Dealer', store_id: 'store-7', store_name: 'Demo Motors', phone: '239-555-0100',
+    location: 'Naples, FL', slot_minutes: 30, weekly_schedule: { monday: { open: '09:00', close: '17:00' }, sunday: { is_off: true, private_note: 'remove-me' } },
+    blocked_dates: [dateKey(blockedDate)], open_dates: [dateKey(openSlotDate)], booked_times: [{ date: dateKey(openSlotDate), start_time: '11:00', status: 'booked' }],
+    verified_open_slots: [{ slot_id: 'verified-slot-1', date: dateKey(openSlotDate), start_time: '10:00', end_time: '10:30', available: true, server_private_value: 'remove-me' }],
+    assigned_listings: [{ listing_id: 'listing-1', listing_title: 'Vehicle One', server_private_value: 'remove-me' }], server_private_value: 'remove-me'
+  } }
 };
 
 let requestedResources = [];
+let requestedQueries = [];
 let forcedFailures = {};
 const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.4');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.5');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
+  requestedQueries.push({ resource: resource, query: Object.fromEntries(parsed.searchParams.entries()) });
   if (forcedFailures[resource]) {
     const failure = forcedFailures[resource];
     return {
@@ -173,7 +186,7 @@ const notificationService = new NotificationService({
     const result = await notificationService.syncAutoMarket(false);
     assert.equal(result.ok, true);
     assert.equal(result.failureCount, 0);
-    ['ping','connection-map','store','dealer-summary','listings','orders','agenda','messages','resellers'].forEach(function expected(resource) {
+    ['ping','connection-map','store','dealer-summary','listings','orders','agenda','messages','resellers','dealer-appointment-availability'].forEach(function expected(resource) {
       assert(requestedResources.includes(resource), 'resource not requested: ' + resource);
       const row = db.getIntegrationResourceStatus(resource);
       assert(row, 'missing inspector row: ' + resource);
@@ -183,6 +196,25 @@ const notificationService = new NotificationService({
     assert.equal(db.getIntegrationStatus().sync_state, 'ready');
     assert.equal(db.integrationCacheCount('agenda'), 2);
     assert.equal(db.integrationCacheCount('orders'), 1);
+    assert.equal(db.integrationCacheCount('dealer-appointment-availability'), 2);
+    const availabilityRequest = requestedQueries.find(function findRequest(item) { return item.resource === 'dealer-appointment-availability'; });
+    assert.match(availabilityRequest.query.from, /^20\d{2}-\d{2}-\d{2}$/);
+    assert.equal(availabilityRequest.query.days, '14');
+    assert.equal(availabilityRequest.query.limit, '100');
+  });
+  await test('dealer availability keeps schedules, off dates and verified slots while removing private fields', function () {
+    const cached = db.listIntegrationCache('dealer-appointment-availability', '', 10);
+    const snapshot = cached.find(function findSnapshot(item) { return item.record_type === 'availability_snapshot'; });
+    const slot = cached.find(function findSlot(item) { return item.record_type === 'verified_open_slot'; });
+    assert.equal(snapshot.dealer_name, 'Demo Dealer');
+    assert.equal(snapshot.slot_minutes, 30);
+    assert.equal(snapshot.blocked_dates[0], dateKey(blockedDate));
+    assert.equal(snapshot.weekly_schedule.sunday.is_off, true);
+    assert.equal(snapshot.weekly_schedule.sunday.private_note, undefined);
+    assert.equal(snapshot.assigned_listings[0].listing_title, 'Vehicle One');
+    assert.equal(snapshot.assigned_listings[0].server_private_value, undefined);
+    assert.equal(slot.slot_id, 'verified-slot-1');
+    assert.equal(slot.server_private_value, undefined);
   });
   await test('resource payloads are restricted to the documented safe fields', function () {
     const stored = db.listIntegrationCache('store', '', 1)[0];
@@ -200,6 +232,9 @@ const notificationService = new NotificationService({
     assert.equal(context.connected_business.connected, true);
     assert.equal(context.connected_business.account_type, 'dealer');
     assert.equal(context.connected_business.recent_orders.length, 1);
+    assert.equal(context.connected_business.dealer_appointment_availability.dealer_name, 'Demo Dealer');
+    assert.equal(context.connected_business.dealer_appointment_availability.verified_open_slots.length, 1);
+    assert.equal(context.connected_business.dealer_appointment_availability.blocked_dates[0], dateKey(blockedDate));
     assert.equal(JSON.stringify(context.connected_business).includes('must-not-enter-cache'), false);
   });
   await test('dashboard overview exposes cached resources and sync history', function () {

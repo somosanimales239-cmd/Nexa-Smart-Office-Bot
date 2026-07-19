@@ -1,8 +1,20 @@
-# Nexa Smart Office Bot 1.6.4
+# Nexa Smart Office Bot 1.6.5
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.4
+## New in 1.6.5
+
+- Discovers `dealer-appointment-availability` through `connection-map` and requires the new `dealer-appointment-availability:read` scope.
+- Requests a rolling verified window with `from=YYYY-MM-DD&days=14`, with optional dealer `store_id` filtering.
+- Safely retains dealer/store identity, contact and location data, slot duration, weekly schedules, blocked/off dates, special open dates, booked/unavailable times, verified open slots and reseller-assigned listings.
+- Replaces the previous availability snapshot after every successful sync so website schedule changes become live Knowledge instead of stale custom text.
+- Uses live verified availability for bilingual Knowledge replies, including explicit day-off and blocked-date answers.
+- Filters website slots against the local Agenda and rechecks before creation so Nexa cannot double-book a local appointment.
+- Keeps website appointment creation optional; without `appointment-create`, authorized appointments are created in Nexa's local Agenda.
+
+After updating, create or rotate the website API key with `dealer-appointment-availability:read`, then run **Test connection** and **Sync now**.
+
+## Existing 1.6.4 improvements
 
 - Matches the current website connection contract without requiring any website-file changes.
 - Reads scopes and endpoints from both nested `data` and top-level discovery fields.

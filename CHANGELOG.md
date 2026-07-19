@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.5
+
+- Added full discovery and synchronization for `dealer-appointment-availability` with the `dealer-appointment-availability:read` scope.
+- Preserved weekly schedules, blocked/off dates, special open dates, booked times, verified slots and reseller listing assignments in a safe live snapshot.
+- Connected live website availability to Knowledge replies and external AI context.
+- Prevented automatic appointments from overlapping existing local Agenda entries.
+- Kept remote appointment creation optional while always supporting the authorized local Agenda path.
+
 ## 1.6.4
 
 - Added compatibility with the website's current `messages_write_enabled`, `message_send_endpoint` and `two_way_chat_enabled` discovery fields.

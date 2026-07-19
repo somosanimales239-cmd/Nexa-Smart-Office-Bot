@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { localDateKey } = require('./dealer-availability-service');
 
 const DEFAULT_TIMEOUT_MS = 20000;
 const AUTOMARKET_API_CONTRACT = 'NEXA_AUTOMARKET_API_V1';
@@ -16,7 +17,7 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['agenda', 'agenda:read'],
     ['messages', 'messages:read'],
     ['resellers', 'resellers:read'],
-    ['dealer-appointment-availability', '']
+    ['dealer-appointment-availability', 'dealer-appointment-availability:read']
   ]),
   reseller: Object.freeze([
     ['reseller-profile', 'reseller-profile:read'],
@@ -25,7 +26,7 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['reseller-appointments', 'reseller-appointments:read'],
     ['agenda', 'agenda:read'],
     ['messages', 'messages:read'],
-    ['dealer-appointment-availability', '']
+    ['dealer-appointment-availability', 'dealer-appointment-availability:read']
   ]),
   admin: Object.freeze([
     ['admin-summary', 'admin:read'],
@@ -38,7 +39,7 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
     ['resellers', 'resellers:read'],
     ['validation', 'validation:read'],
     ['api-keys-status', 'admin:read'],
-    ['dealer-appointment-availability', '']
+    ['dealer-appointment-availability', 'dealer-appointment-availability:read']
   ])
 });
 
@@ -51,7 +52,7 @@ const SAFE_RESOURCES = new Set([
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer_appointment_availability','appointment_create'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer-appointment-availability','dealer_appointment_availability','dealer_appointment_availability_enabled','dealer_appointment_availability_endpoint','appointment_create'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
@@ -71,15 +72,48 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   users: ['id','user_id','account_id','name','email','role','status','location','created_at','last_login_at'],
   validation: ['id','validation_id','dealer_user_id','store_id','business_name','authorized_representative','phone','email','address','city','state','zip','driver_license_number','dealer_license_number','business_tax_account_number','business_tax_receipt_number','resale_certificate_number','status','submitted_at','reviewed_at','reviewed_by','admin_note'],
   'api-keys-status': ['id','key_id','name','owner_type','owner_id','status','scopes','expires_at','last_used_at','created_at','updated_at'],
-  'dealer-appointment-availability': ['id','slot_id','availability_id','dealer_id','reseller_id','store_id','listing_id','listing_title','date','appointment_date','start_at','end_at','start_time','end_time','available','status','timezone','duration_minutes','location','address','notes','day_of_week','recurrence','capacity','created_at','updated_at'],
+  'dealer-appointment-availability': [
+    'id','slot_id','availability_id','record_type','dealer','store','dealer_id','dealer_name','dealer_phone','dealer_location',
+    'reseller_id','store_id','store_name','store_phone','store_location','phone','email','location','address','city','state','zip',
+    'listing_id','listing_title','listing_url','listing_image_url','assigned_listings','listings','assignment_id','category','price',
+    'slot_minutes','slot_duration_minutes','duration_minutes','timezone','weekly_schedule','business_hours','dealer_schedule','availability_schedule',
+    'blocked_dates','off_dates','days_off','closed_dates','unavailable_dates','open_dates','available_dates','special_open_dates',
+    'available_times','open_times','booked_times','unavailable_times','blocked_times','booked_slots','verified_open_slots','verified_slots','open_slots',
+    'available_slots','slots','availability','appointment_availability','dealer_appointment_availability','items','records','rows','data','result',
+    'date','appointment_date','open_date','blocked_date','off_date','start_at','starts_at','datetime','date_time','end_at','ends_at',
+    'start_time','appointment_time','time','from_time','open_time','end_time','to_time','close_time','start','end','from','to','open','close','opens_at','closes_at','times','hours','periods',
+    'available','is_available','enabled','is_open','is_off','day_off','closed','blocked','booked','is_booked','is_blocked','status','state','verified','is_verified',
+    'day','weekday','day_of_week','day_number','name','label','recurrence','capacity','notes','created_at','updated_at',
+    'monday','tuesday','wednesday','thursday','friday','saturday','sunday','lunes','martes','miercoles','jueves','viernes','sabado','domingo'
+  ],
   'appointment-create': ['id','appointment_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','appointment_date','appointment_time','start_at','end_at','status','location','notes','created_at','updated_at']
 });
 
 const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys','slots','availability']);
 const MESSAGE_ENTRY_FIELDS = Object.freeze(['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','receiver_id','direction','body','message','text','content','body_format','sent_at','created_at','updated_at','status','is_read','attachments','reply_to_message_id']);
 
+function sanitizeAvailabilityValue(value, depth) {
+  if (depth > 7 || value === undefined) return undefined;
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 1000).map(function sanitizeItem(item) { return sanitizeAvailabilityValue(item, depth + 1); })
+      .filter(function defined(item) { return item !== undefined; });
+  }
+  if (typeof value !== 'object') return undefined;
+  const allowed = new Set(RESOURCE_FIELD_ALLOWLISTS['dealer-appointment-availability']);
+  const output = {};
+  Object.entries(value).forEach(function keep(entry) {
+    const key = entry[0];
+    if (!allowed.has(key) && !/^20\d{2}-\d{2}-\d{2}$/.test(key)) return;
+    const safe = sanitizeAvailabilityValue(entry[1], depth + 1);
+    if (safe !== undefined) output[key] = safe;
+  });
+  return output;
+}
+
 function sanitizeRecord(resource, record) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
+  if (resource === 'dealer-appointment-availability') return sanitizeAvailabilityValue(record, 0);
   const allowed = new Set(RESOURCE_FIELD_ALLOWLISTS[resource] || []);
   const output = {};
   Object.entries(record).forEach(function keepAllowed(entry) {
@@ -174,7 +208,7 @@ const RESOURCE_QUERIES = Object.freeze({
   stores: { limit: 100 },
   users: { limit: 100 },
   validation: { limit: 100 },
-  'dealer-appointment-availability': { limit: 100 }
+  'dealer-appointment-availability': { limit: 100, days: 14 }
 });
 
 class AutoMarketApiError extends Error {
@@ -271,7 +305,8 @@ function normalizeResourceName(value) {
   const aliases = {
     'messages-thread': 'message-thread',
     'messages-send': 'message-send',
-    'messages-read': 'message-read'
+    'messages-read': 'message-read',
+    'dealer_appointment_availability': 'dealer-appointment-availability'
   };
   return aliases[resource] || resource;
 }
@@ -337,7 +372,10 @@ function extractAvailableResources(connectionMap) {
   const endpointFields = [
     ['message_thread_endpoint','message-thread'], ['messages_thread_endpoint','message-thread'],
     ['message_send_endpoint','message-send'], ['messages_send_endpoint','message-send'],
-    ['message_read_endpoint','message-read'], ['messages_read_endpoint','message-read']
+    ['message_read_endpoint','message-read'], ['messages_read_endpoint','message-read'],
+    ['dealer_appointment_availability','dealer-appointment-availability'],
+    ['dealer_appointment_availability_enabled','dealer-appointment-availability'],
+    ['dealer_appointment_availability_endpoint','dealer-appointment-availability']
   ];
   endpointFields.forEach(function addEndpoint(entry) {
     if (capabilityValueEnabled(map[entry[0]], entry[1])) resources.push(entry[1]);
@@ -558,6 +596,8 @@ class AutoMarketApiService {
   async fetchResource(resource, query) {
     const configuration = this.getConfiguration();
     const merged = Object.assign({}, RESOURCE_QUERIES[resource] || {}, query || {});
+    if (resource === 'dealer-appointment-availability' && !merged.from) merged.from = localDateKey(new Date());
+    if (resource === 'dealer-appointment-availability') merged.days = Math.min(Math.max(Number(merged.days) || 14, 1), 60);
     if (Object.prototype.hasOwnProperty.call(merged, 'limit')) merged.limit = Math.min(Number(merged.limit) || configuration.maxItems, configuration.maxItems);
     return this.request(resource, merged);
   }
@@ -605,7 +645,7 @@ class AutoMarketApiService {
   }
 
   async fetchDealerAppointmentAvailability(query) {
-    return this.fetchResource('dealer-appointment-availability', Object.assign({ limit: 100 }, query || {}));
+    return this.fetchResource('dealer-appointment-availability', Object.assign({ limit: 100, days: 14 }, query || {}));
   }
 
   async createRemoteAppointment(payload, idempotencyKey) {

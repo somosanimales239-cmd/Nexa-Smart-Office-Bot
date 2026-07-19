@@ -13,6 +13,7 @@ const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
 const apiService = fs.readFileSync(path.join(root, 'src', 'services', 'automarket-api-service.js'), 'utf8');
 const appSource = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
 const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
+const dealerAvailabilityService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-availability-service.js'), 'utf8');
 assert.equal(preload.includes('integration:inspector'), true);
 assert.equal(preload.includes('integration:items'), true);
 assert.equal(html.includes('data-testid="api-sync-inspector"'), true);
@@ -27,6 +28,9 @@ assert.equal(appSource.includes('message-auto-reply-block'), true);
 assert.equal(appSource.includes('notification-open'), true);
 assert.equal(automationService.includes('never_changes_customer_records'), true);
 assert.equal(automationService.includes('never_deletes_data'), true);
+assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);
+assert.equal(appSource.includes('Live Website Availability'), true);
+assert.equal(appSource.includes('dealer-appointment-availability:read scope'), true);
 
 ['npm ci', 'npm run validate', 'npm test', 'npm run test:implementation', 'npm run test:acceptance', 'npm run ui:smoke', 'npm run build:win', 'npm run verify:artifacts', 'actions/upload-artifact'].forEach(function requireWorkflowStep(marker) {
   assert.equal(workflow.includes(marker), true, 'Workflow missing: ' + marker);
