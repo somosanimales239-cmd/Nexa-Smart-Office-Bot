@@ -1,0 +1,57 @@
+NEXA SMART OFFICE BOT 1.6.12
+
+ENTREGA COMPLETA - ESTADO DE CONVERSACION Y LEAD DE CITA
+
+Esta version corrige de raiz el cruce de fechas cuando dos dias tienen la
+misma hora disponible. La cita activa queda definida por la correccion mas
+reciente del cliente. Una hora de martes nunca puede reemplazar una seleccion
+del sabado solo porque ambas sean a las 11:00 AM.
+
+BIBLIOTECA BILINGUE AMPLIADA
+
+- 371 frases naturales en ingles y espanol
+- 40 intenciones de citas
+- 90 respuestas dinamicas
+- correcciones de fecha
+- selecciones explicitas de hora
+- envio de telefono
+- solicitud de solo telefono cuando el thread ya contiene el nombre
+- confirmacion despues de reservar el horario real
+
+CREACION DEL LEAD DESDE MENSAJES
+
+Nexa envia a appointment-create:
+- thread_id
+- appointment_date
+- appointment_time
+- customer_phone
+- datos opcionales de nombre, email, location y listing
+- notas de Nexa Smart Office Bot
+
+Tambien reconoce:
+- lead-appointment-create
+- nexa-appointment-create
+- appointment-create-from-thread
+
+Nexa acepta y registra lead_id, order_id, appointment_id, source,
+source_context, reserved y lead_url. Despues vuelve a leer Dealer Agenda y solo
+confirma al cliente si la pagina devolvio una reserva valida.
+
+PRUEBA EXACTA INCLUIDA
+
+La prueba reproduce:
+1. solicitud vieja para martes 21 a las 11
+2. cliente corrige para sabado 25
+3. martes y sabado tienen 11:00 AM
+4. cliente responde a las 11 como te dije y manda telefono
+5. Nexa selecciona sabado 25 a las 11
+6. crea el Lead por thread_id
+7. reserva la Agenda y confirma el sabado correcto
+
+DESPUES DE INSTALAR
+
+1. Rotar o crear la API Key con appointment-create:write.
+2. Ejecutar Test connection.
+3. Ejecutar Sync now.
+4. En AI Control seleccionar Website Lead + reserved Agenda slot.
+5. Guardar la autorizacion y ejecutar Run authorized actions now.

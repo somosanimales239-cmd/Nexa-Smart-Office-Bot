@@ -12,11 +12,13 @@ const {
 } = require('./dealer-availability-service');
 const { calendarAppointmentsFromCache, calendarCacheItems, calendarItemCount } = require('./dealer-agenda-calendar-service');
 const { appointmentConfirmation, appointmentConversationPlan, detectAppointmentLocale, formatDate, formatTime, scopeSlotsForConversation } = require('./appointment-communication-service');
+const { appointmentResponse } = require('./appointment-communication-library-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
 const NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 = 'NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2';
 const NEXA_APPOINTMENT_CONTACT_RECOVERY_V1 = 'NEXA_APPOINTMENT_CONTACT_RECOVERY_V1';
+const NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2 = 'NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -78,6 +80,17 @@ function usableCustomerName(value) {
   return candidate;
 }
 
+function isAppointmentContactPrompt(value) {
+  const body = text(value).toLowerCase();
+  if (!body) return false;
+  if (body.includes('antes de completar la cita') || body.includes('before i complete the appointment')) return true;
+  if (body.includes('crear el lead') || body.includes('create the lead')) return true;
+  if ((body.includes('mantengo') || body.includes('i am keeping')) && (body.includes('teléfono') || body.includes('telefono') || body.includes('phone number'))) return true;
+  if ((body.includes('antes de confirmar') || body.includes('before confirming') || body.includes('before i confirm'))
+    && (body.includes('teléfono') || body.includes('telefono') || body.includes('phone number'))) return true;
+  return false;
+}
+
 function contactFromConversation(conversation, override) {
   const thread = conversation && conversation.thread || {};
   const threadPayload = safeJson(thread.payload_json, {});
@@ -99,13 +112,12 @@ function contactFromConversation(conversation, override) {
   for (const row of (conversation && Array.isArray(conversation.messages) ? conversation.messages : [])) {
     const body = text(row && row.body);
     if (String(row && row.direction || '').toLowerCase() === 'outbound') {
-      const lowered = body.toLowerCase();
-      if (lowered.includes('antes de completar la cita') || lowered.includes('before i complete the appointment')) collectingContact = true;
+      if (isAppointmentContactPrompt(body)) collectingContact = true;
       continue;
     }
-    if (!collectingContact) continue;
     const suppliedFromChat = extractCustomerContact(body);
-    if (usableCustomerName(suppliedFromChat.customer_name)) result.customer_name = usableCustomerName(suppliedFromChat.customer_name);
+    const explicitName = /\b(mi nombre es|me llamo|my name is|i am)\b/i.test(body);
+    if ((collectingContact || explicitName) && usableCustomerName(suppliedFromChat.customer_name)) result.customer_name = usableCustomerName(suppliedFromChat.customer_name);
     if (suppliedFromChat.customer_phone) result.customer_phone = suppliedFromChat.customer_phone;
     if (suppliedFromChat.customer_email) result.customer_email = suppliedFromChat.customer_email;
   }
@@ -141,29 +153,49 @@ function contactFlowCancelled(message) {
   return /\b(no gracias|no quiero|cancelar|cancela|dejalo|déjalo|olvidalo|olvídalo|mejor no|never mind|no thanks|do not book|dont book|cancel it|forget it)\b/i.test(text(message));
 }
 
-function appointmentContactRequest(slot, locale) {
+function appointmentContactRequest(slot, locale, contact, missingFields) {
   const date = new Intl.DateTimeFormat(locale === 'es' ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(slot.start);
   const time = formatTime(slot.start, locale);
-  if (locale === 'es') {
-    return 'Antes de completar la cita para ' + date + ' a las ' + time + ', necesito el nombre del cliente y por lo menos un teléfono o correo electrónico. Respóndame aquí con esos datos; volveré a verificar ese mismo horario antes de reservarlo.';
-  }
-  return 'Before I complete the appointment for ' + date + ' at ' + time + ', I need the customer name and at least a phone number or email address. Reply here with those details; I will revalidate that same time before booking it.';
+  const fields = Array.isArray(missingFields) ? missingFields : [];
+  const known = contact && typeof contact === 'object' ? contact : {};
+  const phoneOnly = fields.length === 1 && fields[0] === 'customer_phone' || Boolean(known.customer_name) && !known.customer_phone;
+  return appointmentResponse(phoneOnly ? 'contact_phone_request' : 'contact_identity_request', locale, { date: date, time: time }, slot.id);
 }
 
 function pendingContactSelection(conversation, slots, referenceDate) {
-  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice(-30).reverse() : [];
-  const request = messages.find(function latestOutbound(row) { return String(row && row.direction || '').toLowerCase() === 'outbound'; });
-  if (!request) return null;
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice(-40) : [];
+  let requestIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const row = messages[index];
+    if (String(row && row.direction || '').toLowerCase() !== 'outbound') continue;
+    const body = text(row && row.body);
+    if (isAppointmentContactPrompt(body)) {
+      requestIndex = index;
+      break;
+    }
+  }
+  if (requestIndex < 0) return null;
+  const request = messages[requestIndex];
   const requestBody = text(request && request.body).toLowerCase();
-  if (!requestBody.includes('antes de completar la cita') && !requestBody.includes('before i complete the appointment')) return null;
   const rowReference = request.sent_at || request.created_at ? new Date(request.sent_at || request.created_at) : referenceDate || new Date();
   const parsed = parseRequestedDateTime(request.body, Number.isNaN(rowReference.getTime()) ? referenceDate || new Date() : rowReference);
   if (!parsed.date || !parsed.time) return null;
+  for (let index = requestIndex + 1; index < messages.length; index += 1) {
+    const row = messages[index];
+    const body = text(row && row.body);
+    const direction = String(row && row.direction || '').toLowerCase();
+    const laterReference = row && (row.sent_at || row.created_at) ? new Date(row.sent_at || row.created_at) : referenceDate || new Date();
+    const later = parseRequestedDateTime(body, Number.isNaN(laterReference.getTime()) ? referenceDate || new Date() : laterReference);
+    if (later.date && localDateKey(later.date) !== localDateKey(parsed.date)) return null;
+    const explicitTime = /\b(a las|a la|hora|horario|at|time)\b/i.test(body);
+    if (explicitTime && later.time && (later.time.hour !== parsed.time.hour || later.time.minute !== parsed.time.minute)) return null;
+    if (direction === 'outbound' && body.toLowerCase() !== requestBody && later.date) return null;
+  }
   const scoped = scopeSlotsForConversation(slots || [], conversation);
   const slot = scoped.find(function exact(candidate) {
     return Math.abs(candidate.start.getTime() - parsed.date.getTime()) <= 15 * 60000;
   }) || null;
-  return { request: request, parsed: parsed, slot: slot };
+  return { request: request, parsed: parsed, slot: slot, request_index: requestIndex };
 }
 
 function appointmentFailureReply(locale) {
@@ -286,7 +318,8 @@ class AutomaticActionsService {
         appointment_capabilities: appointmentCapabilities
       },
       invariants: {
-        never_changes_customer_records: true,
+        never_edits_existing_customer_records: true,
+        appointment_lead_creation_requires_authorization: true,
         never_deletes_data: true,
         never_replies_to_announcements: true,
         logs_every_action: true,
@@ -478,8 +511,13 @@ class AutomaticActionsService {
     const sourceMessageId = text(candidate.inbound_message_id);
     const dedupeKey = 'auto-appointment:' + sourceMessageId + ':' + slot.id;
     const contact = contactFromConversation(conversation, contactOverride);
-    if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) {
-      return { needsContact: true, reason: 'customer_identity_required', slot: slot };
+    const integration = this.getState().integration;
+    const remoteRequested = enabled(settings.auto_appointments_create_remote) && integration.appointment_create;
+    const missingFields = [];
+    if (remoteRequested && !contact.customer_phone) missingFields.push('customer_phone');
+    else if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) missingFields.push('customer_name', 'customer_phone');
+    if (missingFields.length) {
+      return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: missingFields };
     }
     if (this.database.hasAutomaticActionEvent(dedupeKey) || this.database.findAppointmentBySource('automatic-message', sourceMessageId)) return { skipped: true, reason: 'duplicate' };
     const appointmentConflicts = this.database.listAppointments('').concat(calendarAppointmentsAsConflicts(this.database.listIntegrationCache('dealer-agenda-calendar', '', 500)));
@@ -497,20 +535,29 @@ class AutomaticActionsService {
       const customerPhone = contact.customer_phone;
       const customerEmail = contact.customer_email;
       let remoteAppointmentId = null;
-      const integration = this.getState().integration;
       let calendarRefresh = null;
-      if (enabled(settings.auto_appointments_create_remote) && integration.appointment_create) {
+      let remoteLeadId = null;
+      let remoteOrderId = null;
+      let remoteReserved = false;
+      let remoteLeadUrl = '';
+      if (remoteRequested) {
         const appointmentDate = localDateKey(slot.start);
         const appointmentTime = String(slot.start.getHours()).padStart(2, '0') + ':' + String(slot.start.getMinutes()).padStart(2, '0');
         const listingId = text(slot.listing_id || payload.listing_id || thread.context_id);
-        if (String(integration.account_type || '').toLowerCase() === 'reseller' && !listingId) throw new Error('A reseller appointment requires an assigned listing_id.');
         const remote = await this.apiService.createRemoteAppointment({
-          listing_id: listingId, customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail,
+          thread_id: candidate.thread_id, listing_id: listingId, customer_name: contact.customer_name, customer_phone: customerPhone, customer_email: customerEmail,
           customer_location: text(payload.customer_location || thread.customer_location || slot.location),
           appointment_date: appointmentDate, appointment_time: appointmentTime,
-          notes: 'Customer appointment created by Nexa guarded automatic actions with explicit user authorization.'
+          notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
         }, dedupeKey);
-        remoteAppointmentId = text(remote.payload && (remote.payload.appointment_id || remote.payload.id));
+        const remotePayload = remote.payload && typeof remote.payload === 'object' ? remote.payload : {};
+        remoteAppointmentId = text(remotePayload.appointment_id || remotePayload.lead_id || remotePayload.order_id || remotePayload.id);
+        remoteLeadId = text(remotePayload.lead_id || remotePayload.order_id);
+        remoteOrderId = text(remotePayload.order_id || remotePayload.lead_id);
+        remoteReserved = remotePayload.reserved !== false;
+        remoteLeadUrl = text(remotePayload.lead_url);
+        if (remote.raw && remote.raw.ok === false) throw new Error(text(remote.raw.message) || 'The website did not create the appointment Lead.');
+        if (!remoteAppointmentId || !remoteReserved) throw new Error('The website did not confirm the Lead appointment reservation.');
         try {
           calendarRefresh = await this.cacheDealerAgendaCalendar(settings, { from: appointmentDate, days: 14, store_id: slot.store_id || undefined });
         } catch (refreshError) {
@@ -525,9 +572,9 @@ class AutomaticActionsService {
         source_type: 'automatic-message', source_id: sourceMessageId, thread_id: candidate.thread_id,
         remote_appointment_id: remoteAppointmentId, created_by: 'nexa-automatic-actions'
       });
-      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment created from dealer availability', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, slot_id: slot.id, dealer_agenda_calendar_refresh: calendarRefresh } });
+      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created from dealer availability', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, dealer_agenda_calendar_refresh: calendarRefresh } });
       await this.notify('Nexa created an authorized appointment', customerName + ' · ' + formatSlot(slot), 'success', 'auto-appointment-notification:' + sourceMessageId, { appointment_id: saved.id, thread_id: candidate.thread_id });
-      return { created: true, appointment: saved, customerName: customerName };
+      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl };
     } catch (error) {
       this.database.completeAutomaticActionEvent(event.id, { status: 'failed', engine: 'availability', summary: 'Appointment creation failed', error: error.message });
       await this.notify('Automatic appointment needs attention', error.message, 'danger', 'auto-appointment-error:' + sourceMessageId, { thread_id: candidate.thread_id });
@@ -563,13 +610,6 @@ class AutomaticActionsService {
         return { handled: true, skipped: true, reason: 'appointment_time_changed' };
       }
       const suppliedContact = extractCustomerContact(message);
-      if (!suppliedContact.provided) {
-        if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
-          const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
-          return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
-        }
-        return { handled: true, skipped: true, reason: 'customer_identity_required' };
-      }
       const recovered = await this.createAppointmentFromSlot(candidate, conversation, pendingContact.slot, settings, suppliedContact);
       if (recovered.created && enabled(settings.auto_messages_enabled) && enabled(settings.auto_appointments_send_confirmation) && this.canSendMore(settings)) {
         const confirmation = appointmentConfirmation(pendingContact.slot, locale, liveAppointmentPayload);
@@ -578,7 +618,7 @@ class AutomaticActionsService {
       }
       if (recovered.created) return { handled: true, appointment: recovered };
       if (recovered.needsContact && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
-        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale, recovered.contact, recovered.missing_fields), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
         return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
       }
       if ((recovered.failed || recovered.skipped) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
@@ -599,7 +639,7 @@ class AutomaticActionsService {
       const created = await this.createAppointmentFromSlot(candidate, conversation, plan.selectedSlot, settings);
       if (created.needsContact) {
         if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
-          const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(plan.selectedSlot, plan.locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested');
+          const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(plan.selectedSlot, plan.locale, created.contact, created.missing_fields), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested');
           return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
         }
         return { handled: true, skipped: true, reason: 'customer_identity_required' };
@@ -772,6 +812,7 @@ module.exports = {
   NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1,
   NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2,
   NEXA_APPOINTMENT_CONTACT_RECOVERY_V1,
+  NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2,
   availabilityStart,
   classifyRisk,
   inQuietHours,

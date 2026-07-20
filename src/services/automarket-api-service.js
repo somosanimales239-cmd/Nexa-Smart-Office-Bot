@@ -55,7 +55,7 @@ const SAFE_RESOURCES = new Set([
 
 const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   ping: ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','api_version','status','message','ok'],
-  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer-appointment-availability','dealer_appointment_availability','dealer_appointment_availability_enabled','dealer_appointment_availability_endpoint','dealer-agenda-calendar','dealer_agenda_calendar','dealer_agenda_calendar_enabled','dealer_agenda_calendar_endpoint','appointment-create','appointment_create','appointment_create_enabled','appointment_create_endpoint'],
+  'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer-appointment-availability','dealer_appointment_availability','dealer_appointment_availability_enabled','dealer_appointment_availability_endpoint','dealer-agenda-calendar','dealer_agenda_calendar','dealer_agenda_calendar_enabled','dealer_agenda_calendar_endpoint','appointment-create','appointment_create','appointment_create_enabled','appointment_create_endpoint','lead-appointment-create','nexa-appointment-create','appointment-create-from-thread','lead_appointment_create_endpoint','nexa_appointment_create_endpoint','appointment_create_from_thread_endpoint'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
   listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
@@ -95,7 +95,7 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
     'slots','available_slots','verified_open_slots','open_slots','booked_slots','unavailable_slots','available_times','booked_times','start_at','end_at','start_time','end_time','appointment_date','appointment_time','time','available','is_available','booked','is_booked','verified','capacity',
     'appointments','appointment_count','verified_open_slots_count','id','appointment_id','order_id','listing_id','listing_title','customer_name','customer_phone','customer_email','customer_location','appointment_status','source','created_at','updated_at','data','result','items','records','rows'
   ],
-  'appointment-create': ['id','appointment_id','order_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_label','start_at','end_at','status','appointment_status','location','notes','created_at','updated_at']
+  'appointment-create': ['ok','resource','id','appointment_id','order_id','lead_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_label','start_at','end_at','status','appointment_status','location','notes','source','source_context','reserved','lead_url','created_at','updated_at']
 });
 
 const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys','slots','availability']);
@@ -338,7 +338,13 @@ function normalizeResourceName(value) {
     'messages-read': 'message-read',
     'dealer_appointment_availability': 'dealer-appointment-availability',
     'dealer_agenda_calendar': 'dealer-agenda-calendar',
-    'appointment_create': 'appointment-create'
+    'appointment_create': 'appointment-create',
+    'lead-appointment-create': 'appointment-create',
+    'nexa-appointment-create': 'appointment-create',
+    'appointment-create-from-thread': 'appointment-create',
+    'lead_appointment_create': 'appointment-create',
+    'nexa_appointment_create': 'appointment-create',
+    'appointment_create_from_thread': 'appointment-create'
   };
   return aliases[resource] || resource;
 }
@@ -413,7 +419,13 @@ function extractAvailableResources(connectionMap) {
     ['dealer_agenda_calendar_endpoint','dealer-agenda-calendar'],
     ['appointment_create','appointment-create'],
     ['appointment_create_enabled','appointment-create'],
-    ['appointment_create_endpoint','appointment-create']
+    ['appointment_create_endpoint','appointment-create'],
+    ['lead-appointment-create','appointment-create'],
+    ['nexa-appointment-create','appointment-create'],
+    ['appointment-create-from-thread','appointment-create'],
+    ['lead_appointment_create_endpoint','appointment-create'],
+    ['nexa_appointment_create_endpoint','appointment-create'],
+    ['appointment_create_from_thread_endpoint','appointment-create']
   ];
   endpointFields.forEach(function addEndpoint(entry) {
     if (capabilityValueEnabled(map[entry[0]], entry[1])) resources.push(entry[1]);
@@ -478,7 +490,7 @@ function deriveAppointmentCapabilities(identity, connectionMap) {
   const scopes = new Set(normalizeScopes(source.scopes, source.allowed_scopes, source.permissions, map.scopes, map.allowed_scopes, map.permissions));
   const availabilityState = capabilityState(map, ['dealer_appointment_availability','dealer_appointment_availability_enabled','dealer_appointment_availability_endpoint'], 'dealer-appointment-availability');
   const calendarState = capabilityState(map, ['dealer_agenda_calendar','dealer_agenda_calendar_enabled','dealer_agenda_calendar_endpoint'], 'dealer-agenda-calendar');
-  const createState = capabilityState(map, ['appointment_create','appointment_create_enabled','appointment_create_endpoint'], 'appointment-create');
+  const createState = capabilityState(map, ['appointment_create','appointment_create_enabled','appointment_create_endpoint','lead-appointment-create','nexa-appointment-create','appointment-create-from-thread','lead_appointment_create_endpoint','nexa_appointment_create_endpoint','appointment_create_from_thread_endpoint'], 'appointment-create');
   const scopesAdvertised = scopes.size > 0;
   const availabilityEndpoint = availabilityState.advertised ? availabilityState.enabled : resources.has('dealer-appointment-availability');
   const calendarEndpoint = calendarState.advertised ? calendarState.enabled : resources.has('dealer-agenda-calendar');
@@ -723,10 +735,11 @@ class AutoMarketApiService {
       throw new AutoMarketApiError('Appointment date and time are required.', { resource: 'appointment-create' });
     }
     const body = {};
-    for (const key of ['listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','notes']) {
+    for (const key of ['thread_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','notes']) {
       if (input[key] !== undefined && input[key] !== null && String(input[key]).trim() !== '') body[key] = input[key];
     }
-    if (!body.customer_name) throw new AutoMarketApiError('Customer name is required.', { resource: 'appointment-create' });
+    if (!body.thread_id && !body.customer_name) throw new AutoMarketApiError('Message thread ID or customer name is required.', { resource: 'appointment-create' });
+    if (!body.customer_phone) throw new AutoMarketApiError('Customer phone is required to create the appointment Lead.', { resource: 'appointment-create' });
     return this.request('appointment-create', {}, {
       method: 'POST',
       timeoutMs: 30000,

@@ -1,0 +1,26 @@
+Nexa Smart Office Bot 1.6.12 - Validation Summary
+
+Delivery: complete software source
+
+Contracts:
+- NEXA_APPOINTMENT_STATE_MACHINE_V2
+- NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2
+- NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2
+
+Exact regressions:
+- stale Tuesday contact request is invalidated by a Saturday correction
+- duplicate 11:00 AM slots remain scoped to the corrected Saturday
+- time and phone in one inbound message create the Saturday Lead
+- thread_id is sent without requiring listing_id
+- appointment-create aliases are discovered safely
+- Lead/order/appointment identifiers and reserved status survive filtering
+- Dealer Agenda refresh occurs after website creation
+
+Required delivery checks:
+- JavaScript syntax validation
+- project and delivery validation
+- complete integration test suite
+- implementation and acceptance contracts
+- Nexa contract gate
+- archive integrity
+- extracted archive checksums and repeated tests

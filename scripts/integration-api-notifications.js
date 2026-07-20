@@ -65,7 +65,7 @@ const responses = {
     ok: true,
     allowed_scopes: dealerScopes.slice(),
     permissions: dealerScopes.slice(),
-    allowed_endpoints: ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
+    allowed_endpoints: ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread'],
     messages_write_enabled: true,
     message_send_endpoint: 'message-send',
     two_way_chat_enabled: true,
@@ -101,7 +101,7 @@ const responses = {
         appointments: [{ appointment_id: 'calendar-appt-1', customer_name: 'Calendar Customer', appointment_time: '11:00', appointment_status: 'scheduled', source: 'software', server_private_value: 'remove-me' }] }], private_store_value: 'remove-me' }],
     server_private_value: 'remove-me'
   } },
-  'appointment-create': { ok: true, data: { appointment_id: 'remote-contract-1', appointment_status: 'scheduled' } }
+  'appointment-create': { ok: true, resource: 'appointment-create', data: { order_id: 'ord-contract-1', lead_id: 'ord-contract-1', appointment_id: 'remote-contract-1', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: 'thread-contract-1', customer_name: 'Customer Name', customer_phone: '7865553333', appointment_date: '2026-07-22', appointment_time: '10:30', appointment_status: 'scheduled', reserved: true, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-contract-1' } }
 };
 
 let requestedResources = [];
@@ -112,7 +112,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.11');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.12');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
@@ -197,7 +197,8 @@ const notificationService = new NotificationService({
     assert.equal(result.identity.scopes.includes('messages:write'), true);
     assert.equal(result.identity.available_resources.includes('message-send'), true);
     assert.deepEqual(result.connectionMap.allowed_scopes, dealerScopes);
-    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create']);
+    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread']);
+    assert.equal(result.identity.available_resources.includes('appointment-create'), true);
     assert.equal(result.connectionMap.messages_write_enabled, true);
     assert.equal(result.connectionMap.message_send_endpoint, 'message-send');
     assert.equal(result.connectionMap.two_way_chat_enabled, true);
@@ -217,20 +218,44 @@ const notificationService = new NotificationService({
     assert.deepEqual(requestedResources, ['ping','connection-map']);
     assert(result.resources.some((entry)=>entry.resource === 'agenda'));
   });
-  await test('appointment-create sends the exact V6 body and idempotency key', async function () {
+  await test('appointment-create sends the thread Lead body and idempotency key', async function () {
     requestedOptions = [];
     const response = await apiService.createRemoteAppointment({
       listing_id: 'listing-45', customer_name: 'Customer Name', customer_phone: '7865553333', customer_email: 'optional@example.com',
       customer_location: 'Miami, FL', appointment_date: '2026-07-22', appointment_time: '10:30', notes: 'Customer wants to see the vehicle.',
-      thread_id: 'must-not-be-forwarded', start_at: 'must-not-be-forwarded'
+      thread_id: 'thread-contract-1', start_at: 'must-not-be-forwarded'
     }, 'appointment-v6-idempotency');
     assert.equal(response.payload.appointment_id, 'remote-contract-1');
+    assert.equal(response.payload.lead_id, 'ord-contract-1');
+    assert.equal(response.payload.reserved, true);
+    assert.equal(response.payload.source, 'Nexa Smart Office Bot');
     const request = requestedOptions.find((item)=>item.resource === 'appointment-create');
     assert.equal(request.method, 'POST');
     assert.equal(request.idempotencyKey, 'appointment-v6-idempotency');
     assert.deepEqual(JSON.parse(request.body), {
-      listing_id: 'listing-45', customer_name: 'Customer Name', customer_phone: '7865553333', customer_email: 'optional@example.com',
+      thread_id: 'thread-contract-1', listing_id: 'listing-45', customer_name: 'Customer Name', customer_phone: '7865553333', customer_email: 'optional@example.com',
       customer_location: 'Miami, FL', appointment_date: '2026-07-22', appointment_time: '10:30', notes: 'Customer wants to see the vehicle.'
+    });
+  });
+  await test('appointment-create aliases normalize to the guarded Lead capability', async function () {
+    for (const alias of ['lead-appointment-create','nexa-appointment-create','appointment-create-from-thread']) {
+      const capabilities = deriveAppointmentCapabilities({ scopes: ['appointment-create:write'], available_resources: [alias] }, { allowed_endpoints: [alias], scopes: ['appointment-create:write'] });
+      assert.equal(capabilities.createEndpoint, true);
+      assert.equal(capabilities.createWrite, true);
+      assert(capabilities.resources.includes('appointment-create'));
+    }
+  });
+  await test('thread-derived Lead creation needs no listing or duplicated customer name', async function () {
+    requestedOptions = [];
+    const response = await apiService.createRemoteAppointment({
+      thread_id: 'msg-thread-only', appointment_date: '2026-07-25', appointment_time: '11:00',
+      customer_phone: '2395550199', notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
+    }, 'thread-lead-idempotency');
+    assert.equal(response.payload.lead_id, 'ord-contract-1');
+    const request = requestedOptions.find((item)=>item.resource === 'appointment-create');
+    assert.deepEqual(JSON.parse(request.body), {
+      thread_id: 'msg-thread-only', customer_phone: '2395550199', appointment_date: '2026-07-25', appointment_time: '11:00',
+      notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
     });
   });
   await test('first full synchronization loads every allowed dealer resource and diagnostics', async function () {

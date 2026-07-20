@@ -1,9 +1,9 @@
-Nexa Smart Office Bot 1.6.11 Validation Report
+Nexa Smart Office Bot 1.6.12 Validation Report
 
 Package feature
-Store-aware V6 Dealer Appointment Agenda synchronization with guarded date and
-customer-identity recovery, contextual AM/PM selection, bilingual topic-locked
-appointment communication and local/website collision protection.
+Date-scoped bilingual appointment state, guarded thread-to-Lead creation,
+Store-aware Dealer Appointment Agenda synchronization and local/website
+collision protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -20,18 +20,18 @@ Validation scope
 - Nexa contract gate
 - JavaScript syntax
 - 28 core SQLite and business integration tests
-- 25 API synchronization and notification tests
+- 27 API synchronization and notification tests
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 13 automotive Knowledge tests, including live schedules and website-calendar conflicts
-- 19 professional appointment communication tests
+- 20 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
 - Implementation and acceptance contracts
 
 Appointment communication regression verified
-- The dedicated library contains 304 English/Spanish phrases, 34 intents and
-  72 dynamic response templates.
+- The dedicated state-aware library contains 371 English/Spanish phrases,
+  40 intents and 90 dynamic response templates.
 - Active appointment context takes priority over general inventory Knowledge.
 - The reported "algo mas disponible para ese dia" conversation is reproduced
   exactly and remains inside the appointment flow.
@@ -51,6 +51,10 @@ Appointment communication regression verified
 - An appointment decline leaves the dealer's verified contact information.
 - A simple availability question cannot create an appointment.
 - A short contextual selection can create only its exact verified slot.
+- Identical Tuesday and Saturday times remain isolated to the active corrected date.
+- A stale contact request is invalidated when the customer corrects the date or time.
+- The exact reported Tuesday-to-Saturday conversation selects Saturday July 25
+  at 11:00 AM, never Tuesday July 21.
 - “sababdo en la mañana” resolves to Saturday, July 25 rather than Tuesday,
   July 21; “en la mañana” is never interpreted as tomorrow by itself.
 - Prior dealer offer dates remain available as conversation context even when
@@ -70,8 +74,12 @@ Appointment communication regression verified
   current times without incorrectly declaring the whole date blocked.
 - A booked or locally occupied time is never used for a new appointment.
 - A booked website-calendar time is never offered or created.
-- Website creation uses the exact V6 date/time/customer request body and requires
-  appointment-create:write.
+- Website creation sends thread_id, date, time and customer phone, accepts optional
+  listing/name/email/location context and requires appointment-create:write.
+- appointment-create, lead-appointment-create, nexa-appointment-create and
+  appointment-create-from-thread all discover the same guarded capability.
+- Lead/order/appointment IDs, source metadata, reserved status and Lead URL are
+  retained in the automatic-action audit record.
 - After successful website creation the Dealer Agenda calendar is refreshed
   immediately and the local read cache is replaced.
 - Authorized appointments are saved to the local Agenda when remote creation is

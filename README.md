@@ -1,8 +1,20 @@
-# Nexa Smart Office Bot 1.6.11
+# Nexa Smart Office Bot 1.6.12
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.11
+## New in 1.6.12
+
+- Replaces time-only appointment matching with a date-scoped conversation state machine. Identical times on Tuesday and Saturday can no longer cross days.
+- Gives the latest customer date correction priority over stale offers and old contact requests.
+- Invalidates a pending contact step when the customer changes the date or time, then continues from the corrected verified slot.
+- Expands the dedicated bilingual appointment library to 371 English/Spanish phrases, 40 intents and 90 dynamic templates, including date corrections, explicit time selections and phone collection.
+- Reads the customer name from the message thread and accepts a phone number in the same message as the selected time.
+- Sends `thread_id`, date, time and phone to `appointment-create`, allowing the website to create the Lead and reserve the Agenda slot without requiring a listing ID when the thread supplies the context.
+- Supports `lead-appointment-create`, `nexa-appointment-create` and `appointment-create-from-thread` as discovery aliases.
+- Preserves `lead_id`, `order_id`, `appointment_id`, `reserved`, `source`, `source_context` and `lead_url` from the website response.
+- Adds the complete reported Tuesday-to-Saturday conversation as a permanent end-to-end regression, including Lead creation and confirmation.
+
+## Existing 1.6.11 improvements
 
 - Removes the ambiguous apostrophe constructs that the website Local build validation incorrectly reported as unterminated JavaScript strings.
 - Keeps the complete 1.6.10 appointment date, contact-collection, revalidation and booking recovery behavior unchanged.
@@ -125,6 +137,6 @@ After updating, create or rotate the website API key with `dealer-appointment-av
 
 ## Safety model
 
-AI Messages can run only when both AI Control and the Messages switch authorize it. Blocking one conversation stops automatic sending for that thread but does not stop reading or manual AI review. Nexa never automatically changes customer records and has no automatic delete operation.
+AI Messages can run only when both AI Control and the Messages switch authorize it. Blocking one conversation stops automatic sending for that thread but does not stop reading or manual AI review. Existing customer records stay read-only; when website appointment creation is explicitly authorized, Nexa may create one new Lead for the confirmed appointment. It has no automatic delete operation.
 
 Existing SQLite data, encrypted API keys, provider keys, conversations, appointments, custom knowledge and settings are preserved during this update.

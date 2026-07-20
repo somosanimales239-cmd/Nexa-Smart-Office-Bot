@@ -43,6 +43,8 @@ Recommended reseller keys should include `reseller-profile:read`, `reseller:read
 
 The website may require a separate appointment-write scope for optional remote appointment creation.
 
+For conversation-originated appointments, Nexa posts `thread_id`, `appointment_date`, `appointment_time`, `customer_phone` and notes to `appointment-create`. The same capability may be advertised as `lead-appointment-create`, `nexa-appointment-create` or `appointment-create-from-thread`; Nexa normalizes all three aliases. The website may derive the customer name and listing/order context from the thread, create the Lead, reserve the slot and return the resulting IDs.
+
 ## Message resources
 
 For complete conversations and replies, the website should advertise:

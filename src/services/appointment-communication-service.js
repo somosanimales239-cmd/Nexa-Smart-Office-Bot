@@ -20,6 +20,7 @@ const {
 
 const NEXA_PRO_APPOINTMENT_COMMUNICATION_V1 = 'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1';
 const NEXA_CONTEXTUAL_TIME_SELECTION_V1 = 'NEXA_CONTEXTUAL_TIME_SELECTION_V1';
+const NEXA_APPOINTMENT_STATE_MACHINE_V2 = 'NEXA_APPOINTMENT_STATE_MACHINE_V2';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function normalized(value) { return libraryNormalize(value); }
@@ -102,6 +103,26 @@ function lastRequestedDate(conversation, latestMessage, referenceDate) {
   return null;
 }
 
+function latestAppointmentDate(conversation, latestMessage, referenceDate) {
+  const now = referenceDate || new Date();
+  const current = parseRequestedDateTime(latestMessage, now);
+  if (current.date) return current.date;
+  const rows = conversationMessages(conversation).slice(-40).reverse();
+  let skippedLatest = false;
+  for (const row of rows) {
+    if (!row) continue;
+    const body = text(row.body);
+    if (!skippedLatest && body === text(latestMessage) && normalized(row.direction) !== 'outbound') {
+      skippedLatest = true;
+      continue;
+    }
+    const rowReference = row.sent_at || row.created_at ? new Date(row.sent_at || row.created_at) : now;
+    const parsed = parseRequestedDateTime(body, Number.isNaN(rowReference.getTime()) ? now : rowReference);
+    if (parsed.date) return parsed.date;
+  }
+  return null;
+}
+
 function groupSlotsByDay(slots) {
   const groups = new Map();
   (slots || []).forEach(function addSlot(slot) {
@@ -158,10 +179,10 @@ function lastOfferedGroupKey(conversation, groups, locale) {
 }
 
 function previousOrEarliestDay(conversation, latestMessage, groups, referenceDate, locale) {
+  const activeDate = latestAppointmentDate(conversation, latestMessage, referenceDate);
+  if (activeDate) return localDateKey(activeDate);
   const offered = lastOfferedGroupKey(conversation, groups, locale);
   if (offered) return offered;
-  const previousDate = lastRequestedDate(conversation, latestMessage, referenceDate);
-  if (previousDate) return localDateKey(previousDate);
   return groups.length ? groups[0].key : '';
 }
 
@@ -207,21 +228,28 @@ function previouslyOfferedSlots(conversation, group, locale) {
   return group.slots.filter(function mentioned(slot) { return body.includes(normalized(formatTime(slot.start, locale))); });
 }
 
-function lastOfferedSlots(conversation, groups, locale) {
-  const allSlots = groups.reduce(function flatten(output, group) { return output.concat(group.slots); }, []);
-  const outbound = conversationMessages(conversation).slice(-16).reverse().find(function appointmentOffer(row) {
-    if (normalized(row && row.direction) !== 'outbound') return false;
-    const body = normalized(row && row.body);
-    return allSlots.some(function hasTime(slot) { return body.includes(normalized(formatTime(slot.start, locale))); });
+function lastOfferedSlots(conversation, groups, locale, contextDay) {
+  const fixedGroup = contextDay ? groups.find(function sameDay(group) { return group.key === contextDay; }) : null;
+  const outbound = conversationMessages(conversation).slice(-24).reverse().filter(function appointmentOffer(row) {
+    return normalized(row && row.direction) === 'outbound';
   });
-  if (!outbound) return [];
-  const body = normalized(outbound.body);
-  return allSlots.map(function withPosition(slot) {
-    return { slot: slot, position: body.indexOf(normalized(formatTime(slot.start, locale))) };
-  }).filter(function mentioned(item) { return item.position >= 0; })
-    .sort(function responseOrder(a, b) { return a.position - b.position || a.slot.start - b.slot.start; })
-    .filter(function unique(item, index, rows) { return rows.findIndex(function same(candidate) { return candidate.slot.id === item.slot.id; }) === index; })
-    .map(function unwrap(item) { return item.slot; });
+  for (const row of outbound) {
+    const body = normalized(row && row.body);
+    const rowReference = row.sent_at || row.created_at ? new Date(row.sent_at || row.created_at) : new Date();
+    const parsed = parseRequestedDateTime(text(row && row.body), Number.isNaN(rowReference.getTime()) ? new Date() : rowReference);
+    const parsedKey = parsed.date ? localDateKey(parsed.date) : '';
+    if (contextDay && parsedKey && parsedKey !== contextDay) continue;
+    const rowGroups = fixedGroup ? [fixedGroup] : groups;
+    const candidates = rowGroups.reduce(function flatten(output, group) { return output.concat(group.slots); }, []);
+    const mentioned = candidates.map(function withPosition(slot) {
+      return { slot: slot, position: body.indexOf(normalized(formatTime(slot.start, locale))) };
+    }).filter(function mentionedTime(item) { return item.position >= 0; })
+      .sort(function responseOrder(a, b) { return a.position - b.position || a.slot.start - b.slot.start; })
+      .filter(function unique(item, index, rows) { return rows.findIndex(function same(candidate) { return candidate.slot.id === item.slot.id; }) === index; })
+      .map(function unwrap(item) { return item.slot; });
+    if (mentioned.length) return mentioned;
+  }
+  return [];
 }
 
 function resolveSlotSelection(message, conversation, slots, referenceDate, locale, preference, followUpType, classification) {
@@ -234,15 +262,20 @@ function resolveSlotSelection(message, conversation, slots, referenceDate, local
   }
   const contextDay = requested.date ? localDateKey(requested.date) : previousOrEarliestDay(conversation, message, groups, now, locale);
   const daySlots = contextDay ? (groups.find(function sameDay(group) { return group.key === contextDay; }) || {}).slots || [] : [];
-  const ranked = rankSlotsForPreference(daySlots.length ? daySlots : slots, preference, 3).slots;
-  const offered = lastOfferedSlots(conversation, groups, locale);
+  const contextualPool = contextDay ? daySlots : slots;
+  const ranked = rankSlotsForPreference(contextualPool, preference, 3).slots;
+  const offered = lastOfferedSlots(conversation, groups, locale, contextDay);
   const ordinal = requestedOrdinal(message, classification);
   if (ordinal !== null) return { selected: offered[ordinal] || ranked[ordinal] || null, requested: requested, reference_day: contextDay };
   if (requested.time) {
-    const pool = daySlots.length ? daySlots : (slots || []);
+    const pool = contextDay ? daySlots : (slots || []);
     let matching = offered.filter(function offeredTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
     if (!matching.length) matching = pool.filter(function sameTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
-    if (!matching.length) matching = (slots || []).filter(function anyDaySameTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
+    if (!matching.length && contextDay) {
+      const broadOffered = lastOfferedSlots(conversation, groups, locale, '').filter(function offeredTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
+      const offeredDays = new Set(broadOffered.map(function day(slot) { return localDateKey(slot.start); }));
+      if (offeredDays.size === 1) matching = broadOffered;
+    }
     return { selected: matching.length ? matching[0] : null, requested: requested, reference_day: contextDay };
   }
   if (followUpType === 'acceptance') return { selected: offered[0] || ranked[0] || null, requested: requested, reference_day: contextDay };
@@ -270,8 +303,10 @@ function requestedTimeWasOffered(conversation, requestedTime) {
 
 function explicitBookingCommitment(message, hasContext, followUpType, selected, classification) {
   if (!selected) return false;
-  if (classification && ['select_first', 'select_second', 'select_third', 'accept_recommendation'].includes(classification.intent)) return hasContext;
+  if (classification && ['select_first', 'select_second', 'select_third', 'accept_recommendation', 'select_explicit_time'].includes(classification.intent)) return hasContext;
   const source = normalized(message);
+  if (hasContext && classification && classification.intent === 'correct_date' && /\b\d{1,2}(?::\d{2})?\b/.test(source)) return true;
+  if (hasContext && /\b(como te dije|la hora que te dije|as i said|the time i said)\b/.test(source) && /\b\d{1,2}(?::\d{2})?\b/.test(source)) return true;
   if (/\b(quiero (?:hacer |agendar |reservar )?(?:una |la )?cita|agendame|reservame|puede agendar|puedes agendar|hacer una cita|schedule (?:an|the|my) appointment|book (?:an|the|my) appointment|reserve (?:the|this) time|i ll take|tomare)\b/.test(source)) return true;
   if (/\b(can i schedule|could you schedule|please schedule|me conviene|me sirve|perfecto|that works|works for me)\b/.test(source)) return true;
   if (/\b(que tal|como seria|tienes|hay|puedo|podria|seria posible|what about|how about|do you have|is it available|is that available)\b/.test(source)) return false;
@@ -416,13 +451,17 @@ function appointmentConversationPlan(input) {
   const selection = resolveSlotSelection(message, conversation, slots, now, locale, preference, followUpType, classification);
   const requested = selection.requested;
   const priorRequestedDate = lastRequestedDate(conversation, message, now);
-  const requestedDate = requested.date || priorRequestedDate;
+  const activeDate = latestAppointmentDate(conversation, message, now);
+  const requestedDate = requested.date || activeDate || priorRequestedDate;
+  const correctionPrefix = classification.intent === 'correct_date' && requestedDate
+    ? appointmentResponse('date_correction_ack', locale, { date: formatDate(requestedDate, locale) }, localDateKey(requestedDate))
+    : '';
   if (selection.selected) {
     const daySlots = groups.find(function sameDay(group) { return group.key === localDateKey(selection.selected.start); });
     const shouldCreate = explicitBookingCommitment(message, hasContext, followUpType, selection.selected, classification);
     return {
       relevant: true, locale: locale, decision: shouldCreate ? 'select_slot' : 'exact_available',
-      response: exactAvailableReply(payload, selection.selected, daySlots ? daySlots.slots : [selection.selected], locale, now),
+      response: [correctionPrefix, exactAvailableReply(payload, selection.selected, daySlots ? daySlots.slots : [selection.selected], locale, now)].filter(Boolean).join(' '),
       shouldCreate: shouldCreate, selectedSlot: selection.selected, requested: requested, preference: preference,
       libraryIntent: classification.intent
     };
@@ -461,13 +500,14 @@ function appointmentConversationPlan(input) {
     const group = groups.find(function sameDay(item) { return item.key === requestedKey; });
     const blocked = dateAvailabilityState(payload, requestedDate, { verifiedSlots: group && group.slots }).blocked;
     if (group && group.slots.length && !blocked) {
-      const prefix = requested.exact || requestedTimeWasOffered(conversation, requested.time)
+      const availabilityPrefix = requested.exact || requestedTimeWasOffered(conversation, requested.time)
         ? appointmentResponse('requested_time_unavailable', locale, {}, requestedKey) : '';
+      const prefix = [correctionPrefix, availabilityPrefix].filter(Boolean).join(' ');
       const offer = dayOffer(payload, group, locale, prefix, { preference: preference, referenceDate: now });
       return { relevant: true, locale: locale, decision: 'offer_same_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
     }
     const unavailable = unavailableReply(payload, requestedDate, groups, locale, blocked, { preference: preference, referenceDate: now });
-    return { relevant: true, locale: locale, decision: blocked ? 'blocked_day' : 'offer_next_day', response: unavailable.response, shouldCreate: false, selectedSlot: null, recommendedSlot: unavailable.recommendedSlot, offeredSlots: unavailable.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
+    return { relevant: true, locale: locale, decision: blocked ? 'blocked_day' : 'offer_next_day', response: [correctionPrefix, unavailable.response].filter(Boolean).join(' '), shouldCreate: false, selectedSlot: null, recommendedSlot: unavailable.recommendedSlot, offeredSlots: unavailable.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
   }
   if (groups.length) {
     const offer = dayOffer(payload, groups[0], locale, '', { preference: preference, referenceDate: now });
@@ -488,6 +528,7 @@ function appointmentConfirmation(slot, locale, payload) {
 
 module.exports = {
   NEXA_CONTEXTUAL_TIME_SELECTION_V1,
+  NEXA_APPOINTMENT_STATE_MACHINE_V2,
   NEXA_PRO_APPOINTMENT_COMMUNICATION_V1,
   appointmentConfirmation,
   appointmentConversationActive,

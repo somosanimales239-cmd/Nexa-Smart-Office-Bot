@@ -1,6 +1,7 @@
 {
   "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "state_contract": "NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2",
   "description": "Curated English and Spanish communication library for natural, context-aware dealer appointment conversations backed by verified availability.",
   "supported_locales": ["en", "es"],
   "locales": {
@@ -51,6 +52,22 @@
           "si ese", "si esa", "ese me conviene", "esa me conviene", "ese me sirve", "esa me sirve",
           "perfecto", "me parece bien", "reservalo", "agendalo", "confirmalo", "puedes reservarlo",
           "quiero ese horario", "tomare esa hora", "si por favor", "dale"
+        ],
+        "correct_date": [
+          "la fecha esta incorrecta", "la fecha es incorrecta", "esa no es la fecha", "ese no es el dia",
+          "no quiero cita para ese dia", "no quiero cita para el dia 21", "quiero para el sabado",
+          "es para el sabado", "dije el sabado", "te dije el sabado", "que no quiero el martes",
+          "mantenga el sabado", "corrige la fecha", "cambia la fecha al sabado"
+        ],
+        "select_explicit_time": [
+          "a las 11 como te dije", "a las 11 esta bien", "las 11 esta bien", "quiero la de las 11",
+          "me quedo con las 11", "reserve la de las 11", "confirma la de las 11",
+          "esa hora esta bien", "la hora que te dije", "ese horario como te dije"
+        ],
+        "provide_contact": [
+          "mi telefono es", "mi numero es", "este es mi telefono", "puedes llamarme al",
+          "me puede llamar al", "mi celular es", "mi correo es", "mi email es",
+          "el numero para la cita es", "para confirmar llama al"
         ],
         "decline_appointment": [
           "no gracias", "no quiero una cita", "ya no quiero la cita", "prefiero no hacer la cita",
@@ -139,6 +156,21 @@
           "{{time}} está disponible y verificada{{location}}. ¿Desea que prepare la cita?",
           "La Agenda confirma que {{time}} sigue disponible{{location}}. ¿Le reservo ese horario?"
         ],
+        "date_correction_ack": [
+          "Gracias por corregir la fecha. Mantengo la cita en {{date}} y descarto la fecha anterior.",
+          "Entendido: la fecha correcta es {{date}}. No volveré a usar el día anterior.",
+          "De acuerdo, continuamos únicamente con {{date}}."
+        ],
+        "contact_phone_request": [
+          "Para reservar definitivamente {{date}} a las {{time}}, envíeme un número de teléfono. La Agenda volverá a verificar ese mismo horario antes de crear el Lead y la cita.",
+          "Ya mantengo {{date}} a las {{time}}. Solo necesito un teléfono para crear el Lead, reservar el horario en la página y enviarle la confirmación.",
+          "Antes de confirmar {{date}} a las {{time}}, indíqueme el teléfono del cliente. No cambiaré la fecha ni la hora mientras completo la reserva."
+        ],
+        "contact_identity_request": [
+          "Para reservar {{date}} a las {{time}}, necesito el nombre del cliente y un número de teléfono. Volveré a verificar exactamente ese horario antes de crear el Lead y la cita.",
+          "Mantengo seleccionados {{date}} a las {{time}}. Envíeme el nombre y teléfono del cliente para completar la reserva en la página.",
+          "Antes de confirmar {{date}} a las {{time}}, indíqueme nombre y teléfono. La fecha y la hora seleccionadas permanecerán fijas durante este paso."
+        ],
         "no_future_slots": [
           "No aparecen otros horarios verificados en la ventana actual. Puedo pedir que el equipo se comunique con usted o puede {{contact}}.",
           "En este momento la Agenda no muestra otra fecha que pueda prometerle. Si lo prefiere, podemos continuar por este chat o puede {{contact}}."
@@ -198,6 +230,22 @@
         "accept_recommendation": [
           "yes that one", "that works for me", "that time works", "perfect", "sounds good", "book it",
           "schedule it", "confirm it", "please reserve it", "i want that time", "i will take that time", "yes please"
+        ],
+        "correct_date": [
+          "the date is incorrect", "that is the wrong date", "that is not the date", "that is not the day",
+          "i do not want the appointment that day", "i do not want tuesday", "i want saturday",
+          "it is for saturday", "i said saturday", "keep saturday", "correct the date",
+          "change the date to saturday", "use saturday instead"
+        ],
+        "select_explicit_time": [
+          "at 11 like i said", "11 works for me", "11 is fine", "i want the 11 o clock time",
+          "i will take 11", "reserve the 11 o clock time", "confirm 11", "that time is fine",
+          "the time i said", "that time as i said"
+        ],
+        "provide_contact": [
+          "my phone number is", "my number is", "this is my phone", "you can call me at",
+          "my cell number is", "my email is", "the number for the appointment is",
+          "to confirm call", "use this phone number", "contact me at"
         ],
         "decline_appointment": [
           "no thanks", "i do not want an appointment", "i no longer want the appointment", "i would rather not schedule",
@@ -283,6 +331,21 @@
         "exact_available": [
           "{{time}} is available and verified{{location}}. Would you like me to prepare the appointment?",
           "The Agenda confirms that {{time}} is still available{{location}}. Shall I reserve it for you?"
+        ],
+        "date_correction_ack": [
+          "Thank you for correcting the date. I will keep the appointment on {{date}} and discard the previous date.",
+          "Understood: the correct date is {{date}}. I will not use the previous day again.",
+          "Got it. We will continue only with {{date}}."
+        ],
+        "contact_phone_request": [
+          "To reserve {{date}} at {{time}}, please send me a phone number. The Agenda will revalidate that exact time before creating the Lead and appointment.",
+          "I am keeping {{date}} at {{time}} selected. I only need a phone number to create the Lead, reserve the website time and send confirmation.",
+          "Before I confirm {{date}} at {{time}}, please provide the customer phone number. I will not change the selected date or time during this step."
+        ],
+        "contact_identity_request": [
+          "To reserve {{date}} at {{time}}, I need the customer name and phone number. I will revalidate that exact time before creating the Lead and appointment.",
+          "I am keeping {{date}} at {{time}} selected. Please send the customer name and phone number so I can complete the website reservation.",
+          "Before confirming {{date}} at {{time}}, please provide the name and phone number. The selected date and time will remain fixed during this step."
         ],
         "no_future_slots": [
           "No other verified times appear in the current window. I can ask the team to contact you, or you can {{contact}}.",

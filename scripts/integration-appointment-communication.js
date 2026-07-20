@@ -9,6 +9,7 @@ const {
   normalizeAvailability
 } = require('../src/services/dealer-availability-service');
 const {
+  NEXA_APPOINTMENT_STATE_MACHINE_V2,
   NEXA_CONTEXTUAL_TIME_SELECTION_V1,
   NEXA_PRO_APPOINTMENT_COMMUNICATION_V1,
   appointmentConfirmation,
@@ -16,6 +17,7 @@ const {
 } = require('../src/services/appointment-communication-service');
 const {
   NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1,
+  NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2,
   classifyAppointmentMessage,
   libraryStatistics
 } = require('../src/services/appointment-communication-library-service');
@@ -82,11 +84,15 @@ test('professional appointment communication contract marker is present', functi
   assert.equal(NEXA_PRO_APPOINTMENT_COMMUNICATION_V1, 'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1');
   assert.equal(NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1, 'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1');
   assert.equal(NEXA_CONTEXTUAL_TIME_SELECTION_V1, 'NEXA_CONTEXTUAL_TIME_SELECTION_V1');
+  assert.equal(NEXA_APPOINTMENT_STATE_MACHINE_V2, 'NEXA_APPOINTMENT_STATE_MACHINE_V2');
   assert.equal(NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1, 'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1');
+  assert.equal(NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2, 'NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2');
   const summary = libraryStatistics();
   assert.deepEqual(summary.locales, ['en', 'es']);
-  assert.ok(summary.phrases >= 300);
-  assert.ok(summary.templates >= 68);
+  assert.equal(summary.state_contract, 'NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2');
+  assert.equal(summary.intents, 40);
+  assert.ok(summary.phrases >= 371);
+  assert.ok(summary.templates >= 90);
 });
 
 test('day inquiry states dealer hours, every verified option and a convenience question', function () {
@@ -318,6 +324,7 @@ test('reported Saturday typo changes the active date to Saturday July 25 instead
     store_id: 'store-somerset',
     verified_open_slots: [
       { slot_id: 'tuesday-1000', store_id: 'store-somerset', start_at: fixed(21, 10), available: true },
+      { slot_id: 'tuesday-1100', store_id: 'store-somerset', start_at: fixed(21, 11), available: true },
       { slot_id: 'saturday-1000', store_id: 'store-somerset', start_at: fixed(25, 10), available: true },
       { slot_id: 'saturday-1030', store_id: 'store-somerset', start_at: fixed(25, 10, 30), available: true },
       { slot_id: 'saturday-1100', store_id: 'store-somerset', start_at: fixed(25, 11), available: true }
@@ -349,6 +356,34 @@ test('reported Saturday typo changes the active date to Saturday July 25 instead
   assert.equal(selection.shouldCreate, true);
   assert.equal(selection.selectedSlot.id, 'saturday-1100');
   assert.equal(localDateKey(selection.selectedSlot.start), '2026-07-25');
+});
+
+test('a stale Tuesday contact prompt cannot override the corrected Saturday at the same 11 AM time', function () {
+  const reference = new Date(2026, 6, 20, 17, 23, 0, 0);
+  function fixed(day, hour, minute) { return new Date(2026, 6, day, hour, minute || 0, 0, 0).toISOString(); }
+  const payload = {
+    store_id: 'store-somerset',
+    verified_open_slots: [
+      { slot_id: 'duplicate-tuesday-1100', store_id: 'store-somerset', start_at: fixed(21, 11), available: true },
+      { slot_id: 'correct-saturday-1000', store_id: 'store-somerset', start_at: fixed(25, 10), available: true },
+      { slot_id: 'correct-saturday-1030', store_id: 'store-somerset', start_at: fixed(25, 10, 30), available: true },
+      { slot_id: 'correct-saturday-1100', store_id: 'store-somerset', start_at: fixed(25, 11), available: true }
+    ]
+  };
+  const correctedSlots = normalizeAvailability(payload, { auto_appointments_min_notice_hours: 0, auto_appointments_max_days: 30, auto_appointments_duration_minutes: 30 }, reference);
+  const messages = [
+    { direction: 'inbound', body: 'la fecha esta incorrecta es el sabado a las 11', sent_at: fixed(20, 17, 20) },
+    { direction: 'outbound', body: 'Antes de completar la cita para martes, 21 de julio de 2026 a las 11:00 AM, necesito el nombre y teléfono.', sent_at: fixed(20, 17, 20) },
+    { direction: 'inbound', body: 'que no quiero cita para el dia 21 que quiero para el sabado', sent_at: fixed(20, 17, 22) },
+    { direction: 'outbound', body: 'Las horas verificadas para sábado, 25 de julio son 10:00 AM, 10:30 AM y 11:00 AM. ¿Cuál le reservo?', sent_at: fixed(20, 17, 22) },
+    { direction: 'inbound', body: 'a las 11 como te dije', sent_at: fixed(20, 17, 23) }
+  ];
+  const plan = appointmentConversationPlan({ payload: payload, slots: correctedSlots, conversation: { messages: messages }, message: messages[4].body, locale: 'es', referenceDate: reference });
+  assert.equal(plan.decision, 'select_slot');
+  assert.equal(plan.shouldCreate, true);
+  assert.equal(plan.selectedSlot.id, 'correct-saturday-1100');
+  assert.equal(localDateKey(plan.selectedSlot.start), '2026-07-25');
+  assert.notEqual(plan.selectedSlot.id, 'duplicate-tuesday-1100');
 });
 
 test('reported conversation remains locked to appointments and recommends verified Agenda alternatives', function () {

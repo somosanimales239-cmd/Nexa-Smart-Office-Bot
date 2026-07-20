@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.12
+
+- Added a date-scoped appointment conversation state machine so a repeated hour cannot select a slot from another day.
+- Made the newest customer date correction invalidate stale pending contact requests and older dealer offers.
+- Expanded the English/Spanish appointment library from 304 phrases, 34 intents and 72 templates to 371 phrases, 40 intents and 90 templates.
+- Added professional date-correction acknowledgements plus phone-only and name-plus-phone collection replies.
+- Extracts phone/email from any inbound appointment message and keeps the customer name supplied by the website thread.
+- Sends `thread_id` in the guarded appointment POST and permits thread-derived Lead creation without a listing ID.
+- Added discovery aliases for `lead-appointment-create`, `nexa-appointment-create` and `appointment-create-from-thread`.
+- Requires the remote response to confirm an appointment/Lead identifier and a reserved slot before local confirmation.
+- Captures remote Lead/order IDs, source metadata and Lead URL in the automatic-action audit record.
+- Added exact communication and automatic-action regressions for the reported July 20 Tuesday/Saturday failure.
+
 ## 1.6.11
 
 - Rewrote the customer-contact prompt without an apostrophe embedded inside a differently quoted JavaScript string.

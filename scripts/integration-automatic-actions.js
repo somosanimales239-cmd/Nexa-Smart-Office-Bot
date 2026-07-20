@@ -38,7 +38,7 @@ const apiService = {
   async createRemoteAppointment(payload) {
     remoteAppointmentBody = payload;
     calendarPayload = { appointment_count: 1, verified_open_slots: 0, stores: [{ store_id: 'store-1', store_name: 'Main dealership', days: [{ date: payload.appointment_date, appointments: [{ appointment_id: 'remote-appt-v6', listing_id: payload.listing_id, customer_name: payload.customer_name, appointment_time: payload.appointment_time, appointment_status: 'scheduled', source: 'software' }] }] }] };
-    return { payload: { appointment_id: 'remote-appt-v6', appointment_status: 'scheduled' } };
+    return { raw: { ok: true, resource: 'appointment-create' }, payload: { order_id: 'ord-nexa-v6', lead_id: 'ord-nexa-v6', appointment_id: 'remote-appt-v6', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: payload.thread_id, customer_name: payload.customer_name, customer_phone: payload.customer_phone, appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled', reserved: true, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-nexa-v6' } };
   }
 };
 const settingsService = {
@@ -242,7 +242,7 @@ async function run() {
   const contactRequestResult = await service.runNow('test-missing-contact-request');
   assert.equal(contactRequestResult.appointments_created, 0);
   assert.equal(contactRequestResult.messages_sent, 1, 'Missing identity must produce a customer-facing request instead of stopping silently.');
-  assert.match(sentMessages[0].body, /nombre del cliente|customer name/i);
+  assert.match(sentMessages[0].body, /nombre del cliente|nombre y teléfono|customer name/i);
   assert.match(sentMessages[0].body, /11:00 AM/i);
   assert.equal(notifications.filter((item) => item.title === 'Automatic appointment needs attention').length, attentionBefore, 'Missing identity should be a recoverable conversation step, not a terminal error notification.');
 
@@ -293,15 +293,80 @@ async function run() {
   const remoteResult = await service.runNow('test-v6-remote-appointment');
   assert.equal(remoteResult.appointments_created, 1);
   assert.deepEqual(remoteAppointmentBody, {
-    listing_id: 'listing-77', customer_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com',
+    thread_id: 'thread-v6', listing_id: 'listing-77', customer_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com',
     customer_location: 'Miami, FL', appointment_date: remoteDateKey, appointment_time: '14:30',
-    notes: 'Customer appointment created by Nexa guarded automatic actions with explicit user authorization.'
+    notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
   });
   assert.equal(calendarFetchCount, 2, 'Dealer Agenda calendar must refresh before evaluation and immediately after website creation.');
   const websiteCalendar = database.listIntegrationCache('dealer-agenda-calendar', '', 20);
   assert(websiteCalendar.some((item) => item.appointment_id === 'remote-appt-v6'));
   assert.equal(service.getState().readiness.dealer_agenda_calendar_scope, true);
   assert.equal(service.getState().readiness.appointment_create_scope, true);
+
+  const correctedSaturday = new Date(2026, 6, 25, 11, 0, 0, 0);
+  const correctedTuesday = new Date(2026, 6, 21, 11, 0, 0, 0);
+  availabilityPayload = {
+    store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '13500 Intrepid Lane, Fort Myers, Florida 33913',
+    verified_open_slots: [
+      { slot_id: 'wrong-tuesday-1100', store_id: 'store-1', start_at: correctedTuesday.toISOString(), available: true },
+      { slot_id: 'correct-saturday-1000', store_id: 'store-1', start_at: new Date(2026, 6, 25, 10, 0, 0, 0).toISOString(), available: true },
+      { slot_id: 'correct-saturday-1030', store_id: 'store-1', start_at: new Date(2026, 6, 25, 10, 30, 0, 0).toISOString(), available: true },
+      { slot_id: 'correct-saturday-1100', store_id: 'store-1', start_at: correctedSaturday.toISOString(), available: true }
+    ]
+  };
+  calendarPayload = { stores: [{ store_id: 'store-1', days: [{ date: '2026-07-25', available_slots: [
+    { slot_id: 'correct-saturday-1000', start_time: '10:00', end_time: '10:30', available: true },
+    { slot_id: 'correct-saturday-1030', start_time: '10:30', end_time: '11:00', available: true },
+    { slot_id: 'correct-saturday-1100', start_time: '11:00', end_time: '11:30', available: true }
+  ] }] }], appointment_count: 0, verified_open_slots: 3 };
+  remoteAppointmentBody = null;
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_create_remote: '1', auto_appointments_send_confirmation: '1', auto_appointments_require_contact: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-date-correction', subject: 'Corrected Saturday appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function correctedDateNeedsPhone(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Corrected Saturday appointment', participant_name: 'Maria Customer', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'wrong-contact-prompt', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: 'Antes de completar la cita para martes, 21 de julio de 2026 a las 11:00 AM, necesito el nombre del cliente y un teléfono.', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'correct-date-exact', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Maria Customer', body: 'la fecha esta incorrecta es el sabado a las 11', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+      ]
+    };
+  };
+  const correctedPromptResult = await service.runNow('test-date-correction-phone-prompt');
+  assert.equal(correctedPromptResult.appointments_created, 0);
+  assert.equal(correctedPromptResult.messages_sent, 1);
+  const correctedPhonePrompt = sentMessages[sentMessages.length - 1].body;
+  assert.match(correctedPhonePrompt, /sábado, 25 de julio/i);
+  assert.match(correctedPhonePrompt, /11:00 AM/i);
+  assert.match(correctedPhonePrompt, /teléfono|telefono|phone/i);
+  assert.doesNotMatch(correctedPhonePrompt, /martes, 21 de julio/i);
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const correctedPhoneAt = new Date().toISOString();
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-date-correction', subject: 'Corrected Saturday appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function correctedDatePhoneProvided(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Corrected Saturday appointment', participant_name: 'Maria Customer', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'wrong-contact-prompt', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: 'Antes de completar la cita para martes, 21 de julio de 2026 a las 11:00 AM, necesito el nombre del cliente y un teléfono.', sent_at: new Date(Date.now() - 240000).toISOString(), is_read: 1 },
+        { message_id: 'correct-date-exact', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Maria Customer', body: 'la fecha esta incorrecta es el sabado a las 11', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
+        { message_id: 'corrected-phone-prompt', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: correctedPhonePrompt, sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'corrected-phone', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Maria Customer', body: 'mi teléfono es 239-555-0199', sent_at: correctedPhoneAt, is_read: 0 }
+      ]
+    };
+  };
+  const correctedDateResult = await service.runNow('test-date-correction-thread-lead');
+  assert.equal(correctedDateResult.appointments_created, 1, 'The corrected Saturday selection must create one appointment Lead.');
+  assert.equal(remoteAppointmentBody.thread_id, 'thread-date-correction');
+  assert.equal(remoteAppointmentBody.appointment_date, '2026-07-25');
+  assert.equal(remoteAppointmentBody.appointment_time, '11:00');
+  assert.equal(remoteAppointmentBody.customer_phone, '2395550199');
+  assert.equal(remoteAppointmentBody.customer_name, 'Maria Customer');
+  assert.equal(remoteAppointmentBody.listing_id, '');
+  const savedCorrectedAppointment = database.listAppointments('Maria Customer').find((item) => new Date(item.start_at).getDate() === 25 && new Date(item.start_at).getHours() === 11);
+  assert.ok(savedCorrectedAppointment);
+  assert.match(sentMessages[sentMessages.length - 1].body, /sábado, 25 de julio/i);
+  assert.doesNotMatch(sentMessages[sentMessages.length - 1].body, /martes, 21 de julio/i);
 
   sentMessages = [];
   saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '1' });
@@ -320,11 +385,12 @@ async function run() {
   assert.equal(declineResult.messages_sent, 1);
   assert.match(sentMessages[0].body, /no problem|leave the appointment unscheduled/i);
   assert.match(sentMessages[0].body, /239-555-0100/);
-  assert.match(sentMessages[0].body, /100 Main Street/);
+  assert.match(sentMessages[0].body, /100 Main Street|13500 Intrepid Lane/);
   assert.match(sentMessages[0].body, /same chat/i);
 
   const state = service.getState();
-  assert.equal(state.invariants.never_changes_customer_records, true);
+  assert.equal(state.invariants.never_edits_existing_customer_records, true);
+  assert.equal(state.invariants.appointment_lead_creation_requires_authorization, true);
   assert.equal(state.invariants.never_deletes_data, true);
   assert.ok(notifications.length >= 2);
   database.close();

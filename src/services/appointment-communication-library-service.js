@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const library = require('../data/appointment-communication-library.json');
 
 const NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1 = 'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1';
+const NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2 = 'NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function normalize(value) {
@@ -30,9 +31,21 @@ function bestPhraseMatch(source, phrases) {
   return best;
 }
 
+function stateAwareIntent(source, appointmentContextActive) {
+  const context = Boolean(appointmentContextActive) || /\b(cita|appointment|agendar|reservar|schedule|book)\b/.test(source);
+  if (!context) return null;
+  const correctsDate = /\b(fecha (?:esta |es )?incorrecta|esa no es la fecha|ese no es el dia|corrige la fecha|cambia la fecha|dije (?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)|no quiero .*(?:dia|lunes|martes|miercoles|jueves|viernes|sabado|domingo).*quiero|wrong date|date is incorrect|that is not the (?:date|day)|correct the date|change the date|i said (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|i do not want .* i want)\b/.test(source);
+  if (correctsDate) return { matched: true, intent: 'correct_date', confidence: 0.995, phrase: 'state-aware date correction' };
+  const selectsTime = /\b(?:a las?|at)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b.*\b(como te dije|la hora que te dije|esta bien|me sirve|me conviene|as i said|the time i said|works|is fine)\b/.test(source);
+  if (selectsTime) return { matched: true, intent: 'select_explicit_time', confidence: 0.99, phrase: 'state-aware time selection' };
+  return null;
+}
+
 function classifyAppointmentMessage(message, locale, appointmentContextActive) {
   const source = normalize(message);
   if (!source) return { matched: false, intent: 'none', confidence: 0, phrase: '', locale: locale === 'es' ? 'es' : 'en' };
+  const stateIntent = stateAwareIntent(source, appointmentContextActive);
+  if (stateIntent) return Object.assign({ locale: locale === 'es' ? 'es' : 'en' }, stateIntent);
   const locales = locale === 'es' ? ['es', 'en'] : ['en', 'es'];
   let best = null;
   locales.forEach(function inspectLocale(candidateLocale) {
@@ -182,11 +195,12 @@ function libraryStatistics() {
     Object.values(data.intents || {}).forEach(function countPhrases(values) { phrases += values.length; });
     Object.values(data.responses || {}).forEach(function countTemplates(values) { templates += values.length; });
   });
-  return { contract: library.contract, version: library.version, locales: library.supported_locales.slice(), intents: intents, phrases: phrases, templates: templates };
+  return { contract: library.contract, state_contract: library.state_contract || '', version: library.version, locales: library.supported_locales.slice(), intents: intents, phrases: phrases, templates: templates };
 }
 
 module.exports = {
   NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1,
+  NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2,
   appointmentResponse,
   appointmentTopicActive,
   classifyAppointmentMessage,

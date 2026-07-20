@@ -47,10 +47,12 @@ Version 1.6.8 combines the separate English/Spanish appointment communication li
 
 Version 1.6.10 makes missing appointment identity recoverable. When the selected slot is valid but the website thread does not expose a customer name, phone or email, Nexa asks for those details in the same conversation instead of ending with an internal-only error. The exact selected date/time remains pending, is revalidated when the customer answers, and is then created and confirmed. If it changed, Nexa offers current verified alternatives. Common Spanish weekday typos and morning/tomorrow ambiguity are also resolved before slot selection.
 
+Version 1.6.12 uses a date-scoped appointment state machine. The newest customer correction becomes the active date, and a time mentioned on several days can be selected only inside that active date. A stale contact request is cancelled when the customer corrects the date or time. If the message thread already supplies the customer name, Nexa asks only for a phone number; the customer may also include that phone in the same message as the selected time. With website appointment creation authorized, Nexa sends `thread_id`, phone, date and time to create one Lead, verifies that the website reserved the slot, reloads Dealer Agenda and only then confirms the appointment.
+
 ## Notification navigation
 
 Opening an in-app or Windows notification routes to the related conversation, appointment, task, lead, contact, listing or appropriate fallback area.
 
 ## Hard boundaries
 
-Nexa does not automatically edit contacts, leads, orders, reseller records or customer profiles. It does not automatically delete messages, appointments, records, files or database content. Sensitive conversations remain subject to human review.
+Nexa does not automatically edit existing contacts, leads, orders, reseller records or customer profiles. An explicitly authorized confirmed appointment may create one new website Lead through `appointment-create`. Nexa does not automatically delete messages, appointments, records, files or database content. Sensitive conversations remain subject to human review.

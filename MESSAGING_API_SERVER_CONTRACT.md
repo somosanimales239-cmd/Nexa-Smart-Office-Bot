@@ -156,7 +156,7 @@ X-Nexa-Api-Key: API_KEY
 
 The safe response may contain stores, weekly schedules, blocked dates, daily open slots and appointments. Nexa replaces the old local snapshot after every successful read.
 
-## Optional remote appointment creation
+## Authorized appointment Lead creation from a conversation
 
 ```http
 POST /api/v1/index.php?resource=appointment-create
@@ -168,18 +168,17 @@ Idempotency-Key: AUTO_APPOINTMENT_KEY
 
 ```json
 {
-  "listing_id": "listing-45",
-  "customer_name": "Customer Name",
-  "customer_phone": "2395550100",
-  "customer_email": "customer@example.com",
-  "customer_location": "Miami, FL",
-  "appointment_date": "2026-07-20",
-  "appointment_time": "10:00",
-  "notes": "Customer appointment created by Nexa under explicit user authorization."
+  "thread_id": "msg_123",
+  "appointment_date": "2026-07-24",
+  "appointment_time": "10:30",
+  "customer_phone": "7865553333",
+  "notes": "Customer confirmed appointment through Nexa Smart Office Bot."
 }
 ```
 
-The server must verify that the listing belongs to the reseller when applicable, that the slot is still available, create at most one appointment for the idempotency key and return the appointment ID. Nexa then immediately reads `dealer-agenda-calendar` again.
+When the thread does not provide enough context, Nexa may also send `listing_id`, `customer_name`, `customer_email` and `customer_location`. Discovery may advertise `appointment-create` or the aliases `lead-appointment-create`, `nexa-appointment-create` and `appointment-create-from-thread`.
+
+The server must resolve the conversation, verify that the slot is still available, create at most one Lead/appointment for the idempotency key and reserve the Agenda slot. A successful response should provide `lead_id`/`order_id`, `appointment_id`, `source`, `source_context`, `thread_id`, customer details, date/time, `appointment_status`, `reserved` and `lead_url`. Nexa requires an identifier and a non-false reservation result, then immediately reads `dealer-agenda-calendar` again before confirming the appointment.
 
 ## Recommended errors
 
