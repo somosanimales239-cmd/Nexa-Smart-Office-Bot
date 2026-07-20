@@ -1,9 +1,9 @@
-Nexa Smart Office Bot 1.6.7 Validation Report
+Nexa Smart Office Bot 1.6.8 Validation Report
 
 Package feature
-Dedicated bilingual appointment communication library with topic locking,
-date/time preference memory, Agenda-ranked closing, verified alternatives,
-explicit slot selection and local conflict protection.
+Live V6 Dealer Appointment Agenda synchronization and guarded website creation,
+combined with bilingual topic-locked appointment communication, verified
+alternatives and local/website collision protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -18,10 +18,10 @@ Validation scope
 - Nexa contract gate
 - JavaScript syntax
 - 28 core SQLite and business integration tests
-- 22 API synchronization and notification tests
+- 25 API synchronization and notification tests
 - Complete workspace reflection
 - 9 real-time messaging tests
-- 12 automotive Knowledge tests, including live schedules
+- 13 automotive Knowledge tests, including live schedules and website-calendar conflicts
 - 14 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
@@ -36,6 +36,8 @@ Appointment communication regression verified
 - Requested day and after-7 preference survive the complete conversation.
 - The nearest next-day slot and a later exact preference match can be offered.
 - The endpoint and dealer-appointment-availability:read scope are discovered.
+- The dealer-agenda-calendar endpoint/read scope and appointment-create endpoint/write
+  scope are discovered from every documented V6 connection-map field.
 - Requests include from=YYYY-MM-DD and days=14.
 - Weekly schedule, blocked/off dates, open dates, booked times and verified slots
   survive the safety filter while undocumented private fields do not.
@@ -48,6 +50,11 @@ Appointment communication regression verified
 - A simple availability question cannot create an appointment.
 - A short contextual selection can create only its exact verified slot.
 - A booked or locally occupied time is never used for a new appointment.
+- A booked website-calendar time is never offered or created.
+- Website creation uses the exact V6 date/time/customer request body and requires
+  appointment-create:write.
+- After successful website creation the Dealer Agenda calendar is refreshed
+  immediately and the local read cache is replaced.
 - Authorized appointments are saved to the local Agenda when remote creation is
   unavailable or disabled.
 

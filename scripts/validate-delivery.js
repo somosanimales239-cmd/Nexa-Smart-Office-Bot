@@ -19,6 +19,7 @@ const requiredFiles = [
   'src/services/ai-service.js',
   'src/services/automatic-actions-service.js',
   'src/services/dealer-availability-service.js',
+  'src/services/dealer-agenda-calendar-service.js',
   'src/services/appointment-communication-service.js',
   'src/services/appointment-communication-library-service.js',
   'src/data/appointment-communication-library.json',

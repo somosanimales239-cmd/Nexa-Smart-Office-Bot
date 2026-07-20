@@ -13,14 +13,17 @@ Each resource displays:
 - Last successful synchronization.
 - Exact last error.
 
-Important resources for version 1.6.7 include:
+Important resources for version 1.6.8 include:
 
 - `messages`
 - `message-thread`
 - `message-send`
 - `message-read`
 - `dealer-appointment-availability`
+- `dealer-agenda-calendar`
 - `appointment-create` when supported
+
+`appointment-create` is write-only and is never called during read synchronization. AI Control reports its endpoint and `appointment-create:write` scope separately.
 
 Examples:
 

@@ -3,13 +3,14 @@
 const crypto = require('node:crypto');
 const { resourcePlan, stableHash } = require('./automarket-api-service');
 const { availabilityCacheItems, availabilityItemCount } = require('./dealer-availability-service');
+const { calendarCacheItems, calendarItemCount } = require('./dealer-agenda-calendar-service');
 
 const NEXA_SMART_NOTIFICATIONS_V1 = 'NEXA_SMART_NOTIFICATIONS_V1';
 const NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2 = 'NEXA_CONNECTED_BUSINESS_FULL_SYNC_V2';
 const DEFAULT_RESOURCES = [
   'store', 'dealer-summary', 'listings', 'orders', 'agenda', 'messages', 'resellers',
   'reseller-profile', 'reseller-summary', 'reseller-listings', 'reseller-appointments',
-  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status', 'dealer-appointment-availability'
+  'admin-summary', 'stores', 'users', 'validation', 'api-keys-status', 'dealer-appointment-availability', 'dealer-agenda-calendar'
 ];
 
 function nowIso() {
@@ -31,6 +32,7 @@ function listFromPayload(payload) {
 
 function cacheItemsFromPayload(resource, payload) {
   if (resource === 'dealer-appointment-availability') return availabilityCacheItems(payload);
+  if (resource === 'dealer-agenda-calendar') return calendarCacheItems(payload);
   const list = listFromPayload(payload);
   if (list.length) return list;
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) return [payload];
@@ -39,6 +41,7 @@ function cacheItemsFromPayload(resource, payload) {
 
 function resourceItemCount(payload, resource) {
   if (resource === 'dealer-appointment-availability') return availabilityItemCount(payload);
+  if (resource === 'dealer-agenda-calendar') return calendarItemCount(payload);
   if (Array.isArray(payload)) return payload.length;
   const list = listFromPayload(payload);
   if (list.length) return list.length;
@@ -583,7 +586,7 @@ class NotificationService {
       orders: 'New order activity', messages: 'New message activity', resellers: 'New reseller activity',
       agenda: 'Agenda update', listings: 'Listing update', 'dealer-summary': 'Dealer dashboard update',
       'reseller-summary': 'Reseller dashboard update', 'reseller-appointments': 'Reseller appointment update',
-      'reseller-listings': 'Assigned listing update', 'dealer-appointment-availability': 'Dealer appointment availability', 'admin-summary': 'Platform summary update',
+      'reseller-listings': 'Assigned listing update', 'dealer-appointment-availability': 'Dealer appointment availability', 'dealer-agenda-calendar': 'Dealer Agenda calendar', 'admin-summary': 'Platform summary update',
       stores: 'Store activity', users: 'User activity', validation: 'Dealer validation activity',
       store: 'Store profile update', 'reseller-profile': 'Reseller profile update'
     };

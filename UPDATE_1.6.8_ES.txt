@@ -1,0 +1,45 @@
+NEXA SMART OFFICE BOT 1.6.8
+ACTUALIZACION DE AGENDA Y CITAS V6
+
+Este ZIP modifica solamente el software Nexa. No incluye ni reemplaza archivos de la pagina web.
+
+CAMBIOS PRINCIPALES
+
+1. Nexa lee del connection-map:
+   - dealer_appointment_availability_enabled
+   - dealer_agenda_calendar_enabled
+   - dealer_appointment_availability_endpoint
+   - dealer_agenda_calendar_endpoint
+   - appointment_create_enabled
+   - appointment_create_endpoint
+
+2. Sincroniza:
+   GET resource=dealer-appointment-availability&from=YYYY-MM-DD&days=14
+   GET resource=dealer-agenda-calendar&from=YYYY-MM-DD&days=14
+
+3. Knowledge y Agenda reciben horarios, dias off/bloqueados, slots abiertos y citas ocupadas de la pagina.
+
+4. Las horas ofrecidas al cliente se filtran contra las citas locales y las citas ya ocupadas en la pagina.
+
+5. Cuando el usuario autoriza crear citas en la pagina y la key tiene appointment-create:write, Nexa envia:
+   listing_id, customer_name, customer_phone, customer_email, customer_location,
+   appointment_date, appointment_time y notes.
+
+6. Despues de crear una cita, Nexa vuelve a leer dealer-agenda-calendar inmediatamente y actualiza la Agenda local.
+
+PERMISOS NECESARIOS
+
+- dealer-appointment-availability:read
+- dealer-agenda-calendar:read
+- appointment-create:write (para crear en la pagina)
+- messages:read
+- messages:write
+
+PASOS DESPUES DE INSTALAR
+
+1. Cree o rote la API Key con los permisos nuevos.
+2. En Nexa ejecute Test connection.
+3. Ejecute Sync now.
+4. En AI Control confirme que los dos endpoints de lectura y appointment-create aparecen Ready.
+
+La creacion automatica permanece desactivada por defecto y requiere autorizacion explicita en AI Control.

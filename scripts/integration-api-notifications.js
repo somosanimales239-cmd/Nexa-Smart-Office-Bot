@@ -9,6 +9,7 @@ const { SettingsService } = require('../src/services/settings-service');
 const {
   AutoMarketApiService,
   cleanBaseUrl,
+  deriveAppointmentCapabilities,
   deriveMessageCapabilities,
   resourcePlan,
   stableHash
@@ -53,7 +54,7 @@ settingsService.saveSettings({
   automarket_max_items: '100'
 });
 
-const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read', 'dealer-appointment-availability:read'];
+const dealerScopes = ['store:read', 'dealer:read', 'listings:read', 'orders:read', 'agenda:read', 'messages:read', 'messages:write', 'resellers:read', 'dealer-appointment-availability:read', 'dealer-agenda-calendar:read', 'appointment-create:write'];
 const openSlotDate = new Date(Date.now() + 2 * 86400000);
 openSlotDate.setHours(10, 0, 0, 0);
 const blockedDate = new Date(Date.now() + 3 * 86400000);
@@ -64,11 +65,17 @@ const responses = {
     ok: true,
     allowed_scopes: dealerScopes.slice(),
     permissions: dealerScopes.slice(),
-    allowed_endpoints: ['messages-thread','messages-send','messages-read'],
+    allowed_endpoints: ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
     messages_write_enabled: true,
     message_send_endpoint: 'message-send',
     two_way_chat_enabled: true,
-    data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers','dealer-appointment-availability'] }
+    dealer_appointment_availability_enabled: true,
+    dealer_appointment_availability_endpoint: 'dealer-appointment-availability',
+    dealer_agenda_calendar_enabled: true,
+    dealer_agenda_calendar_endpoint: 'dealer-agenda-calendar',
+    appointment_create_enabled: true,
+    appointment_create_endpoint: 'appointment-create',
+    data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'] }
   },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
   'dealer-summary': { ok: true, data: { total_listings: 5, active_listings: 4, unreviewed_orders: 1, agenda_contacts: 2, unread_messages: 2 } },
@@ -86,21 +93,31 @@ const responses = {
     blocked_dates: [dateKey(blockedDate)], open_dates: [dateKey(openSlotDate)], booked_times: [{ date: dateKey(openSlotDate), start_time: '11:00', status: 'booked' }],
     verified_open_slots: [{ slot_id: 'verified-slot-1', date: dateKey(openSlotDate), start_time: '10:00', end_time: '10:30', available: true, server_private_value: 'remove-me' }],
     assigned_listings: [{ listing_id: 'listing-1', listing_title: 'Vehicle One', server_private_value: 'remove-me' }], server_private_value: 'remove-me'
-  } }
+  } },
+  'dealer-agenda-calendar': { ok: true, data: {
+    from: dateKey(openSlotDate), days_count: 14, appointment_count: 1, verified_open_slots: 1,
+    stores: [{ store_id: 'store-7', store_name: 'Demo Motors', phone: '239-555-0100', weekly_schedule: { monday: { open: '09:00', close: '17:00' } }, blocked_dates: [dateKey(blockedDate)],
+      days: [{ date: dateKey(openSlotDate), is_open: true, available_slots: [{ slot_id: 'calendar-slot-1', start_time: '10:00', end_time: '10:30', available: true }],
+        appointments: [{ appointment_id: 'calendar-appt-1', customer_name: 'Calendar Customer', appointment_time: '11:00', appointment_status: 'scheduled', source: 'software', server_private_value: 'remove-me' }] }], private_store_value: 'remove-me' }],
+    server_private_value: 'remove-me'
+  } },
+  'appointment-create': { ok: true, data: { appointment_id: 'remote-contract-1', appointment_status: 'scheduled' } }
 };
 
 let requestedResources = [];
 let requestedQueries = [];
+let requestedOptions = [];
 let forcedFailures = {};
 const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.7');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.8');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
   requestedQueries.push({ resource: resource, query: Object.fromEntries(parsed.searchParams.entries()) });
+  requestedOptions.push({ resource: resource, method: options.method, body: options.body || '', idempotencyKey: options.headers['Idempotency-Key'] || '' });
   if (forcedFailures[resource]) {
     const failure = forcedFailures[resource];
     return {
@@ -154,6 +171,19 @@ const notificationService = new NotificationService({
     assert.equal(capabilities.markRead, true);
     assert.equal(capabilities.write, false);
   });
+  await test('appointment creation requires both the V6 endpoint and write scope', function () {
+    const ready = deriveAppointmentCapabilities({ scopes: ['dealer-agenda-calendar:read','appointment-create:write'] }, {
+      dealer_agenda_calendar_enabled: true, dealer_agenda_calendar_endpoint: 'dealer-agenda-calendar',
+      appointment_create_enabled: true, appointment_create_endpoint: 'appointment-create'
+    });
+    assert.equal(ready.calendarRead, true);
+    assert.equal(ready.createWrite, true);
+    const missingScope = deriveAppointmentCapabilities({ scopes: ['dealer-agenda-calendar:read'] }, { appointment_create_enabled: true, appointment_create_endpoint: 'appointment-create' });
+    assert.equal(missingScope.createEndpoint, true);
+    assert.equal(missingScope.createWrite, false);
+    const disabled = deriveAppointmentCapabilities({ scopes: ['appointment-create:write'] }, { appointment_create_enabled: false, appointment_create_endpoint: 'appointment-create' });
+    assert.equal(disabled.createWrite, false);
+  });
   await test('connection-map scopes are used when an older cached identity has an empty scope array', function () {
     const capabilities = deriveMessageCapabilities({ scopes: [] }, { scopes: ['Messages:Read','Messages:Write'], endpoints: ['messages-send'] });
     assert.equal(capabilities.read, true);
@@ -167,7 +197,7 @@ const notificationService = new NotificationService({
     assert.equal(result.identity.scopes.includes('messages:write'), true);
     assert.equal(result.identity.available_resources.includes('message-send'), true);
     assert.deepEqual(result.connectionMap.allowed_scopes, dealerScopes);
-    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read']);
+    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create']);
     assert.equal(result.connectionMap.messages_write_enabled, true);
     assert.equal(result.connectionMap.message_send_endpoint, 'message-send');
     assert.equal(result.connectionMap.two_way_chat_enabled, true);
@@ -178,15 +208,37 @@ const notificationService = new NotificationService({
     assert.equal(messageCapabilities.read, true);
     assert.equal(messageCapabilities.write, true);
     assert.equal(messageCapabilities.twoWayChat, true);
+    const appointmentCapabilities = deriveAppointmentCapabilities(result.identity, result.connectionMap);
+    assert.equal(appointmentCapabilities.availabilityRead, true);
+    assert.equal(appointmentCapabilities.calendarRead, true);
+    assert.equal(appointmentCapabilities.createWrite, true);
+    assert.equal(result.connectionMap.dealer_agenda_calendar_endpoint, 'dealer-agenda-calendar');
+    assert.equal(result.connectionMap.appointment_create_endpoint, 'appointment-create');
     assert.deepEqual(requestedResources, ['ping','connection-map']);
     assert(result.resources.some((entry)=>entry.resource === 'agenda'));
+  });
+  await test('appointment-create sends the exact V6 body and idempotency key', async function () {
+    requestedOptions = [];
+    const response = await apiService.createRemoteAppointment({
+      listing_id: 'listing-45', customer_name: 'Customer Name', customer_phone: '7865553333', customer_email: 'optional@example.com',
+      customer_location: 'Miami, FL', appointment_date: '2026-07-22', appointment_time: '10:30', notes: 'Customer wants to see the vehicle.',
+      thread_id: 'must-not-be-forwarded', start_at: 'must-not-be-forwarded'
+    }, 'appointment-v6-idempotency');
+    assert.equal(response.payload.appointment_id, 'remote-contract-1');
+    const request = requestedOptions.find((item)=>item.resource === 'appointment-create');
+    assert.equal(request.method, 'POST');
+    assert.equal(request.idempotencyKey, 'appointment-v6-idempotency');
+    assert.deepEqual(JSON.parse(request.body), {
+      listing_id: 'listing-45', customer_name: 'Customer Name', customer_phone: '7865553333', customer_email: 'optional@example.com',
+      customer_location: 'Miami, FL', appointment_date: '2026-07-22', appointment_time: '10:30', notes: 'Customer wants to see the vehicle.'
+    });
   });
   await test('first full synchronization loads every allowed dealer resource and diagnostics', async function () {
     requestedResources = [];
     const result = await notificationService.syncAutoMarket(false);
     assert.equal(result.ok, true);
     assert.equal(result.failureCount, 0);
-    ['ping','connection-map','store','dealer-summary','listings','orders','agenda','messages','resellers','dealer-appointment-availability'].forEach(function expected(resource) {
+    ['ping','connection-map','store','dealer-summary','listings','orders','agenda','messages','resellers','dealer-appointment-availability','dealer-agenda-calendar'].forEach(function expected(resource) {
       assert(requestedResources.includes(resource), 'resource not requested: ' + resource);
       const row = db.getIntegrationResourceStatus(resource);
       assert(row, 'missing inspector row: ' + resource);
@@ -197,10 +249,27 @@ const notificationService = new NotificationService({
     assert.equal(db.integrationCacheCount('agenda'), 2);
     assert.equal(db.integrationCacheCount('orders'), 1);
     assert.equal(db.integrationCacheCount('dealer-appointment-availability'), 2);
+    assert.equal(db.integrationCacheCount('dealer-agenda-calendar'), 2);
     const availabilityRequest = requestedQueries.find(function findRequest(item) { return item.resource === 'dealer-appointment-availability'; });
     assert.match(availabilityRequest.query.from, /^20\d{2}-\d{2}-\d{2}$/);
     assert.equal(availabilityRequest.query.days, '14');
     assert.equal(availabilityRequest.query.limit, '100');
+    const calendarRequest = requestedQueries.find(function findRequest(item) { return item.resource === 'dealer-agenda-calendar'; });
+    assert.match(calendarRequest.query.from, /^20\d{2}-\d{2}-\d{2}$/);
+    assert.equal(calendarRequest.query.days, '14');
+  });
+  await test('dealer Agenda calendar keeps verified schedule and appointments while removing private fields', function () {
+    const cached = db.listIntegrationCache('dealer-agenda-calendar', '', 10);
+    const snapshot = cached.find(function findSnapshot(item) { return item.record_type === 'calendar_snapshot'; });
+    const appointment = cached.find(function findAppointment(item) { return item.record_type === 'calendar_appointment'; });
+    assert.equal(snapshot.stores[0].store_name, 'Demo Motors');
+    assert.equal(snapshot.stores[0].blocked_dates[0], dateKey(blockedDate));
+    assert.equal(snapshot.stores[0].private_store_value, undefined);
+    assert.equal(snapshot.server_private_value, undefined);
+    assert.equal(appointment.appointment_id, 'calendar-appt-1');
+    assert.equal(appointment.customer_name, 'Calendar Customer');
+    assert.equal(appointment.server_private_value, undefined);
+    assert.match(appointment.start_at, /^20\d{2}-\d{2}-\d{2}T11:00/);
   });
   await test('dealer availability keeps schedules, off dates and verified slots while removing private fields', function () {
     const cached = db.listIntegrationCache('dealer-appointment-availability', '', 10);

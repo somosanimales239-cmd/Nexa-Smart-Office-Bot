@@ -441,6 +441,15 @@ function agendaEvents() {
       events.push({ id:remoteItemId(resource,item,index), kind:'connected', resource:resource, source:resource==='orders'?'Website order':'Reseller appointment', title:item.customer_name || item.listing_title || 'Connected appointment', detail:item.listing_title || item.store_name || item.dealer_name || '', status:item.appointment_status || item.status || item.sale_status || 'Pending', date:date, local:false, item:item });
     });
   });
+  integrationRemote('dealer-agenda-calendar').filter(function calendarAppointment(item) {
+    if (!item || item.record_type !== 'calendar_appointment') return false;
+    return !state.appointments.some(function localCopy(local) {
+      return String(local.remote_appointment_id || '') && String(local.remote_appointment_id) === String(item.appointment_id || item.id || '');
+    });
+  }).forEach(function connectedCalendar(item,index) {
+    const date = remoteAppointmentDate(item); if (!date) return;
+    events.push({ id:remoteItemId('dealer-agenda-calendar',item,index), kind:'connected', resource:'dealer-agenda-calendar', source:'Dealer Agenda website', title:item.customer_name || item.listing_title || 'Dealer appointment', detail:item.store_name || item.customer_phone || item.listing_title || '', status:item.appointment_status || item.status || 'Scheduled', date:date, local:false, item:item });
+  });
   return events.sort(function sortEvents(a,b){ return a.date-b.date; });
 }
 
@@ -514,6 +523,16 @@ function availabilitySlotsRemote() {
     if (Array.isArray(snapshot[key])) return snapshot[key];
   }
   return [];
+}
+
+function dealerAgendaSnapshotRemote() {
+  return integrationRemote('dealer-agenda-calendar').find(function snapshot(item) {
+    return item && (item.record_type === 'calendar_snapshot' || Array.isArray(item.stores) || Array.isArray(item.days));
+  }) || null;
+}
+
+function dealerAgendaAppointmentsRemote() {
+  return integrationRemote('dealer-agenda-calendar').filter(function appointment(item) { return item && item.record_type === 'calendar_appointment'; });
 }
 
 function integrationResourceStatus(resource) {
@@ -715,10 +734,12 @@ function renderConversationBubbles() {
 function renderKnowledgeCenter() {
   const summary=state.knowledgeSummary||{};
   const liveSnapshot=availabilitySnapshotRemote();
+  const calendarSnapshot=dealerAgendaSnapshotRemote();
+  const calendarAppointments=dealerAgendaAppointmentsRemote();
   const liveSlots=availabilitySlotsRemote();
   const blockedDates=liveSnapshot&&Array.isArray(liveSnapshot.blocked_dates)?liveSnapshot.blocked_dates:liveSnapshot&&Array.isArray(liveSnapshot.off_dates)?liveSnapshot.off_dates:[];
   const openDates=liveSnapshot&&Array.isArray(liveSnapshot.open_dates)?liveSnapshot.open_dates:[];
-  const liveKnowledge=liveSnapshot?'<article class="panel-card"><div class="panel-header"><div><h3>Live Website Availability</h3><p>Dynamic Knowledge from dealer-appointment-availability. Every successful sync replaces old hours, off dates and appointment options.</p></div>'+badge('Verified website data','success')+'</div><div class="knowledge-summary-grid"><article><span>Dealer / Store</span><strong>'+esc(liveSnapshot.dealer_name||liveSnapshot.store_name||liveSnapshot.dealer_id||liveSnapshot.store_id||'Connected dealer')+'</strong><small>'+esc(liveSnapshot.location||liveSnapshot.address||'Location supplied by website')+'</small></article><article><span>Verified open slots</span><strong>'+esc(liveSlots.length)+'</strong><small>Offers same-day times, then the next available day</small></article><article><span>Blocked / off dates</span><strong>'+esc(blockedDates.length)+'</strong><small>Never offered as available</small></article><article><span>Special open dates</span><strong>'+esc(openDates.length)+'</strong><small>Overrides the regular weekly day</small></article></div></article>':'';
+  const liveKnowledge=liveSnapshot?'<article class="panel-card"><div class="panel-header"><div><h3>Live Website Availability + Dealer Agenda</h3><p>Dynamic Knowledge from dealer-appointment-availability and dealer-agenda-calendar. Every successful sync replaces old hours, off dates, booked appointments and open options.</p></div>'+badge(calendarSnapshot?'Both sources live':'Availability live',calendarSnapshot?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Dealer / Store</span><strong>'+esc(liveSnapshot.dealer_name||liveSnapshot.store_name||liveSnapshot.dealer_id||liveSnapshot.store_id||'Connected dealer')+'</strong><small>'+esc(liveSnapshot.location||liveSnapshot.address||'Location supplied by website')+'</small></article><article><span>Verified open slots</span><strong>'+esc(liveSlots.length)+'</strong><small>Filtered against website and local appointments</small></article><article><span>Blocked / off dates</span><strong>'+esc(blockedDates.length)+'</strong><small>Never offered as available</small></article><article><span>Website appointments</span><strong>'+esc(calendarAppointments.length)+'</strong><small>Read from Dealer Appointment Agenda</small></article></div></article>':'';
   const appointmentLibrary='<article class="panel-card"><div class="panel-header"><div><h3>Professional Appointment Communication</h3><p>A dedicated topic-locked library keeps the complete appointment context ahead of general automotive Knowledge and recommends only conflict-free verified Agenda slots.</p></div>'+badge('English + Spanish','success')+'</div><div class="knowledge-summary-grid"><article><span>Appointment phrases</span><strong>304</strong><small>Natural requests, corrections, alternatives and short follow-ups</small></article><article><span>Communication intents</span><strong>34</strong><small>Scheduling, same-day options, selections, declines and changes</small></article><article><span>Professional templates</span><strong>72</strong><small>Dynamic responses filled with live dates, hours and contact data</small></article><article><span>Closing strategy</span><strong>Agenda first</strong><small>Recommends the best verified time and asks for a clear selection</small></article></div></article>';
   const filtered=state.messageKnowledge.filter(function filterKnowledge(row){return remoteMatches(row,state.search); });
   const page=paginateItems(filtered,'message-knowledge');
@@ -776,7 +797,11 @@ function renderAgenda() {
   const list=page.items.map(function eventRow(event){ const action=event.local?(event.kind==='task'?'task-edit':event.kind==='appointment'?'appointment-edit':'agenda-noop'):'connected-detail'; const attrs=event.local?' data-record-id="'+esc(event.id)+'"':' data-resource="'+esc(event.resource)+'" data-item-id="'+esc(event.id)+'"'; return '<div class="agenda-work-item"><div class="agenda-date-block"><strong>'+event.date.toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</strong><span>'+event.date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></div><div><b>'+esc(event.title)+'</b><span>'+esc(event.detail||event.source)+'</span></div>'+badge(event.kind,'info')+badge(event.status||'scheduled')+'<button class="ghost-button" data-nexa-action="'+esc(action)+'"'+attrs+'>'+(event.local?'Open':'Details')+'</button></div>'; }).join('')||emptyMini('Nothing scheduled','Create a task, appointment or synchronize website appointments.');
   const label=state.agendaMode==='week'?'Week of '+formatDate(startOfWeek(anchor),false):anchor.toLocaleDateString(undefined,{month:'long',year:'numeric'});
   const controls='<div class="agenda-controls"><button class="ghost-button" data-nexa-action="agenda-prev">‹</button><button class="ghost-button" data-nexa-action="agenda-today">Today</button><button class="ghost-button" data-nexa-action="agenda-next">›</button><strong>'+esc(label)+'</strong><button class="'+(state.agendaMode==='month'?'primary-button':'ghost-button')+'" data-nexa-action="agenda-month">Month</button><button class="'+(state.agendaMode==='week'?'primary-button':'ghost-button')+'" data-nexa-action="agenda-week">Week</button></div>';
-  return sectionHeader('Agenda','A visual command center for local tasks, appointments, reminders and website appointments.','<div class="button-row"><button class="secondary-button" data-nexa-action="task-create">+ Task</button><button class="primary-button" data-nexa-action="appointment-create">+ Appointment</button></div>')+toolbar('Agenda items','appointment-create','appointment-search','new-appointment')+'<article class="panel-card calendar-panel">'+controls+calendar+'</article><article class="panel-card agenda-work-panel"><div class="panel-header"><div><h3>Organized work</h3><p>Everything with a date, in chronological order</p></div><strong>'+events.length+'</strong></div><div class="agenda-work-list">'+list+'</div>'+renderPagination(page,'agenda-list','agenda items')+'</article>';
+  const dealerCalendar=dealerAgendaSnapshotRemote();
+  const dealerAppointments=dealerAgendaAppointmentsRemote();
+  const dealerCalendarStatus=integrationResourceStatus('dealer-agenda-calendar');
+  const dealerAgendaCard='<article class="panel-card"><div class="panel-header"><div><h3>Dealer Appointment Agenda</h3><p>Live website calendar used by Knowledge and appointment collision protection.</p></div>'+badge(dealerCalendar?'Synchronized':'Not loaded',dealerCalendar?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Website appointments</span><strong>'+esc(dealerAppointments.length)+'</strong><small>Includes page and software-created appointments</small></article><article><span>Open slots reported</span><strong>'+esc(dealerCalendar&&dealerCalendar.verified_open_slots||0)+'</strong><small>Verified by the connected dealer</small></article><article><span>Calendar window</span><strong>'+esc(dealerCalendar&&dealerCalendar.days_count||14)+' days</strong><small>'+esc(dealerCalendar&&dealerCalendar.from||'Run Sync now to load')+'</small></article><article><span>Last website sync</span><strong>'+esc(dealerCalendarStatus&&dealerCalendarStatus.status||'pending')+'</strong><small>'+esc(dealerCalendarStatus&&dealerCalendarStatus.last_success_at?formatDate(dealerCalendarStatus.last_success_at):'No successful sync yet')+'</small></article></div></article>';
+  return sectionHeader('Agenda','A visual command center for local tasks, appointments, reminders and the live Dealer Appointment Agenda.','<div class="button-row"><button class="secondary-button" data-nexa-action="task-create">+ Task</button><button class="primary-button" data-nexa-action="appointment-create">+ Appointment</button></div>')+toolbar('Agenda items','appointment-create','appointment-search','new-appointment')+dealerAgendaCard+'<article class="panel-card calendar-panel">'+controls+calendar+'</article><article class="panel-card agenda-work-panel"><div class="panel-header"><div><h3>Organized work</h3><p>Everything with a date, in chronological order</p></div><strong>'+events.length+'</strong></div><div class="agenda-work-list">'+list+'</div>'+renderPagination(page,'agenda-list','agenda items')+'</article>';
 }
 
 function renderAI() {
@@ -1154,6 +1179,10 @@ function renderAIControl() {
     ['Two-way chat', readiness.two_way_chat_ready],
     ['Dealer availability endpoint', readiness.dealer_availability_endpoint],
     ['dealer-appointment-availability:read scope', readiness.dealer_availability_scope],
+    ['Dealer Agenda calendar endpoint', readiness.dealer_agenda_calendar_endpoint],
+    ['dealer-agenda-calendar:read scope', readiness.dealer_agenda_calendar_scope],
+    ['Appointment create endpoint', readiness.appointment_create_endpoint],
+    ['appointment-create:write scope', readiness.appointment_create_scope],
     ['Message limits available', readiness.rate_limit_available],
     ['Outside quiet hours', !readiness.in_quiet_hours]
   ].map(function readinessRow(entry) { return '<div class="automation-readiness-row"><span>' + esc(entry[0]) + '</span>' + badge(entry[1] ? 'Ready' : 'Blocked', entry[1] ? 'success' : 'warning') + '</div>'; }).join('');
@@ -1190,7 +1219,7 @@ function renderAIControl() {
       '<article class="panel-card"><div class="panel-header"><div><p class="eyebrow">AUTOMATIC APPOINTMENTS</p><h3>Dealer Appointment Availability</h3><p>Nexa explains verified daily hours, offers available times for that day, proposes the next available day when needed, and creates a calendar appointment only after the customer clearly selects a verified slot. A cordial decline includes dealer contact information.</p></div>' + badge(String(availability.length) + ' slots loaded', availability.length ? 'success' : 'warning') + '</div>' +
         '<div class="automation-grid">' +
           '<label>Automatic appointment creation<select name="auto_appointments_enabled">' + automationOption('0','Disabled',settings.auto_appointments_enabled) + automationOption('1','Enabled',settings.auto_appointments_enabled) + '</select></label>' +
-          '<label>Availability source<input name="auto_appointments_source" value="dealer-appointment-availability" readonly></label>' +
+          '<label>Live sources<input name="auto_appointments_source" value="availability + dealer agenda calendar" readonly></label>' +
           '<label>Offer open slots<select name="auto_appointments_offer_slots">' + automationOption('1','Yes',settings.auto_appointments_offer_slots) + automationOption('0','No',settings.auto_appointments_offer_slots) + '</select></label>' +
           '<label>Default duration<input name="auto_appointments_duration_minutes" type="number" min="10" max="480" value="' + esc(settings.auto_appointments_duration_minutes || '30') + '"><small>Minutes.</small></label>' +
           '<label>Minimum notice<input name="auto_appointments_min_notice_hours" type="number" min="0" max="168" value="' + esc(settings.auto_appointments_min_notice_hours || '2') + '"><small>Hours.</small></label>' +

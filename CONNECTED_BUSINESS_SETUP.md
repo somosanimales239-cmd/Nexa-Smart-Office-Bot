@@ -35,9 +35,11 @@ Nexa performs this sequence:
 - `messages:read`
 - `resellers:read`
 - `dealer-appointment-availability:read`
+- `dealer-agenda-calendar:read`
+- `appointment-create:write` for authorized website appointment creation
 - `messages:write` for manual or authorized automatic replies
 
-Recommended reseller keys should include `reseller-profile:read`, `reseller:read`, `reseller-listings:read`, `reseller-appointments:read`, `agenda:read`, `messages:read`, `messages:write` and `dealer-appointment-availability:read`.
+Recommended reseller keys should include `reseller-profile:read`, `reseller:read`, `agenda:read`, `messages:read`, `messages:write`, `dealer-appointment-availability:read`, `dealer-agenda-calendar:read` and `appointment-create:write`.
 
 The website may require a separate appointment-write scope for optional remote appointment creation.
 
@@ -52,7 +54,7 @@ For complete conversations and replies, the website should advertise:
 
 Nexa stores authorized conversation bodies locally and never includes API keys in AI context.
 
-Nexa 1.6.7 accepts `endpoints` / `allowed_endpoints`, `messages_write_enabled`, `message_send_endpoint`, `two_way_chat_enabled` and the plural aliases `messages-thread`, `messages-send` and `messages-read`. It discovers `dealer-appointment-availability`, requires `dealer-appointment-availability:read`, and synchronizes a rolling 14-day verified schedule. Scopes are compared case-insensitively. Saving a new URL or API key invalidates the cached discovery contract; run **Test connection** and **Sync now** to load the current key.
+Nexa 1.6.8 accepts `endpoints` / `allowed_endpoints`, the V6 appointment enable/endpoint fields and the plural message aliases. It discovers both appointment read resources, requires their exact scopes and synchronizes a rolling 14-day verified schedule/calendar. Scopes are compared case-insensitively. Saving a new URL or API key invalidates the cached discovery contract; run **Test connection** and **Sync now** to load the current key.
 
 ## Dealer Appointment Availability
 
@@ -65,6 +67,12 @@ Nexa calls `GET resource=dealer-appointment-availability&from=YYYY-MM-DD&days=14
 For optional website-side creation, the connection map must advertise:
 
 - `appointment-create`
+
+It must also grant `appointment-create:write`. After a successful POST, Nexa reloads `dealer-agenda-calendar` immediately so website and local Agenda state stay aligned.
+
+## Dealer Agenda Calendar
+
+Nexa calls `GET resource=dealer-agenda-calendar&from=YYYY-MM-DD&days=14`. It retains only documented safe schedule, blocked-date, slot and appointment fields. The synchronized appointments appear in Agenda, are added to AI/Knowledge context and prevent already occupied times from being recommended.
 
 Nexa leaves remote creation off by default. When it is unavailable, local calendar appointments continue to work.
 

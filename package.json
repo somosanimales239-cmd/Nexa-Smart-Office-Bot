@@ -1,7 +1,7 @@
 {
     "name": "nexa-smart-office-bot",
-    "version": "1.6.7",
-    "description": "Local-first smart office assistant with a dedicated bilingual appointment communication library, contextual closing from verified Agenda slots, automotive knowledge, AutoMarket Pro messages and notifications.",
+    "version": "1.6.8",
+    "description": "Local-first smart office assistant with live Dealer Agenda synchronization, guarded website appointment creation, bilingual appointment communication, automotive knowledge, messages and notifications.",
     "main": "main.js",
     "author": "Nexa",
     "license": "MIT",

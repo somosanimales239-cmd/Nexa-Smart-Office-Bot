@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.8
+
+- Added `dealer-agenda-calendar` discovery, safe synchronization, cache replacement and Agenda/Knowledge integration.
+- Added V6 capability detection for availability, calendar and appointment creation using enable flags, endpoint fields, resources and scopes.
+- Added guarded `appointment-create` POST support with the documented date/time/customer body.
+- Required `appointment-create:write` whenever the website advertises scopes.
+- Refreshes the remote calendar immediately after a successful website appointment.
+- Filters offered times against booked website calendar appointments and local Agenda appointments.
+- Added Dealer Appointment Agenda readiness diagnostics and user interface summaries.
+- Added V6 regression coverage for discovery, cache safety, creation and refresh behavior.
+
 ## 1.6.7
 
 - Added a dedicated bilingual appointment communication library with 304 phrases, 34 intents and 72 dynamic professional templates.

@@ -15,6 +15,9 @@ let currentThread = null;
 let availabilityPayload = { slots: [] };
 let availabilityFailure = false;
 let lastAvailabilityQuery = null;
+let calendarFetchCount = 0;
+let calendarPayload = { stores: [], appointment_count: 0, verified_open_slots: 0 };
+let remoteAppointmentBody = null;
 const apiService = {
   async fetchResource(resource) {
     if (resource !== 'messages') throw new Error('Unsupported test resource: ' + resource);
@@ -29,7 +32,12 @@ const apiService = {
   },
   async markMessageRead() { return { payload: { status: 'read' } }; },
   async fetchDealerAppointmentAvailability(query) { lastAvailabilityQuery = query; if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { payload: availabilityPayload }; },
-  async createRemoteAppointment() { return { payload: { appointment_id: 'remote-appt-1' } }; }
+  async fetchDealerAgendaCalendar() { calendarFetchCount += 1; return { payload: calendarPayload }; },
+  async createRemoteAppointment(payload) {
+    remoteAppointmentBody = payload;
+    calendarPayload = { appointment_count: 1, verified_open_slots: 0, stores: [{ store_id: 'store-1', store_name: 'Main dealership', days: [{ date: payload.appointment_date, appointments: [{ appointment_id: 'remote-appt-v6', listing_id: payload.listing_id, customer_name: payload.customer_name, appointment_time: payload.appointment_time, appointment_status: 'scheduled', source: 'software' }] }] }] };
+    return { payload: { appointment_id: 'remote-appt-v6', appointment_status: 'scheduled' } };
+  }
 };
 const settingsService = {
   getPublicSettings() { return Object.assign({ preferred_provider: 'openai' }, database.getSettings()); }
@@ -201,6 +209,50 @@ async function run() {
   const collisionResult = await service.runNow('test-local-agenda-collision');
   assert.equal(collisionResult.appointments_created, 0);
   assert.equal(database.listAppointments('').length, 1, 'A verified remote slot must not overlap an existing local Agenda appointment.');
+
+  const remoteDay = new Date(tomorrow);
+  remoteDay.setDate(remoteDay.getDate() + 1);
+  remoteDay.setHours(14, 30, 0, 0);
+  const remoteDateText = String(remoteDay.getMonth() + 1).padStart(2, '0') + '/' + String(remoteDay.getDate()).padStart(2, '0') + '/' + remoteDay.getFullYear();
+  const remoteDateKey = remoteDay.getFullYear() + '-' + String(remoteDay.getMonth() + 1).padStart(2, '0') + '-' + String(remoteDay.getDate()).padStart(2, '0');
+  database.saveIntegrationStatus({
+    connected: 1,
+    account_type: 'reseller',
+    scopes_json: JSON.stringify(['messages:read','messages:write','dealer-appointment-availability:read','dealer-agenda-calendar:read','appointment-create:write']),
+    connection_map_json: JSON.stringify({
+      available_resources: ['messages','message-thread','message-send','message-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
+      dealer_appointment_availability_enabled: true,
+      dealer_appointment_availability_endpoint: 'dealer-appointment-availability',
+      dealer_agenda_calendar_enabled: true,
+      dealer_agenda_calendar_endpoint: 'dealer-agenda-calendar',
+      appointment_create_enabled: true,
+      appointment_create_endpoint: 'appointment-create'
+    })
+  });
+  calendarPayload = { stores: [{ store_id: 'store-1', days: [{ date: remoteDateKey, available_slots: [{ slot_id: 'remote-v6-slot', start_time: '14:30', end_time: '15:00', available: true }] }] }], appointment_count: 0, verified_open_slots: 1 };
+  availabilityPayload = { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', open_dates: [remoteDateKey], verified_open_slots: [{ slot_id: 'remote-v6-slot', listing_id: 'listing-77', start_at: remoteDay.toISOString(), available: true, location: '100 Main Street' }] };
+  remoteAppointmentBody = null;
+  calendarFetchCount = 0;
+  saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1', auto_appointments_create_remote: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-v6', subject: 'Website appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadV6(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Website appointment', context_id: 'listing-77', participant_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com', customer_location: 'Miami, FL', can_reply: 1, is_announcement: 0 },
+      messages: [{ message_id: 'inbound-v6', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Remote Customer', body: 'Please book my appointment on ' + remoteDateText + ' at 2:30 PM.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
+    };
+  };
+  const remoteResult = await service.runNow('test-v6-remote-appointment');
+  assert.equal(remoteResult.appointments_created, 1);
+  assert.deepEqual(remoteAppointmentBody, {
+    listing_id: 'listing-77', customer_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com',
+    customer_location: 'Miami, FL', appointment_date: remoteDateKey, appointment_time: '14:30',
+    notes: 'Customer appointment created by Nexa guarded automatic actions with explicit user authorization.'
+  });
+  assert.equal(calendarFetchCount, 2, 'Dealer Agenda calendar must refresh before evaluation and immediately after website creation.');
+  const websiteCalendar = database.listIntegrationCache('dealer-agenda-calendar', '', 20);
+  assert(websiteCalendar.some((item) => item.appointment_id === 'remote-appt-v6'));
+  assert.equal(service.getState().readiness.dealer_agenda_calendar_scope, true);
+  assert.equal(service.getState().readiness.appointment_create_scope, true);
 
   sentMessages = [];
   saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '1' });

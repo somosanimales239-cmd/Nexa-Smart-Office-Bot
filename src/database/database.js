@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { applyMigrations } = require('./migrations');
 const { compactAvailabilityContext } = require('../services/dealer-availability-service');
+const { compactDealerAgendaContext } = require('../services/dealer-agenda-calendar-service');
 
 const nowIso = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
@@ -30,7 +31,8 @@ const integrationItemIdentity = (resource, item, index = 0) => {
     users: ['user_id', 'account_id', 'id'], validation: ['validation_id', 'id'], 'reseller-profile': ['reseller_id', 'id'],
     'reseller-listings': ['assignment_id', 'listing_id', 'id'], 'reseller-appointments': ['appointment_id', 'id'],
     store: ['store_id', 'id'], 'dealer-summary': ['store_id', 'id'], 'reseller-summary': ['reseller_id', 'id'],
-    'admin-summary': ['id'], 'api-keys-status': ['id'], 'dealer-appointment-availability': ['slot_id', 'availability_id', 'id'], 'appointment-create': ['appointment_id', 'id']
+    'admin-summary': ['id'], 'api-keys-status': ['id'], 'dealer-appointment-availability': ['slot_id', 'availability_id', 'id'],
+    'dealer-agenda-calendar': ['appointment_id', 'order_id', 'calendar_id', 'id'], 'appointment-create': ['appointment_id', 'id']
   };
   const keys = keysByResource[resource] || ['id', 'uuid'];
   for (const key of keys) {
@@ -380,6 +382,7 @@ class DatabaseService {
       || {};
     const connectedListings = this.listIntegrationCache('listings', '', 30).concat(this.listIntegrationCache('reseller-listings', '', 30));
     const dealerAvailability = this.listIntegrationCache('dealer-appointment-availability', '', 500);
+    const dealerAgendaCalendar = this.listIntegrationCache('dealer-agenda-calendar', '', 500);
     return {
       summary: this.dashboardSummary(),
       alerts: this.listAlerts().slice(0, 20),
@@ -397,6 +400,9 @@ class DatabaseService {
         reseller_appointments: this.listIntegrationCache('reseller-appointments', '', 15),
         dealer_appointment_availability: dealerAvailability.length
           ? compactAvailabilityContext(dealerAvailability, this.getSettings(), new Date())
+          : null,
+        dealer_agenda_calendar: dealerAgendaCalendar.length
+          ? compactDealerAgendaContext(dealerAgendaCalendar)
           : null,
         agenda_contacts: this.listIntegrationCache('agenda', '', 15),
         unread_message_threads: this.listIntegrationCache('messages', '', 40).filter(function unread(item) { return Number(item.unread_count || 0) > 0 || Number(item.is_announcement || 0) === 1; }),
@@ -840,7 +846,7 @@ class DatabaseService {
       agenda: 200, orders: 100, listings: 100, messages: 100, resellers: 100,
       'reseller-appointments': 100, 'reseller-listings': 100, stores: 100, users: 100, validation: 100,
       store: 1, 'dealer-summary': 1, 'reseller-profile': 1, 'reseller-summary': 1, 'admin-summary': 1,
-      'api-keys-status': 20, 'dealer-appointment-availability': 100
+      'api-keys-status': 20, 'dealer-appointment-availability': 100, 'dealer-agenda-calendar': 500
     };
     Object.keys(limits).forEach((resource) => {
       remote[resource] = this.listIntegrationCache(resource, '', limits[resource]);

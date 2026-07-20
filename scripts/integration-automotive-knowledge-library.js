@@ -7,6 +7,7 @@ const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
 const { MessageResponseEngine, detectLocale, inferDealerSegment } = require('../src/services/message-response-engine');
 const { availabilityCacheItems } = require('../src/services/dealer-availability-service');
+const { calendarCacheItems } = require('../src/services/dealer-agenda-calendar-service');
 const manifest = require('../src/data/automotive-dealer-library-manifest.json');
 const library = require('../src/data/automotive-dealer-knowledge-library.json');
 
@@ -184,6 +185,27 @@ test('live website Knowledge confirms only an exact verified open slot', functio
   assert.match(match.response, /Main showroom/i);
 });
 
+test('Dealer Agenda booked appointments remove an otherwise open website slot from Knowledge', function () {
+  const cached = database.listIntegrationCache('dealer-appointment-availability', '', 20);
+  const snapshot = cached.find(function find(item) { return item.record_type === 'availability_snapshot'; });
+  const slotDate = new Date(snapshot.verified_open_slots[0].start_at);
+  const key = slotDate.getFullYear() + '-' + String(slotDate.getMonth() + 1).padStart(2, '0') + '-' + String(slotDate.getDate()).padStart(2, '0');
+  database.replaceIntegrationCache('dealer-agenda-calendar', calendarCacheItems({
+    appointment_count: 1,
+    stores: [{ store_id: 'store-live', days: [{ date: key, appointments: [{ appointment_id: 'busy-website-slot', customer_name: 'Existing Customer', appointment_time: '10:00', appointment_status: 'scheduled', source: 'website' }] }] }]
+  }));
+  const requestDate = String(slotDate.getMonth() + 1).padStart(2, '0') + '/' + String(slotDate.getDate()).padStart(2, '0') + '/' + slotDate.getFullYear();
+  database.saveMessageThreadSnapshot(
+    { thread_id: 'calendar-booked-slot', subject: 'Appointment', can_reply: 1 },
+    [{ message_id: 'calendar-booked-1', direction: 'inbound', sender_type: 'customer', body: 'Can I schedule an appointment on ' + requestDate + ' at 10:00 AM?', sent_at: new Date().toISOString() }],
+    { thread_id: 'calendar-booked-slot' }
+  );
+  const match = new MessageResponseEngine(database).match(database.getMessageConversationContext('calendar-booked-slot', 20));
+  assert.equal(match.dynamic, true);
+  assert.doesNotMatch(match.response, /available and verified/i);
+  assert.match(match.response, /no verified appointment times|does not show verified open appointment times|no other verified/i);
+});
+
 database.close();
-console.log('Automotive dealer knowledge library tests: ' + passed + '/12 passed.');
+console.log('Automotive dealer knowledge library tests: ' + passed + '/13 passed.');
 if (process.exitCode) process.exit(process.exitCode);

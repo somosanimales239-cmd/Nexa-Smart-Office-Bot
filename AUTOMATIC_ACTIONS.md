@@ -43,7 +43,7 @@ The Live Readiness card shows connection, scopes and endpoint capabilities separ
 
 Sending a reply no longer teaches Nexa automatically. The Knowledge Engine can be updated only through a deliberate user action. This prevents a customer thread or an unreviewed response from silently changing the business knowledge base.
 
-Version 1.6.7 includes a separate built-in English/Spanish appointment communication library. While an appointment topic is active, it keeps the requested date, time preference and offered slots ahead of general automotive Knowledge. It recommends only verified availability that does not conflict with the local Agenda and requires a clear slot selection before creation.
+Version 1.6.8 combines the separate English/Spanish appointment communication library with `dealer-appointment-availability` and `dealer-agenda-calendar`. It keeps the requested date, time preference and offered slots ahead of general automotive Knowledge, excludes both local and website-calendar conflicts, and requires a clear verified-slot selection before creation. Website creation additionally requires `appointment-create:write`; after success Nexa immediately reloads the dealer calendar.
 
 ## Notification navigation
 

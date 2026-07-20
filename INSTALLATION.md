@@ -1,13 +1,13 @@
-# Nexa Smart Office Bot 1.6.7 Installation
+# Nexa Smart Office Bot 1.6.8 Installation
 
 This is one complete source replacement for the existing Nexa Smart Office Bot project.
 
 1. Open Manual Delivery in Nexa App Builder Pro.
 2. Select the existing Nexa Smart Office Bot project.
 3. Create a new manual delivery.
-4. Upload the single ZIP for version 1.6.7.
+4. Upload the single ZIP for version 1.6.8.
 5. Apply staged files once.
-6. Confirm the application version is 1.6.7.
+6. Confirm the application version is 1.6.8.
 7. Run Local build validation.
 8. When validation is green, select Push to GitHub and Build.
 
@@ -30,8 +30,8 @@ The migration adds only:
 4. Read the exact result shown. It will identify no unanswered messages, missing endpoint or scope, quiet hours, limits, confidence, safety, missing verified context, disabled fallback or another concrete reason.
 5. Open Action History before leaving background operation active.
 
-For live dealer scheduling, create or rotate the connected website API key with `dealer-appointment-availability:read`, then run **Test connection** and **Sync now**. AI Control should show both the endpoint and its read scope as Ready.
+For live dealer scheduling, create or rotate the connected website API key with `dealer-appointment-availability:read`, `dealer-agenda-calendar:read` and `appointment-create:write`, then run **Test connection** and **Sync now**. AI Control should show the availability endpoint, Dealer Agenda endpoint, appointment-create endpoint and their scopes as Ready.
 
-Version 1.6.7 adds a dedicated English/Spanish appointment communication library. It keeps the appointment topic active across natural follow-ups, preserves the requested day and time preference, recommends conflict-free Agenda slots and prevents general inventory Knowledge from interrupting the scheduling conversation. An availability question alone does not create an appointment; the customer must clearly select a verified slot.
+Version 1.6.8 adds the live Dealer Appointment Agenda to Knowledge and Nexa Agenda. It keeps the appointment topic active across natural follow-ups, preserves the requested day and time preference, recommends conflict-free slots from both calendars and refreshes the website calendar after an authorized remote creation. An availability question alone does not create an appointment; the customer must clearly select a verified slot.
 
 The per-thread checkbox blocks automatic replies only for that conversation. Nexa continues reading and analyzing it.

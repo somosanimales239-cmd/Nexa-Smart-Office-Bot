@@ -1,4 +1,4 @@
-# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.7
+# AutoMarket Pro Messages and Appointment API contract for Nexa 1.6.8
 
 This contract supports complete conversations, manual or explicitly authorized automatic replies, dealer appointment availability and optional remote appointment creation.
 
@@ -9,6 +9,8 @@ This contract supports complete conversations, manual or explicitly authorized a
 - `messages:read` is required to list and read conversations.
 - `messages:write` is required to send replies and mark threads read.
 - `dealer-appointment-availability:read` is required to read verified dealer schedules.
+- `dealer-agenda-calendar:read` is required to read the dealer's current calendar.
+- `appointment-create:write` is required before Nexa can create a website appointment.
 - The appointment availability endpoint must return only the authorized dealer's schedule.
 - Remote appointment creation requires an appointment-write capability or scope enforced by the server.
 - Admin announcements are read-only.
@@ -27,6 +29,7 @@ This contract supports complete conversations, manual or explicitly authorized a
   "message-send",
   "message-read",
   "dealer-appointment-availability",
+  "dealer-agenda-calendar",
   "appointment-create"
 ]
 ```
@@ -40,6 +43,7 @@ Capabilities may also be advertised:
     "message_send": true,
     "message_read": true,
     "dealer_appointment_availability": true,
+    "dealer_agenda_calendar": true,
     "appointment_create": true
   }
 }
@@ -142,30 +146,40 @@ Recommended response:
 
 Optional query parameters are `store_id` and `listing_id`. Blocked, booked, closed or unavailable slots must not be returned as available.
 
+## Read Dealer Agenda Calendar
+
+```http
+GET /api/v1/index.php?resource=dealer-agenda-calendar&from=2026-07-19&days=14
+Authorization: Bearer API_KEY
+X-Nexa-Api-Key: API_KEY
+```
+
+The safe response may contain stores, weekly schedules, blocked dates, daily open slots and appointments. Nexa replaces the old local snapshot after every successful read.
+
 ## Optional remote appointment creation
 
 ```http
 POST /api/v1/index.php?resource=appointment-create
 Authorization: Bearer API_KEY
+X-Nexa-Api-Key: API_KEY
 Content-Type: application/json
 Idempotency-Key: AUTO_APPOINTMENT_KEY
 ```
 
 ```json
 {
-  "thread_id": "thread-123",
+  "listing_id": "listing-45",
   "customer_name": "Customer Name",
   "customer_phone": "2395550100",
   "customer_email": "customer@example.com",
-  "start_at": "2026-07-20T10:00:00-04:00",
-  "end_at": "2026-07-20T10:30:00-04:00",
-  "location": "Main dealership",
-  "listing_id": "listing-45",
-  "notes": "Created by Nexa under explicit user authorization."
+  "customer_location": "Miami, FL",
+  "appointment_date": "2026-07-20",
+  "appointment_time": "10:00",
+  "notes": "Customer appointment created by Nexa under explicit user authorization."
 }
 ```
 
-The server must verify that the slot is still available, create at most one appointment for the idempotency key and return the appointment ID.
+The server must verify that the listing belongs to the reseller when applicable, that the slot is still available, create at most one appointment for the idempotency key and return the appointment ID. Nexa then immediately reads `dealer-agenda-calendar` again.
 
 ## Recommended errors
 

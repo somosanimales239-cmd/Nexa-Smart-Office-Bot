@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { deriveMessageCapabilities } = require('./automarket-api-service');
+const { deriveAppointmentCapabilities, deriveMessageCapabilities, stableHash } = require('./automarket-api-service');
 const {
   availabilityCacheItems,
   availabilityStart,
@@ -10,6 +10,7 @@ const {
   normalizeAvailability,
   parseRequestedDateTime
 } = require('./dealer-availability-service');
+const { calendarAppointmentsFromCache, calendarCacheItems, calendarItemCount } = require('./dealer-agenda-calendar-service');
 const { appointmentConfirmation, appointmentConversationPlan } = require('./appointment-communication-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
@@ -80,6 +81,14 @@ function slotConflictsWithLocalAgenda(slot, appointments) {
   });
 }
 
+function calendarAppointmentsAsConflicts(rows) {
+  return calendarAppointmentsFromCache(rows).filter(function active(item) {
+    return !['cancelled','canceled','completed','no-show','no_show'].includes(String(item.appointment_status || item.status || '').toLowerCase());
+  }).map(function conflict(item) {
+    return Object.assign({}, item, { status: 'scheduled' });
+  });
+}
+
 
 function safeDeferredKnowledge(match) {
   const required = Array.isArray(match && match.requiredContext) ? match.requiredContext : [];
@@ -114,8 +123,7 @@ class AutomaticActionsService {
     const map = safeJson(integration.connection_map_json, {});
     const scopes = safeJson(integration.scopes_json, []);
     const messageCapabilities = deriveMessageCapabilities({ scopes: scopes }, map);
-    const advertisedResources = new Set(messageCapabilities.resources.map(function normalizeResource(resource) { return String(resource || '').toLowerCase(); }));
-    const advertisedScopes = new Set(scopes.map(function normalizeScope(scope) { return String(scope || '').toLowerCase(); }));
+    const appointmentCapabilities = deriveAppointmentCapabilities({ scopes: scopes }, map);
     const preferred = text(publicSettings.preferred_provider || 'openai');
     const provider = publicSettings.secrets && publicSettings.secrets[preferred] ? publicSettings.secrets[preferred] : {};
     return {
@@ -134,8 +142,12 @@ class AutomaticActionsService {
       messages_read_scope: messageCapabilities.read,
       messages_write_scope: messageCapabilities.write,
       message_scopes_advertised: messageCapabilities.scopesAdvertised,
-      dealer_availability_endpoint: advertisedResources.has('dealer-appointment-availability'),
-      dealer_availability_scope: advertisedScopes.has('dealer-appointment-availability:read'),
+      dealer_availability_endpoint: appointmentCapabilities.availabilityEndpoint,
+      dealer_availability_scope: appointmentCapabilities.availabilityRead,
+      dealer_agenda_calendar_endpoint: appointmentCapabilities.calendarEndpoint,
+      dealer_agenda_calendar_scope: appointmentCapabilities.calendarRead,
+      appointment_create_endpoint: appointmentCapabilities.createEndpoint,
+      appointment_create_scope: appointmentCapabilities.createWrite,
       knowledge_only: enabled(settings.auto_messages_knowledge_only),
       ai_fallback_enabled: enabled(settings.auto_messages_ai_fallback),
       preferred_provider: preferred,
@@ -152,6 +164,7 @@ class AutomaticActionsService {
     const integration = this.database.getIntegrationStatus();
     const map = safeJson(integration.connection_map_json, {});
     const available = safeJson(integration.scopes_json, []);
+    const appointmentCapabilities = deriveAppointmentCapabilities({ scopes: available }, map);
     return {
       settings: settings,
       summary: summary,
@@ -165,7 +178,9 @@ class AutomaticActionsService {
         account_type: integration.account_type || '',
         available_resources: Array.isArray(map.available_resources) ? map.available_resources : Array.isArray(map.resources) ? map.resources : [],
         scopes: Array.isArray(available) ? available : [],
-        appointment_create: Boolean(map.appointment_create || (map.capabilities && map.capabilities.appointment_create))
+        dealer_agenda_calendar: appointmentCapabilities.calendarRead,
+        appointment_create: appointmentCapabilities.createWrite && appointmentCapabilities.calendarRead && appointmentCapabilities.availabilityRead,
+        appointment_capabilities: appointmentCapabilities
       },
       invariants: {
         never_changes_customer_records: true,
@@ -214,14 +229,20 @@ class AutomaticActionsService {
       const response = await this.apiService.fetchDealerAppointmentAvailability(query);
       const items = availabilityCacheItems(response.payload);
       this.database.replaceIntegrationCache('dealer-appointment-availability', items);
-      const localAppointments = this.database.listAppointments('');
-      return normalizeAvailability(response.payload, settings, new Date()).filter(function noLocalConflict(slot) {
+      const calendarRows = this.database.listIntegrationCache('dealer-agenda-calendar', '', 500);
+      const calendarSnapshot = calendarRows.find(function snapshot(item) { return item && item.record_type === 'calendar_snapshot'; });
+      const localAppointments = this.database.listAppointments('').concat(calendarAppointmentsAsConflicts(calendarRows));
+      const livePayload = calendarSnapshot ? [response.payload, calendarSnapshot] : response.payload;
+      return normalizeAvailability(livePayload, settings, new Date()).filter(function noLocalConflict(slot) {
         return !slotConflictsWithLocalAgenda(slot, localAppointments);
       });
     } catch (error) {
       const cached = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
-      const localAppointments = this.database.listAppointments('');
-      if (cached.length) return normalizeAvailability(cached, settings, new Date()).filter(function noCachedConflict(slot) {
+      const calendarRows = this.database.listIntegrationCache('dealer-agenda-calendar', '', 500);
+      const calendarSnapshot = calendarRows.find(function snapshot(item) { return item && item.record_type === 'calendar_snapshot'; });
+      const localAppointments = this.database.listAppointments('').concat(calendarAppointmentsAsConflicts(calendarRows));
+      const cachedPayload = calendarSnapshot ? cached.concat([calendarSnapshot]) : cached;
+      if (cachedPayload.length) return normalizeAvailability(cachedPayload, settings, new Date()).filter(function noCachedConflict(slot) {
         return !slotConflictsWithLocalAgenda(slot, localAppointments);
       });
       const resellerAvailability = [];
@@ -236,6 +257,35 @@ class AutomaticActionsService {
         return !slotConflictsWithLocalAgenda(slot, localAppointments);
       });
     }
+  }
+
+  async cacheDealerAgendaCalendar(settings, queryInput) {
+    const integration = this.database.getIntegrationStatus();
+    const map = safeJson(integration.connection_map_json, {});
+    const scopes = safeJson(integration.scopes_json, []);
+    const capabilities = deriveAppointmentCapabilities({ scopes: scopes }, map);
+    if (!capabilities.calendarRead) return { refreshed: false, reason: 'dealer_agenda_calendar_not_authorized' };
+    const query = Object.assign({ from: localDateKey(new Date()), days: 14 }, queryInput || {});
+    if (String(integration.account_type || '').toLowerCase() === 'dealer' && text(integration.store_id)) query.store_id = text(integration.store_id);
+    const response = await this.apiService.fetchDealerAgendaCalendar(query);
+    const items = calendarCacheItems(response.payload);
+    this.database.replaceIntegrationCache('dealer-agenda-calendar', items);
+    const checkedAt = response.receivedAt || nowIso();
+    if (typeof this.database.saveIntegrationSnapshot === 'function') {
+      this.database.saveIntegrationSnapshot({
+        resource: 'dealer-agenda-calendar', payload_hash: stableHash(response.payload), item_count: calendarItemCount(response.payload),
+        payload_json: JSON.stringify(response.payload || {}), last_checked_at: checkedAt, last_changed_at: checkedAt
+      });
+    }
+    if (typeof this.database.saveIntegrationResourceStatus === 'function') {
+      this.database.saveIntegrationResourceStatus({
+        resource: 'dealer-agenda-calendar', account_type: integration.account_type || '', required_scope: 'dealer-agenda-calendar:read',
+        allowed: 1, status: 'ok', item_count: calendarItemCount(response.payload), http_status: response.status || 200,
+        last_error: '', last_checked_at: checkedAt, last_success_at: checkedAt, duration_ms: response.durationMs || 0,
+        payload_hash: stableHash(response.payload)
+      });
+    }
+    return { refreshed: true, count: items.length, payload: response.payload };
   }
 
   async refreshMessageMetadata() {
@@ -325,7 +375,8 @@ class AutomaticActionsService {
     const sourceMessageId = text(candidate.inbound_message_id);
     const dedupeKey = 'auto-appointment:' + sourceMessageId + ':' + slot.id;
     if (this.database.hasAutomaticActionEvent(dedupeKey) || this.database.findAppointmentBySource('automatic-message', sourceMessageId)) return { skipped: true, reason: 'duplicate' };
-    if (slotConflictsWithLocalAgenda(slot, this.database.listAppointments(''))) return { skipped: true, reason: 'local_agenda_conflict' };
+    const appointmentConflicts = this.database.listAppointments('').concat(calendarAppointmentsAsConflicts(this.database.listIntegrationCache('dealer-agenda-calendar', '', 500)));
+    if (slotConflictsWithLocalAgenda(slot, appointmentConflicts)) return { skipped: true, reason: 'agenda_conflict' };
     const event = this.database.createAutomaticActionEvent({
       dedupe_key: dedupeKey, action_type: 'appointment_create', source_type: 'message', source_id: sourceMessageId,
       thread_id: candidate.thread_id, status: 'pending', engine: 'availability', confidence: 1,
@@ -342,13 +393,24 @@ class AutomaticActionsService {
       const customerName = verifiedCustomerName || 'Website customer';
       let remoteAppointmentId = null;
       const integration = this.getState().integration;
+      let calendarRefresh = null;
       if (enabled(settings.auto_appointments_create_remote) && integration.appointment_create) {
+        const appointmentDate = localDateKey(slot.start);
+        const appointmentTime = String(slot.start.getHours()).padStart(2, '0') + ':' + String(slot.start.getMinutes()).padStart(2, '0');
+        const listingId = text(slot.listing_id || payload.listing_id || thread.context_id);
+        if (String(integration.account_type || '').toLowerCase() === 'reseller' && !listingId) throw new Error('A reseller appointment requires an assigned listing_id.');
         const remote = await this.apiService.createRemoteAppointment({
-          thread_id: candidate.thread_id, customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail,
-          start_at: slot.start.toISOString(), end_at: slot.end.toISOString(), location: slot.location,
-          listing_id: payload.listing_id || thread.context_id || null, notes: 'Created by Nexa guarded automatic actions with explicit user authorization.'
+          listing_id: listingId, customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail,
+          customer_location: text(payload.customer_location || thread.customer_location || slot.location),
+          appointment_date: appointmentDate, appointment_time: appointmentTime,
+          notes: 'Customer appointment created by Nexa guarded automatic actions with explicit user authorization.'
         }, dedupeKey);
         remoteAppointmentId = text(remote.payload && (remote.payload.appointment_id || remote.payload.id));
+        try {
+          calendarRefresh = await this.cacheDealerAgendaCalendar(settings, { from: appointmentDate, days: 14, store_id: slot.store_id || undefined });
+        } catch (refreshError) {
+          calendarRefresh = { refreshed: false, error: refreshError.message };
+        }
       }
       const reminder = slot.start.getTime() - Date.now() > 24 * 3600000 ? new Date(slot.start.getTime() - 24 * 3600000).toISOString() : new Date(Math.max(Date.now(), slot.start.getTime() - 2 * 3600000)).toISOString();
       const saved = this.database.saveAppointment({
@@ -358,7 +420,7 @@ class AutomaticActionsService {
         source_type: 'automatic-message', source_id: sourceMessageId, thread_id: candidate.thread_id,
         remote_appointment_id: remoteAppointmentId, created_by: 'nexa-automatic-actions'
       });
-      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment created from dealer availability', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, slot_id: slot.id } });
+      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment created from dealer availability', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, slot_id: slot.id, dealer_agenda_calendar_refresh: calendarRefresh } });
       await this.notify('Nexa created an authorized appointment', customerName + ' · ' + formatSlot(slot), 'success', 'auto-appointment-notification:' + sourceMessageId, { appointment_id: saved.id, thread_id: candidate.thread_id });
       return { created: true, appointment: saved, customerName: customerName };
     } catch (error) {
@@ -372,8 +434,10 @@ class AutomaticActionsService {
     const message = text(candidate.inbound_body);
     if (!enabled(settings.auto_appointments_enabled)) return { handled: false };
     const availabilityPayload = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
+    const calendarSnapshot = this.database.listIntegrationCache('dealer-agenda-calendar', '', 500).find(function snapshot(item) { return item && item.record_type === 'calendar_snapshot'; });
+    const liveAppointmentPayload = calendarSnapshot ? availabilityPayload.concat([calendarSnapshot]) : availabilityPayload;
     const plan = appointmentConversationPlan({
-      payload: availabilityPayload,
+      payload: liveAppointmentPayload,
       slots: slots,
       conversation: conversation,
       message: message,
@@ -383,7 +447,7 @@ class AutomaticActionsService {
     if (plan.shouldCreate && plan.selectedSlot) {
       const created = await this.createAppointmentFromSlot(candidate, conversation, plan.selectedSlot, settings);
       if (created.created && enabled(settings.auto_messages_enabled) && enabled(settings.auto_appointments_send_confirmation) && this.canSendMore(settings)) {
-        const confirmation = appointmentConfirmation(plan.selectedSlot, plan.locale, availabilityPayload);
+        const confirmation = appointmentConfirmation(plan.selectedSlot, plan.locale, liveAppointmentPayload);
         await this.sendAutomaticMessage(candidate.thread_id, confirmation, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment confirmation sent');
       }
       return { handled: true, appointment: created };
@@ -497,6 +561,9 @@ class AutomaticActionsService {
       }
       if (result.refresh && result.refresh.metadata && result.refresh.metadata.error) {
         result.errors.push({ phase: 'messages', thread_id: '', error: text(result.refresh.metadata.error) });
+      }
+      if (enabled(settings.auto_appointments_enabled)) {
+        try { await this.cacheDealerAgendaCalendar(settings); } catch (calendarError) { result.errors.push({ phase: 'dealer-agenda-calendar', error: text(calendarError.message) }); }
       }
       const slots = enabled(settings.auto_appointments_enabled) ? await this.cacheAvailability(settings) : [];
       result.availability_count = slots.length;
