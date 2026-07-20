@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.14
+
+- Removed regular-expression slash delimiters from the new website-root and Dealer Lead URL helpers in `src/app.js`.
+- Replaced them with explicit leading/trailing path trimming and string-prefix/suffix checks compatible with the page's simplified Local build validation.
+- Added `NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2` and regression assertions while preserving all AutoMarket Pro V7 appointment and Lead behavior.
+
+## 1.6.13
+
+- Reviewed the supplied `public_html` V7 implementation and aligned Nexa with its real Dealer Agenda, availability, Lead/order and appointment-create response shapes.
+- Added full post-reservation roundtrip synchronization for availability, Dealer Agenda and Dealer Office Leads.
+- Preserved and normalized V7 Lead source/contact fields that the older allowlist discarded.
+- Added V7 reseller `orders`, `listings` and `resellers` resource planning under `reseller:read`.
+- Added Dealer Office shortcuts and per-Lead edit links derived from the configured HTTPS website root.
+- Added recoverable HTTP 409 slot-race handling with refreshed verified alternatives.
+- Added contract markers `NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7` and `NEXA_APPOINTMENT_PAGE_V7_SYNC_V1` plus regression coverage.
+
 ## 1.6.12
 
 - Added a date-scoped appointment conversation state machine so a repeated hour cannot select a slot from another day.

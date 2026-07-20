@@ -9,6 +9,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
 
 assert.equal(packageJson.build.asar, true);
 assert.equal(main.includes('contextIsolation: true'), true);
@@ -47,6 +48,16 @@ assert.equal(automationService.includes('NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR
 assert.equal(automationService.includes('NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_CONTACT_RECOVERY_V1'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V7_SYNC_V1'), true);
+assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7'), true);
+assert.equal(appSource.includes('Open Dealer Appointment Agenda'), true);
+assert.equal(appSource.includes('Edit Availability'), true);
+assert.equal(appSource.includes('Open Dealer Office Leads'), true);
+assert.equal(appSource.includes('NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2'), true);
+assert.equal(appSource.includes("pathname.toLowerCase().endsWith(apiSuffix)"), true);
+assert.equal(appSource.includes("suppliedLeadUrl.toLowerCase().startsWith('https://')"), true);
+assert.equal(appSource.includes('url.pathname.replace('), false);
+assert.equal(appSource.includes('.test(String(item.lead_url'), false);
 assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);
 assert.equal(dealerAvailabilityService.includes('NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1'), true);
 assert.equal(dealerAvailabilityService.includes('NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1'), true);
@@ -73,7 +84,6 @@ assert.equal(automationService.includes('cycle_skipped'), true);
 assert.equal(automationIpc.includes('Explicit user authorization'), true);
 assert.equal(automationService.includes('deleteContact'), false);
 assert.equal(automationService.includes('deleteLead'), false);
-const appSource = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
 assert.equal(appSource.includes('NEXA_MESSAGES_AI_MASTER_SWITCH_V1'), true);
 assert.equal(appSource.includes('NEXA_NOTIFICATION_DEEP_LINK_V1'), true);
 assert.equal(appSource.includes('messages-ai-master-switch'), true);

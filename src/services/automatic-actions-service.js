@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { deriveAppointmentCapabilities, deriveMessageCapabilities, stableHash } = require('./automarket-api-service');
+const { deriveAppointmentCapabilities, deriveMessageCapabilities, extractAvailableResources, normalizeScopes, stableHash } = require('./automarket-api-service');
 const {
   availabilityCacheItems,
   availabilityStart,
@@ -19,6 +19,7 @@ const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CU
 const NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 = 'NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2';
 const NEXA_APPOINTMENT_CONTACT_RECOVERY_V1 = 'NEXA_APPOINTMENT_CONTACT_RECOVERY_V1';
 const NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2 = 'NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2';
+const NEXA_APPOINTMENT_PAGE_V7_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -424,6 +425,84 @@ class AutomaticActionsService {
     return { refreshed: true, count: items.length, payload: response.payload };
   }
 
+  saveConnectedResource(resource, response, items, requiredScope, itemCount) {
+    const integration = this.database.getIntegrationStatus();
+    const safeItems = Array.isArray(items) ? items : [];
+    const checkedAt = response.receivedAt || nowIso();
+    const count = Number.isFinite(Number(itemCount)) ? Number(itemCount) : safeItems.length;
+    this.database.replaceIntegrationCache(resource, safeItems);
+    if (typeof this.database.saveIntegrationSnapshot === 'function') {
+      this.database.saveIntegrationSnapshot({
+        resource: resource, payload_hash: stableHash(response.payload), item_count: count,
+        payload_json: JSON.stringify(response.payload || {}), last_checked_at: checkedAt, last_changed_at: checkedAt
+      });
+    }
+    if (typeof this.database.saveIntegrationResourceStatus === 'function') {
+      this.database.saveIntegrationResourceStatus({
+        resource: resource, account_type: integration.account_type || '', required_scope: requiredScope || '',
+        allowed: 1, status: 'ok', item_count: count, http_status: response.status || 200,
+        last_error: '', last_checked_at: checkedAt, last_success_at: checkedAt, duration_ms: response.durationMs || 0,
+        payload_hash: stableHash(response.payload)
+      });
+    }
+    return { refreshed: true, count: count, payload: response.payload };
+  }
+
+  async cacheDealerAppointmentAvailability(settings, queryInput) {
+    const integration = this.database.getIntegrationStatus();
+    const map = safeJson(integration.connection_map_json, {});
+    const scopes = safeJson(integration.scopes_json, []);
+    const capabilities = deriveAppointmentCapabilities({ scopes: scopes }, map);
+    if (!capabilities.availabilityRead) return { refreshed: false, reason: 'dealer_appointment_availability_not_authorized' };
+    const query = Object.assign({ from: localDateKey(new Date()), days: 14, limit: clamp(settings.auto_appointments_slot_limit, 1, 100) }, queryInput || {});
+    if (String(integration.account_type || '').toLowerCase() === 'dealer' && text(integration.store_id)) query.store_id = text(integration.store_id);
+    const response = await this.apiService.fetchDealerAppointmentAvailability(query);
+    const items = availabilityCacheItems(response.payload);
+    return this.saveConnectedResource('dealer-appointment-availability', response, items, 'dealer-appointment-availability:read', items.length);
+  }
+
+  async cacheDealerLeads(queryInput) {
+    const integration = this.database.getIntegrationStatus();
+    const map = safeJson(integration.connection_map_json, {});
+    const scopes = normalizeScopes(safeJson(integration.scopes_json, []), map.scopes, map.allowed_scopes, map.permissions);
+    const resources = extractAvailableResources(map);
+    const accountType = String(integration.account_type || '').toLowerCase();
+    const requiredScope = accountType === 'reseller' ? 'reseller:read' : 'orders:read';
+    if (resources.length && !resources.includes('orders')) return { refreshed: false, reason: 'dealer_leads_resource_not_advertised' };
+    if (scopes.length && !scopes.includes(requiredScope)) return { refreshed: false, reason: 'dealer_leads_scope_not_authorized', required_scope: requiredScope };
+    const response = await this.apiService.fetchResource('orders', Object.assign({ limit: 100 }, queryInput || {}));
+    const items = listFromPayload(response.payload);
+    return this.saveConnectedResource('orders', response, items, requiredScope, items.length);
+  }
+
+  async refreshAppointmentWebsiteState(settings, appointment) {
+    const details = appointment && typeof appointment === 'object' ? appointment : {};
+    const query = { from: text(details.appointment_date) || localDateKey(new Date()), days: 14 };
+    if (text(details.store_id)) query.store_id = text(details.store_id);
+    const result = { marker: NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, availability: null, calendar: null, leads: null };
+    try { result.availability = await this.cacheDealerAppointmentAvailability(settings, query); }
+    catch (error) { result.availability = { refreshed: false, error: error.message }; }
+    try { result.calendar = await this.cacheDealerAgendaCalendar(settings, query); }
+    catch (error) { result.calendar = { refreshed: false, error: error.message }; }
+    try { result.leads = await this.cacheDealerLeads({ limit: 100 }); }
+    catch (error) { result.leads = { refreshed: false, error: error.message }; }
+    return result;
+  }
+
+  async refreshedUnavailableSlotReply(slot, conversation, settings, locale) {
+    const refreshedSlots = await this.cacheAvailability(settings);
+    const availabilityPayload = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
+    const calendarSnapshot = this.database.listIntegrationCache('dealer-agenda-calendar', '', 500).find(function snapshot(item) { return item && item.record_type === 'calendar_snapshot'; });
+    const payload = calendarSnapshot ? availabilityPayload.concat([calendarSnapshot]) : availabilityPayload;
+    const date = localDateKey(slot.start);
+    const time = formatTime(slot.start, locale);
+    const message = locale === 'es'
+      ? 'Quiero reservar una cita el ' + date + ' a las ' + time + '. Si ya no está disponible, ofréceme otros horarios verificados de ese día.'
+      : 'I want to book an appointment on ' + date + ' at ' + time + '. If it is no longer available, offer other verified times that day.';
+    const plan = appointmentConversationPlan({ payload: payload, slots: refreshedSlots, conversation: conversation, message: message, locale: locale, referenceDate: new Date() });
+    return text(plan.response) || appointmentFailureReply(locale);
+  }
+
   async refreshMessageMetadata() {
     if (!this.apiService || typeof this.apiService.fetchResource !== 'function') return { attempted: false, loaded: this.database.listIntegrationCache('messages', '', 100).length, error: '' };
     try {
@@ -535,7 +614,7 @@ class AutomaticActionsService {
       const customerPhone = contact.customer_phone;
       const customerEmail = contact.customer_email;
       let remoteAppointmentId = null;
-      let calendarRefresh = null;
+      let websiteRefresh = null;
       let remoteLeadId = null;
       let remoteOrderId = null;
       let remoteReserved = false;
@@ -543,7 +622,11 @@ class AutomaticActionsService {
       if (remoteRequested) {
         const appointmentDate = localDateKey(slot.start);
         const appointmentTime = String(slot.start.getHours()).padStart(2, '0') + ':' + String(slot.start.getMinutes()).padStart(2, '0');
-        const listingId = text(slot.listing_id || payload.listing_id || thread.context_id);
+        const contextType = text(thread.context_type || payload.context_type).toLowerCase();
+        const contextListingId = contextType.includes('listing') ? text(thread.context_id || payload.context_id) : '';
+        // For an order/Lead thread, context_id is the order ID. Omitting
+        // listing_id lets AutoMarket Pro V7 derive the real listing safely.
+        const listingId = text(slot.listing_id || payload.listing_id || contextListingId);
         const remote = await this.apiService.createRemoteAppointment({
           thread_id: candidate.thread_id, listing_id: listingId, customer_name: contact.customer_name, customer_phone: customerPhone, customer_email: customerEmail,
           customer_location: text(payload.customer_location || thread.customer_location || slot.location),
@@ -558,11 +641,10 @@ class AutomaticActionsService {
         remoteLeadUrl = text(remotePayload.lead_url);
         if (remote.raw && remote.raw.ok === false) throw new Error(text(remote.raw.message) || 'The website did not create the appointment Lead.');
         if (!remoteAppointmentId || !remoteReserved) throw new Error('The website did not confirm the Lead appointment reservation.');
-        try {
-          calendarRefresh = await this.cacheDealerAgendaCalendar(settings, { from: appointmentDate, days: 14, store_id: slot.store_id || undefined });
-        } catch (refreshError) {
-          calendarRefresh = { refreshed: false, error: refreshError.message };
-        }
+        websiteRefresh = await this.refreshAppointmentWebsiteState(settings, {
+          appointment_date: appointmentDate,
+          store_id: slot.store_id || remotePayload.store_id || ''
+        });
       }
       const reminder = slot.start.getTime() - Date.now() > 24 * 3600000 ? new Date(slot.start.getTime() - 24 * 3600000).toISOString() : new Date(Math.max(Date.now(), slot.start.getTime() - 2 * 3600000)).toISOString();
       const saved = this.database.saveAppointment({
@@ -572,10 +654,16 @@ class AutomaticActionsService {
         source_type: 'automatic-message', source_id: sourceMessageId, thread_id: candidate.thread_id,
         remote_appointment_id: remoteAppointmentId, created_by: 'nexa-automatic-actions'
       });
-      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created from dealer availability', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, dealer_agenda_calendar_refresh: calendarRefresh } });
+      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created and synchronized with Dealer Office', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
       await this.notify('Nexa created an authorized appointment', customerName + ' · ' + formatSlot(slot), 'success', 'auto-appointment-notification:' + sourceMessageId, { appointment_id: saved.id, thread_id: candidate.thread_id });
-      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl };
+      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, website_refresh: websiteRefresh };
     } catch (error) {
+      if (Number(error && error.status || 0) === 409) {
+        const appointmentDate = localDateKey(slot.start);
+        const websiteRefresh = await this.refreshAppointmentWebsiteState(settings, { appointment_date: appointmentDate, store_id: slot.store_id || '' });
+        this.database.completeAutomaticActionEvent(event.id, { status: 'blocked', engine: 'availability', summary: 'Website slot changed before reservation', error: error.message, payload: { slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
+        return { slotUnavailable: true, reason: 'website_slot_changed', error: error.message, website_refresh: websiteRefresh };
+      }
       this.database.completeAutomaticActionEvent(event.id, { status: 'failed', engine: 'availability', summary: 'Appointment creation failed', error: error.message });
       await this.notify('Automatic appointment needs attention', error.message, 'danger', 'auto-appointment-error:' + sourceMessageId, { thread_id: candidate.thread_id });
       return { failed: true, error: error.message };
@@ -621,8 +709,9 @@ class AutomaticActionsService {
         const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale, recovered.contact, recovered.missing_fields), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
         return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
       }
-      if ((recovered.failed || recovered.skipped) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
-        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentFailureReply(locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment creation failure explained');
+      if ((recovered.failed || recovered.skipped || recovered.slotUnavailable) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+        const reply = recovered.slotUnavailable ? await this.refreshedUnavailableSlotReply(pendingContact.slot, conversation, settings, locale) : appointmentFailureReply(locale);
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, reply, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, recovered.slotUnavailable ? 'Updated appointment alternatives sent' : 'Appointment creation failure explained');
         return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: recovered.error || sent && sent.error, reason: recovered.reason || 'appointment_creation_failed' };
       }
       return { handled: true, appointment: recovered, reason: recovered.reason || 'appointment_creation_failed', failed: Boolean(recovered.failed), error: recovered.error };
@@ -648,8 +737,9 @@ class AutomaticActionsService {
         const confirmation = appointmentConfirmation(plan.selectedSlot, plan.locale, liveAppointmentPayload);
         await this.sendAutomaticMessage(candidate.thread_id, confirmation, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment confirmation sent');
       }
-      if ((created.failed || created.skipped) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
-        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentFailureReply(plan.locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment creation failure explained');
+      if ((created.failed || created.skipped || created.slotUnavailable) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+        const reply = created.slotUnavailable ? await this.refreshedUnavailableSlotReply(plan.selectedSlot, conversation, settings, plan.locale) : appointmentFailureReply(plan.locale);
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, reply, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, created.slotUnavailable ? 'Updated appointment alternatives sent' : 'Appointment creation failure explained');
         return { handled: true, appointment: created, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: created.error || sent && sent.error, reason: created.reason || 'appointment_creation_failed' };
       }
       return { handled: true, appointment: created, failed: Boolean(created.failed), error: created.error, reason: created.reason || '' };
@@ -813,6 +903,7 @@ module.exports = {
   NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2,
   NEXA_APPOINTMENT_CONTACT_RECOVERY_V1,
   NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2,
+  NEXA_APPOINTMENT_PAGE_V7_SYNC_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,

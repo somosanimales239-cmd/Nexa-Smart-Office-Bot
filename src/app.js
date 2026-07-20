@@ -800,7 +800,7 @@ function renderAgenda() {
   const dealerCalendar=dealerAgendaSnapshotRemote();
   const dealerAppointments=dealerAgendaAppointmentsRemote();
   const dealerCalendarStatus=integrationResourceStatus('dealer-agenda-calendar');
-  const dealerAgendaCard='<article class="panel-card"><div class="panel-header"><div><h3>Dealer Appointment Agenda</h3><p>Live website calendar used by Knowledge and appointment collision protection.</p></div>'+badge(dealerCalendar?'Synchronized':'Not loaded',dealerCalendar?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Website appointments</span><strong>'+esc(dealerAppointments.length)+'</strong><small>Includes page and software-created appointments</small></article><article><span>Open slots reported</span><strong>'+esc(dealerCalendar&&dealerCalendar.verified_open_slots||0)+'</strong><small>Verified by the connected dealer</small></article><article><span>Calendar window</span><strong>'+esc(dealerCalendar&&dealerCalendar.days_count||14)+' days</strong><small>'+esc(dealerCalendar&&dealerCalendar.from||'Run Sync now to load')+'</small></article><article><span>Last website sync</span><strong>'+esc(dealerCalendarStatus&&dealerCalendarStatus.status||'pending')+'</strong><small>'+esc(dealerCalendarStatus&&dealerCalendarStatus.last_success_at?formatDate(dealerCalendarStatus.last_success_at):'No successful sync yet')+'</small></article></div></article>';
+  const dealerAgendaCard='<article class="panel-card"><div class="panel-header"><div><h3>Dealer Appointment Agenda</h3><p>Live website calendar used by Knowledge and appointment collision protection. Nexa reserves verified slots through appointment-create; availability editing stays inside the authenticated Dealer Office.</p></div>'+badge(dealerCalendar?'Synchronized':'Not loaded',dealerCalendar?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Website appointments</span><strong>'+esc(dealerAppointments.length)+'</strong><small>Includes page and software-created appointments</small></article><article><span>Open slots reported</span><strong>'+esc(dealerCalendar&&dealerCalendar.verified_open_slots||0)+'</strong><small>Verified by the connected dealer</small></article><article><span>Calendar window</span><strong>'+esc(dealerCalendar&&dealerCalendar.days_count||14)+' days</strong><small>'+esc(dealerCalendar&&dealerCalendar.from||'Run Sync now to load')+'</small></article><article><span>Last website sync</span><strong>'+esc(dealerCalendarStatus&&dealerCalendarStatus.status||'pending')+'</strong><small>'+esc(dealerCalendarStatus&&dealerCalendarStatus.last_success_at?formatDate(dealerCalendarStatus.last_success_at):'No successful sync yet')+'</small></article></div>'+dealerOfficeShortcuts()+'</article>';
   return sectionHeader('Agenda','A visual command center for local tasks, appointments, reminders and the live Dealer Appointment Agenda.','<div class="button-row"><button class="secondary-button" data-nexa-action="task-create">+ Task</button><button class="primary-button" data-nexa-action="appointment-create">+ Appointment</button></div>')+toolbar('Agenda items','appointment-create','appointment-search','new-appointment')+dealerAgendaCard+'<article class="panel-card calendar-panel">'+controls+calendar+'</article><article class="panel-card agenda-work-panel"><div class="panel-header"><div><h3>Organized work</h3><p>Everything with a date, in chronological order</p></div><strong>'+events.length+'</strong></div><div class="agenda-work-list">'+list+'</div>'+renderPagination(page,'agenda-list','agenda items')+'</article>';
 }
 
@@ -891,7 +891,7 @@ function renderConnectedRows(resource, payloadOrItems, limit) {
   const page=paginateItems(ordered,key);
   const rows=page.items.slice(0,Number(limit||PAGE_SIZE));
   if(!rows.length)return emptyMini('No '+resource+' cached','Open API Sync Inspector to see whether this resource loaded or failed.');
-  return '<div class="connected-record-list">'+rows.map(function renderRemoteItem(item,index){ const title=remoteTitle(resource,item); const subtitle=remoteSubtitle(resource,item); const url=item.listing_url||item.public_store_url||item.profile_url||''; const announcement=item.is_announcement?'<span class="connected-announcement">Announcement</span>':''; const link=url?'<a class="ghost-button connected-open-link" href="'+esc(url)+'" target="_blank" rel="noreferrer">Open</a>':''; const id=remoteItemId(resource,item,index+page.start); return '<div class="connected-record '+(item.is_announcement?'announcement':'')+'"><div><strong>'+esc(title)+'</strong><span>'+esc(valueLabel(subtitle))+'</span></div><div class="connected-record-actions">'+announcement+(item.status?badge(item.status):'')+'<button class="ghost-button" data-nexa-action="connected-detail" data-resource="'+esc(resource)+'" data-item-id="'+esc(id)+'">Details</button>'+link+'</div></div>'; }).join('')+'</div>'+renderPagination(page,key,resource);
+  return '<div class="connected-record-list">'+rows.map(function renderRemoteItem(item,index){ const title=remoteTitle(resource,item); const subtitle=remoteSubtitle(resource,item); const url=resource==='orders'?connectedLeadPage(item):(item.listing_url||item.public_store_url||item.profile_url||''); const announcement=item.is_announcement?'<span class="connected-announcement">Announcement</span>':''; const link=url?'<a class="ghost-button connected-open-link" href="'+esc(url)+'" target="_blank" rel="noreferrer">'+(resource==='orders'?'Edit Lead':'Open')+'</a>':''; const id=remoteItemId(resource,item,index+page.start); return '<div class="connected-record '+(item.is_announcement?'announcement':'')+'"><div><strong>'+esc(title)+'</strong><span>'+esc(valueLabel(subtitle))+'</span></div><div class="connected-record-actions">'+announcement+(item.status?badge(item.status):'')+'<button class="ghost-button" data-nexa-action="connected-detail" data-resource="'+esc(resource)+'" data-item-id="'+esc(id)+'">Details</button>'+link+'</div></div>'; }).join('')+'</div>'+renderPagination(page,key,resource);
 }
 
 function connectedResourceDefinitions(accountType) {
@@ -900,7 +900,7 @@ function connectedResourceDefinitions(accountType) {
       ['store', 'Store profile', 'Public business profile and status'],
       ['dealer-summary', 'Dealer summary', 'Listings, orders, messages and appointments'],
       ['listings', 'Listings', 'Inventory, images, pricing and status'],
-      ['orders', 'Orders and appointments', 'Customer inquiries and reseller appointments'],
+      ['orders', 'Dealer Office → Leads', 'Customer Leads, Nexa-created appointments and website appointment status'],
       ['agenda', 'Agenda contacts', 'Customers and repeat contacts'],
       ['messages', 'Message activity', 'Safe thread metadata and announcements'],
       ['resellers', 'Resellers', 'Appointments, sales and commission activity']
@@ -931,6 +931,93 @@ function connectedResourceDefinitions(accountType) {
 
 function parseIntegrationJson(value, fallback) {
   try { return value ? JSON.parse(value) : fallback; } catch (error) { return fallback; }
+}
+
+const NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2 = 'NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2';
+
+function trimTrailingPathSlashes(value) {
+  let result = String(value || '');
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
+function trimLeadingPathSlashes(value) {
+  let result = String(value || '');
+  while (result.startsWith('/')) {
+    result = result.slice(1);
+  }
+  return result;
+}
+
+function connectedWebsiteRoot() {
+  const integration = state.integration || {};
+  const settings = integration.settings || state.settings || {};
+  const raw = String(settings.automarket_base_url || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return '';
+    url.search = '';
+    url.hash = '';
+    const apiSuffix = '/api/v1/index.php';
+    let pathname = trimTrailingPathSlashes(url.pathname);
+    if (pathname.toLowerCase().endsWith(apiSuffix)) {
+      pathname = pathname.slice(0, pathname.length - apiSuffix.length);
+    }
+    url.pathname = trimTrailingPathSlashes(pathname);
+    return trimTrailingPathSlashes(url.toString());
+  } catch (error) {
+    return '';
+  }
+}
+
+function connectedWebsitePage(pathname) {
+  const root = connectedWebsiteRoot();
+  if (!root) return '';
+  try {
+    const url = new URL(root + '/');
+    const rootPath = trimTrailingPathSlashes(url.pathname);
+    const requestedPath = trimLeadingPathSlashes(pathname);
+    url.pathname = rootPath + '/' + requestedPath;
+    return url.toString();
+  } catch (error) {
+    return '';
+  }
+}
+
+function connectedLeadPage(item) {
+  const suppliedLeadUrl = String(item && item.lead_url || '').trim();
+  if (suppliedLeadUrl.toLowerCase().startsWith('https://')) {
+    return suppliedLeadUrl;
+  }
+  const orderId = String(item && (
+    item.lead_id || item.order_id || item.appointment_id || item.id
+  ) || '').trim();
+  const page = connectedWebsitePage('dealer/orders.php');
+  if (!page || !orderId) return '';
+  try {
+    const url = new URL(page);
+    url.searchParams.set('highlight_order', orderId);
+    url.hash = 'order-' + orderId;
+    return url.toString();
+  } catch (error) {
+    return '';
+  }
+}
+
+function dealerOfficeShortcuts() {
+  const agenda = connectedWebsitePage('dealer/agenda.php');
+  const availabilityPage = connectedWebsitePage('dealer/resellers.php');
+  const leads = connectedWebsitePage('dealer/orders.php');
+  if (!agenda || !availabilityPage || !leads) return '';
+  const availability = availabilityPage + '#dealer-availability';
+  return '<div class="button-row dealer-office-shortcuts">' +
+    '<a class="secondary-button" href="' + esc(agenda) + '" target="_blank" rel="noreferrer">Open Dealer Appointment Agenda</a>' +
+    '<a class="secondary-button" href="' + esc(availability) + '" target="_blank" rel="noreferrer">Edit Availability</a>' +
+    '<a class="primary-button" href="' + esc(leads) + '" target="_blank" rel="noreferrer">Open Dealer Office Leads</a>' +
+    '</div>';
 }
 
 function renderConnectionProgress(resources) {
@@ -967,12 +1054,13 @@ function renderConnectedBusiness() {
         ? renderConnectedSummary(items[0] || integrationSnapshot(resource))
         : renderConnectedRows(resource, items, 40)) + '</article>';
   }).join('');
-  return sectionHeader('Connected Business', 'A real read-only sync from AutoMarket Pro, separated by account type and API scope.', '<div class="button-row"><button class="secondary-button" data-go="sync-inspector" data-nexa-action="navigate-sync-inspector">API Sync Inspector</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync now</button></div>') +
+  const officeShortcuts = connected ? dealerOfficeShortcuts() : '';
+  return sectionHeader('Connected Business', 'A scoped AutoMarket Pro connection with live synchronization and explicitly authorized appointment Lead creation.', '<div class="button-row"><button class="secondary-button" data-go="sync-inspector" data-nexa-action="navigate-sync-inspector">API Sync Inspector</button><button class="primary-button" data-integration-sync="1" data-nexa-action="integration-sync">Sync now</button></div>') +
     '<div class="connection-hero ' + (connected ? 'connected' : '') + '">' +
       '<div class="connection-orb"><img src="assets/nexa-ai-orb.svg" alt="Nexa connected assistant"><span></span></div>' +
       '<div><p class="eyebrow">SECURE WEBSITE CONNECTION</p><h2>' + (connected ? esc(connectedAccountLabel(status)) + ' connected' : 'Connect your AutoMarket Pro website') + '</h2><p>' + (connected ? 'Nexa detected the account, loaded the resources granted to this key, and saved a local read-only cache.' : 'Create a scoped key in AutoMarket Pro, paste it once, and Nexa protects it with Windows secure storage.') + '</p></div>' +
       '<div class="connection-status">' + badge(connected ? String(status.sync_state || 'connected') : 'Not connected', connected && status.sync_state === 'ready' ? 'success' : 'warning') + '<span>Last success: ' + formatDate(status.last_success_at || status.last_sync_at) + '</span></div>' +
-    '</div>' +
+    '</div>' + officeShortcuts +
     '<form id="integration-form" class="grid connection-grid" data-nexa-action="integration-save">' +
       '<article class="setting-block"><div class="panel-header"><div><h3>API connection</h3><p>Bearer key + X-Nexa-Api-Key fallback</p></div></div>' +
         '<label>Website URL<input name="automarket_base_url" type="url" placeholder="https://yourdomain.com" value="' + esc(settings.automarket_base_url || '') + '"></label>' +

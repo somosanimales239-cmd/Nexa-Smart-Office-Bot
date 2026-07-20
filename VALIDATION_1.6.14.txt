@@ -1,0 +1,37 @@
+Nexa Smart Office Bot 1.6.14 - Validation Summary
+
+Delivery: complete software source
+
+Reported target:
+- src/app.js
+- Local build validation: Unexpected closing delimiter }
+
+Root cause:
+- the page's simplified parser treated regular-expression slash delimiters in the newly added website URL helpers as comment syntax
+- Node.js correctly parsed the file, so the failure was specific to the local pre-GitHub validator
+
+Correction:
+- no regular-expression delimiter is used by connectedWebsiteRoot
+- no regular-expression delimiter is used by connectedWebsitePage
+- no regular-expression delimiter is used by connectedLeadPage
+- explicit path trimming and string prefix/suffix checks preserve the same behavior
+
+Compatibility contract:
+- NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2
+
+Required delivery checks:
+- standalone Node.js syntax check for src/app.js
+- all-project JavaScript syntax validation
+- project and delivery validation
+- complete integration test suite
+- implementation and acceptance contracts
+- Nexa contract gate
+- archive integrity
+- extracted archive checksums and repeated tests
+
+Preserved AutoMarket Pro V7 contracts:
+- NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7
+- NEXA_APPOINTMENT_PAGE_V7_SYNC_V1
+- NEXA_APPOINTMENT_STATE_MACHINE_V2
+- NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2
+- NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2

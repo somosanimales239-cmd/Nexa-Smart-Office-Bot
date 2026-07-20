@@ -6,6 +6,7 @@ const { localDateKey } = require('./dealer-availability-service');
 const DEFAULT_TIMEOUT_MS = 20000;
 const AUTOMARKET_API_CONTRACT = 'NEXA_AUTOMARKET_API_V1';
 const NEXA_API_SYNC_INSPECTOR_V1 = 'NEXA_API_SYNC_INSPECTOR_V1';
+const NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7 = 'NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7';
 const CLIENT_VERSION = require('../../package.json').version;
 
 const ACCOUNT_RESOURCE_PLANS = Object.freeze({
@@ -22,6 +23,11 @@ const ACCOUNT_RESOURCE_PLANS = Object.freeze({
   ]),
   reseller: Object.freeze([
     ['reseller-profile', 'reseller-profile:read'],
+    // AutoMarket Pro V7 exposes reseller-owned Lead/appointment records through
+    // the stable `orders` resource and assigned inventory through `listings`.
+    ['orders', 'reseller:read'],
+    ['listings', 'reseller:read'],
+    ['resellers', 'reseller:read'],
     ['reseller-summary', 'reseller:read'],
     ['reseller-listings', 'reseller-listings:read'],
     ['reseller-appointments', 'reseller-appointments:read'],
@@ -58,8 +64,8 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   'connection-map': ['contract','account_type','owner_type','account_id','owner_id','user_id','store_id','scopes','allowed_scopes','permissions','available_resources','allowed_resources','resources','endpoints','allowed_endpoints','api_version','security','rate_limit','capabilities','message_capabilities','message_threads','message_thread','message_send','message_read','messages_read_enabled','messages_write_enabled','message_thread_endpoint','message_send_endpoint','message_read_endpoint','messages_thread_endpoint','messages_send_endpoint','messages_read_endpoint','two_way_chat','two_way_chat_enabled','dealer-appointment-availability','dealer_appointment_availability','dealer_appointment_availability_enabled','dealer_appointment_availability_endpoint','dealer-agenda-calendar','dealer_agenda_calendar','dealer_agenda_calendar_enabled','dealer_agenda_calendar_endpoint','appointment-create','appointment_create','appointment_create_enabled','appointment_create_endpoint','lead-appointment-create','nexa-appointment-create','appointment-create-from-thread','lead_appointment_create_endpoint','nexa_appointment_create_endpoint','appointment_create_from_thread_endpoint'],
   store: ['store_id','owner_id','store_name','store_slug','slug','headline','description','phone','email','location','address','city','state','zip','logo_url','banner_url','primary_color','store_template','status','public_store_url'],
   'dealer-summary': ['total_listings','active_listings','inactive_listings','draft_listings','new_orders','unreviewed_orders','pending_orders','completed_orders','agenda_contacts','unread_messages','reseller_appointments','upcoming_appointments','today_appointments','credit_applications'],
-  listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
-  orders: ['id','order_id','listing_id','store_id','listing_title','listing_url','listing_image_url','customer_name','customer_email','customer_phone','customer_location','message','order_notes','order_type','source','status','created_at','updated_at','reseller_id','reseller_name','reseller_email','appointment_date','appointment_time','appointment_status','sale_status','sale_price','commission_percent','commission_amount','dealer_status_note'],
+  listings: ['id','listing_id','store_id','title','listing_title','slug','category','subcategory','price','condition','status','quantity','description','short_description','image','url','main_image_url','listing_image_url','gallery_images','video_url','listing_url','financing_enabled','created_at','updated_at','year','make','model','trim','mileage','vin','stock_number','title_status','fuel_type','transmission','exterior_color','interior_color'],
+  orders: ['id','order_id','lead_id','appointment_id','listing_id','store_id','listing_title','listing_url','listing_image_url','name','email','phone','location','customer_name','customer_email','customer_phone','customer_location','message','order_notes','order_type','source','source_context','source_label','created_by_platform','status','created_at','updated_at','reseller_id','reseller_name','reseller_email','appointment_date','appointment_time','appointment_label','appointment_status','appointment_result_status','sale_status','sale_price','appointment_commission_percent','appointment_commission_amount','commission_percent','commission_amount','dealer_status_note','lead_url'],
   agenda: ['id','contact_id','store_id','owner_id','name','email','phone','location','source_type','times_seen','first_seen_at','last_seen_at','created_from'],
   messages: ['id','thread_id','subject','context_type','context_id','store_id','sender_type','receiver_type','participant_name','participant_type','last_message_id','last_message_at','created_at','updated_at','message_count','unread_count','is_favorite','is_pinned','is_announcement','audience','can_reply','message_preview','last_message_preview','capabilities'],
   'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','participant_name','participant_type','customer_name','customer_phone','customer_email','customer_location','sender_type','receiver_type','last_message_id','last_message_at','message_count','unread_count','is_announcement','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
@@ -86,14 +92,16 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
     'date','appointment_date','open_date','blocked_date','off_date','start_at','starts_at','datetime','date_time','end_at','ends_at',
     'start_time','appointment_time','time','from_time','open_time','end_time','to_time','close_time','start','end','from','to','open','close','opens_at','closes_at','times','hours','periods','intervals','ranges',
     'available','is_available','enabled','is_open','is_off','day_off','closed','blocked','booked','is_booked','is_blocked','status','state','verified','is_verified',
-    'day','weekday','day_of_week','day_number','name','label','recurrence','capacity','notes','created_at','updated_at',
+    'resource','scope','store_slug','day','day_key','day_name','weekday','day_of_week','day_number','name','label','reason','recurrence','capacity','available_count','booked_count','appointment_count','notes','created_at','updated_at','appointment_create_enabled','appointment_create_endpoint',
+    'order_id','appointment_id','customer_name','customer_email','customer_phone','message','order_type','source_context','source_label','created_by_platform','appointment_label','appointment_status','appointment_result_status','sale_price','commission_percent','commission_amount',
+    'assignment_listing_id','listing_status','assignment_status',
     'monday','tuesday','wednesday','thursday','friday','saturday','sunday','lunes','martes','miercoles','jueves','viernes','sabado','domingo'
   ],
   'dealer-agenda-calendar': [
     'id','calendar_id','record_type','dealer','store','stores','dealer_id','dealer_name','store_id','store_name','store_phone','store_email','store_location','phone','email','location','address','city','state','zip','timezone','slot_minutes','slot_duration_minutes',
-    'from','to','days_count','weekly_schedule','business_hours','blocked_dates','off_dates','closed_dates','open_dates','days','date','day','weekday','label','is_open','is_off','closed','blocked','status','notes',
-    'slots','available_slots','verified_open_slots','open_slots','booked_slots','unavailable_slots','available_times','booked_times','start_at','end_at','start_time','end_time','appointment_date','appointment_time','time','available','is_available','booked','is_booked','verified','capacity',
-    'appointments','appointment_count','verified_open_slots_count','id','appointment_id','order_id','listing_id','listing_title','customer_name','customer_phone','customer_email','customer_location','appointment_status','source','created_at','updated_at','data','result','items','records','rows'
+    'resource','scope','store_slug','from','to','days_count','weekly_schedule','business_hours','blocked_dates','off_dates','closed_dates','open_dates','days','date','day','day_key','day_name','weekday','label','reason','is_open','is_off','closed','blocked','status','notes',
+    'slots','available_slots','verified_open_slots','open_slots','booked_slots','unavailable_slots','available_times','booked_times','start_at','end_at','start_time','end_time','appointment_date','appointment_time','time','available','is_available','booked','is_booked','verified','capacity','available_count','booked_count',
+    'appointments','appointment_count','verified_open_slots_count','id','appointment_id','order_id','lead_id','listing_id','listing_title','listing_url','customer_name','customer_phone','customer_email','customer_location','message','order_type','source','source_context','source_label','created_by_platform','appointment_label','appointment_status','appointment_result_status','sale_price','commission_percent','commission_amount','reseller_id','reseller_name','reseller_email','created_at','updated_at','appointment_create_enabled','appointment_create_endpoint','data','result','items','records','rows'
   ],
   'appointment-create': ['ok','resource','id','appointment_id','order_id','lead_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_label','start_at','end_at','status','appointment_status','location','notes','source','source_context','reserved','lead_url','created_at','updated_at']
 });
@@ -159,6 +167,23 @@ function sanitizeRecord(resource, record) {
     }
     output[key] = value;
   });
+  if (resource === 'orders') {
+    output.order_id = output.order_id || output.id || '';
+    output.lead_id = output.lead_id || output.order_id || '';
+    output.appointment_id = output.appointment_id || (output.appointment_date && output.appointment_time ? output.order_id : '');
+    output.customer_name = output.customer_name || output.name || '';
+    output.customer_email = output.customer_email || output.email || '';
+    output.customer_phone = output.customer_phone || output.phone || '';
+    output.customer_location = output.customer_location || output.location || '';
+    output.commission_percent = output.commission_percent !== undefined ? output.commission_percent : output.appointment_commission_percent;
+    output.commission_amount = output.commission_amount !== undefined ? output.commission_amount : output.appointment_commission_amount;
+  }
+  if (resource === 'listings') {
+    output.listing_id = output.listing_id || output.id || '';
+    output.listing_title = output.listing_title || output.title || '';
+    output.listing_url = output.listing_url || output.url || '';
+    output.listing_image_url = output.listing_image_url || output.image || '';
+  }
   return output;
 }
 
@@ -755,6 +780,7 @@ module.exports = {
   AutoMarketApiError,
   AutoMarketApiService,
   NEXA_API_SYNC_INSPECTOR_V1,
+  NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7,
   SAFE_RESOURCES,
   cleanBaseUrl,
   deriveAppointmentCapabilities,

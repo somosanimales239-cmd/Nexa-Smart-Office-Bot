@@ -1,0 +1,37 @@
+Nexa Smart Office Bot 1.6.13 - Validation Summary
+
+Delivery: complete software source
+
+Website reviewed:
+- AutoMarket Pro Leads Appointment API V7
+- dealer/agenda.php -> Dealer Appointment Agenda
+- dealer/resellers.php#dealer-availability -> Edit Availability
+- dealer/orders.php -> Dealer Office Leads
+- api/v1/index.php -> availability, calendar, orders and appointment-create
+
+Contracts:
+- NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7
+- NEXA_APPOINTMENT_PAGE_V7_SYNC_V1
+- NEXA_APPOINTMENT_STATE_MACHINE_V2
+- NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2
+- NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2
+
+Roundtrip regression:
+- selected slot is posted with thread_id, date, time and phone
+- website response must contain an appointment/Lead ID and reserved=true
+- dealer-appointment-availability refreshes after creation
+- dealer-agenda-calendar refreshes after creation
+- orders/Dealer Leads refreshes after creation
+- V7 name/phone/source fields remain visible after safe filtering
+- reseller:read discovers orders and listings when advertised
+- Dealer Office shortcuts are generated from the configured HTTPS root
+- HTTP 409 reloads live availability and offers new verified options
+
+Required delivery checks:
+- JavaScript syntax validation
+- project and delivery validation
+- complete integration test suite
+- implementation and acceptance contracts
+- Nexa contract gate
+- archive integrity
+- extracted archive checksums and repeated tests

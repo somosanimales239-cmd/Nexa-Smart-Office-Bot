@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-auto-actions-'));
@@ -16,13 +16,21 @@ let currentThread = null;
 let availabilityPayload = { slots: [] };
 let availabilityFailure = false;
 let lastAvailabilityQuery = null;
+let availabilityFetchCount = 0;
 let calendarFetchCount = 0;
+let leadsFetchCount = 0;
 let calendarPayload = { stores: [], appointment_count: 0, verified_open_slots: 0 };
+let remoteOrdersPayload = [];
 let remoteAppointmentBody = null;
+let remoteAppointmentFailure = null;
 const apiService = {
   async fetchResource(resource) {
-    if (resource !== 'messages') throw new Error('Unsupported test resource: ' + resource);
-    return { payload: { threads: database.listIntegrationCache('messages', '', 100) } };
+    if (resource === 'messages') return { payload: { threads: database.listIntegrationCache('messages', '', 100) } };
+    if (resource === 'orders') {
+      leadsFetchCount += 1;
+      return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: remoteOrdersPayload };
+    }
+    throw new Error('Unsupported test resource: ' + resource);
   },
   async fetchMessageThread(threadId) {
     return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: currentThread(threadId) };
@@ -33,11 +41,21 @@ const apiService = {
     return { payload: { message_id: 'remote-' + remoteMessageSequence, thread_id: threadId, body, direction: 'outbound', sent_at: new Date().toISOString(), status: 'sent' } };
   },
   async markMessageRead() { return { payload: { status: 'read' } }; },
-  async fetchDealerAppointmentAvailability(query) { lastAvailabilityQuery = query; if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { payload: availabilityPayload }; },
+  async fetchDealerAppointmentAvailability(query) { availabilityFetchCount += 1; lastAvailabilityQuery = query; if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: availabilityPayload }; },
   async fetchDealerAgendaCalendar() { calendarFetchCount += 1; return { payload: calendarPayload }; },
   async createRemoteAppointment(payload) {
     remoteAppointmentBody = payload;
+    if (remoteAppointmentFailure) {
+      const failure = remoteAppointmentFailure;
+      remoteAppointmentFailure = null;
+      if (failure.availability) availabilityPayload = failure.availability;
+      if (failure.calendar) calendarPayload = failure.calendar;
+      const error = new Error(failure.message || 'That appointment slot is already booked.');
+      error.status = failure.status || 409;
+      throw error;
+    }
     calendarPayload = { appointment_count: 1, verified_open_slots: 0, stores: [{ store_id: 'store-1', store_name: 'Main dealership', days: [{ date: payload.appointment_date, appointments: [{ appointment_id: 'remote-appt-v6', listing_id: payload.listing_id, customer_name: payload.customer_name, appointment_time: payload.appointment_time, appointment_status: 'scheduled', source: 'software' }] }] }] };
+    remoteOrdersPayload = [{ id: 'ord-nexa-v7', name: payload.customer_name, phone: payload.customer_phone, email: payload.customer_email, status: 'new', order_type: 'reseller_appointment', source_context: 'nexa_smart_office_bot_reseller:assignment-1', source_label: 'Nexa Smart Office Bot', created_by_platform: 'Nexa Smart Office Bot', appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled' }];
     return { raw: { ok: true, resource: 'appointment-create' }, payload: { order_id: 'ord-nexa-v6', lead_id: 'ord-nexa-v6', appointment_id: 'remote-appt-v6', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: payload.thread_id, customer_name: payload.customer_name, customer_phone: payload.customer_phone, appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled', reserved: true, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-nexa-v6' } };
   }
 };
@@ -83,6 +101,7 @@ function saveBaseSettings(extra) {
 }
 
 async function run() {
+  assert.equal(NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1');
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
@@ -267,9 +286,9 @@ async function run() {
   database.saveIntegrationStatus({
     connected: 1,
     account_type: 'reseller',
-    scopes_json: JSON.stringify(['messages:read','messages:write','dealer-appointment-availability:read','dealer-agenda-calendar:read','appointment-create:write']),
+    scopes_json: JSON.stringify(['reseller:read','messages:read','messages:write','dealer-appointment-availability:read','dealer-agenda-calendar:read','appointment-create:write']),
     connection_map_json: JSON.stringify({
-      available_resources: ['messages','message-thread','message-send','message-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
+      available_resources: ['orders','listings','messages','message-thread','message-send','message-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
       dealer_appointment_availability_enabled: true,
       dealer_appointment_availability_endpoint: 'dealer-appointment-availability',
       dealer_agenda_calendar_enabled: true,
@@ -281,12 +300,15 @@ async function run() {
   calendarPayload = { stores: [{ store_id: 'store-1', days: [{ date: remoteDateKey, available_slots: [{ slot_id: 'remote-v6-slot', start_time: '14:30', end_time: '15:00', available: true }] }] }], appointment_count: 0, verified_open_slots: 1 };
   availabilityPayload = { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', open_dates: [remoteDateKey], verified_open_slots: [{ slot_id: 'remote-v6-slot', listing_id: 'listing-77', start_at: remoteDay.toISOString(), available: true, location: '100 Main Street' }] };
   remoteAppointmentBody = null;
+  remoteOrdersPayload = [];
   calendarFetchCount = 0;
+  availabilityFetchCount = 0;
+  leadsFetchCount = 0;
   saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1', auto_appointments_create_remote: '1' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-v6', subject: 'Website appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
   currentThread = function threadV6(threadId) {
     return {
-      thread: { thread_id: threadId, subject: 'Website appointment', context_id: 'listing-77', participant_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com', customer_location: 'Miami, FL', can_reply: 1, is_announcement: 0 },
+      thread: { thread_id: threadId, subject: 'Website appointment', context_type: 'listing', context_id: 'listing-77', participant_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com', customer_location: 'Miami, FL', can_reply: 1, is_announcement: 0 },
       messages: [{ message_id: 'inbound-v6', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Remote Customer', body: 'Please book my appointment on ' + remoteDateText + ' at 2:30 PM.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
     };
   };
@@ -298,10 +320,63 @@ async function run() {
     notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
   });
   assert.equal(calendarFetchCount, 2, 'Dealer Agenda calendar must refresh before evaluation and immediately after website creation.');
+  assert.equal(availabilityFetchCount, 2, 'Dealer availability must refresh before evaluation and immediately after website creation.');
+  assert.equal(leadsFetchCount, 1, 'Dealer Office Leads must refresh immediately after website creation.');
   const websiteCalendar = database.listIntegrationCache('dealer-agenda-calendar', '', 20);
   assert(websiteCalendar.some((item) => item.appointment_id === 'remote-appt-v6'));
+  const websiteLeads = database.listIntegrationCache('orders', '', 20);
+  assert.equal(websiteLeads.length, 1);
+  assert.equal(websiteLeads[0].id, 'ord-nexa-v7');
+  assert.equal(websiteLeads[0].source_context, 'nexa_smart_office_bot_reseller:assignment-1');
+  const completedWebsiteAction = database.listAutomaticActionEvents(20).find((item) => item.source_id === 'inbound-v6');
+  assert.ok(completedWebsiteAction);
+  const completedWebsitePayload = JSON.parse(completedWebsiteAction.payload_json || '{}');
+  assert.equal(completedWebsitePayload.website_refresh.marker, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1);
+  assert.equal(completedWebsitePayload.website_refresh.availability.refreshed, true);
+  assert.equal(completedWebsitePayload.website_refresh.calendar.refreshed, true);
+  assert.equal(completedWebsitePayload.website_refresh.leads.refreshed, true);
   assert.equal(service.getState().readiness.dealer_agenda_calendar_scope, true);
   assert.equal(service.getState().readiness.appointment_create_scope, true);
+
+  const raceDay = new Date(remoteDay);
+  raceDay.setDate(raceDay.getDate() + 2);
+  raceDay.setHours(15, 0, 0, 0);
+  const raceDateKey = raceDay.getFullYear() + '-' + String(raceDay.getMonth() + 1).padStart(2, '0') + '-' + String(raceDay.getDate()).padStart(2, '0');
+  const raceDateText = String(raceDay.getMonth() + 1).padStart(2, '0') + '/' + String(raceDay.getDate()).padStart(2, '0') + '/' + raceDay.getFullYear();
+  const raceAlternative = new Date(raceDay); raceAlternative.setMinutes(30);
+  availabilityPayload = { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', verified_open_slots: [
+    { slot_id: 'race-selected', listing_id: 'listing-77', start_at: raceDay.toISOString(), available: true },
+    { slot_id: 'race-alternative', listing_id: 'listing-77', start_at: raceAlternative.toISOString(), available: true }
+  ] };
+  calendarPayload = { stores: [{ store_id: 'store-1', days: [{ date: raceDateKey, available_slots: [
+    { slot_id: 'race-selected', start_time: '15:00', end_time: '15:30', available: true },
+    { slot_id: 'race-alternative', start_time: '15:30', end_time: '16:00', available: true }
+  ] }] }], appointment_count: 0, verified_open_slots: 2 };
+  remoteAppointmentFailure = {
+    status: 409,
+    message: 'That appointment slot is already booked. Refresh availability and choose another slot.',
+    availability: { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', verified_open_slots: [
+      { slot_id: 'race-alternative', listing_id: 'listing-77', start_at: raceAlternative.toISOString(), available: true }
+    ] },
+    calendar: { stores: [{ store_id: 'store-1', days: [{ date: raceDateKey, available_slots: [
+      { slot_id: 'race-alternative', start_time: '15:30', end_time: '16:00', available: true }
+    ] }] }], appointment_count: 1, verified_open_slots: 1 }
+  };
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_create_remote: '1', auto_appointments_send_confirmation: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-v7-race', subject: 'Website slot race', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadV7Race(threadId) {
+    return { thread: { thread_id: threadId, subject: 'Website slot race', context_type: 'listing', context_id: 'listing-77', participant_name: 'Race Customer', customer_phone: '2395550177', can_reply: 1, is_announcement: 0 }, messages: [
+      { message_id: 'inbound-v7-race', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Race Customer', body: 'Please book my appointment on ' + raceDateText + ' at 3:00 PM.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+    ] };
+  };
+  const raceResult = await service.runNow('test-v7-slot-race');
+  assert.equal(raceResult.appointments_created, 0);
+  assert.equal(raceResult.messages_sent, 1, 'A website 409 must produce a customer-facing updated offer.');
+  assert.match(sentMessages[0].body, /3:30 PM/i);
+  assert.doesNotMatch(sentMessages[0].body, /confirmed|confirmada|confirmado/i);
+  const raceEvent = database.listAutomaticActionEvents(30).find((item) => item.source_id === 'inbound-v7-race' && item.action_type === 'appointment_create');
+  assert.equal(raceEvent.status, 'blocked');
 
   const correctedSaturday = new Date(2026, 6, 25, 11, 0, 0, 0);
   const correctedTuesday = new Date(2026, 6, 21, 11, 0, 0, 0);

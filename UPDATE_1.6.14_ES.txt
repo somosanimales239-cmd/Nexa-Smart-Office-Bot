@@ -1,0 +1,29 @@
+NEXA SMART OFFICE BOT 1.6.14
+
+CORRECCION DEL VALIDADOR LOCAL PARA SRC/APP.JS
+
+El error "Unexpected closing delimiter }" no provenia de Electron ni de una llave realmente sobrante. El archivo pasaba la comprobacion oficial de sintaxis de Node.js, pero el validador simplificado de la pagina confundia los delimitadores de expresiones regulares usados por los accesos de Dealer Office con comentarios de JavaScript.
+
+CORRECCION APLICADA
+
+1. Se eliminaron esas expresiones regulares de los nuevos helpers de URL.
+2. El dominio, la ruta API y las barras iniciales/finales ahora se procesan con operaciones de texto explicitas.
+3. Se separaron los bloques try/catch y la construccion del enlace de Lead para evitar delimitadores ambiguos.
+4. Se agrego el contrato NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2 y pruebas permanentes.
+
+FUNCIONES CONSERVADAS
+
+- Dealer Appointment Agenda sincronizada.
+- Edit Availability mediante el Dealer Office autenticado.
+- Creacion remota por appointment-create.
+- Reserva de la hora verificada.
+- Actualizacion inmediata de disponibilidad, Agenda y Dealer Office Leads.
+- Conversacion bilingue de citas y correccion de fecha/hora.
+- Recuperacion de conflictos HTTP 409 con nuevas alternativas verificadas.
+
+INSTRUCCIONES
+
+1. Usa el ZIP completo 1.6.14 como fuente del build.
+2. Ejecuta Local build validation.
+3. Envia la fuente a GitHub solamente despues de que la validacion local marque Ready.
+4. No mezcles src/app.js de 1.6.13 con esta version.

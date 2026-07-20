@@ -8,6 +8,7 @@ const { DatabaseService, normalizePhone } = require('../src/database/database');
 const { SettingsService } = require('../src/services/settings-service');
 const {
   AutoMarketApiService,
+  NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7,
   cleanBaseUrl,
   deriveAppointmentCapabilities,
   deriveMessageCapabilities,
@@ -79,7 +80,7 @@ const responses = {
   },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
   'dealer-summary': { ok: true, data: { total_listings: 5, active_listings: 4, unreviewed_orders: 1, agenda_contacts: 2, unread_messages: 2 } },
-  orders: { ok: true, data: [{ order_id: 'order-1', customer_name: 'Customer One', customer_phone: '(786) 555-3333', status: 'unreviewed', created_at: '2026-07-17T10:00:00Z' }] },
+  orders: { ok: true, data: [{ id: 'order-1', name: 'Customer One', email: 'customer@example.com', phone: '(786) 555-3333', status: 'new', order_type: 'dealer_appointment', source_context: 'nexa_smart_office_bot_dealer', source_label: 'Nexa Smart Office Bot', created_by_platform: 'Nexa Smart Office Bot', appointment_date: '2026-07-22', appointment_time: '10:30', appointment_status: 'scheduled', appointment_result_status: '', appointment_commission_percent: 0, appointment_commission_amount: 0, created_at: '2026-07-17T10:00:00Z', server_private_value: 'remove-me' }] },
   messages: { ok: true, data: [{ thread_id: 'thread-1', subject: 'Admin announcement', unread_count: 1, is_announcement: 1, can_reply: 0, last_message_at: '2026-07-17T11:00:00Z' }] },
   listings: { ok: true, data: [{ id: 'listing-1', title: 'Vehicle One', price: 3200, status: 'active', listing_url: 'https://example.com/listing/vehicle-one' }] },
   agenda: { ok: true, data: [
@@ -97,8 +98,8 @@ const responses = {
   'dealer-agenda-calendar': { ok: true, data: {
     from: dateKey(openSlotDate), days_count: 14, appointment_count: 1, verified_open_slots: 1,
     stores: [{ store_id: 'store-7', store_name: 'Demo Motors', phone: '239-555-0100', weekly_schedule: { monday: { open: '09:00', close: '17:00' } }, blocked_dates: [dateKey(blockedDate)],
-      days: [{ date: dateKey(openSlotDate), is_open: true, available_slots: [{ slot_id: 'calendar-slot-1', start_time: '10:00', end_time: '10:30', available: true }],
-        appointments: [{ appointment_id: 'calendar-appt-1', customer_name: 'Calendar Customer', appointment_time: '11:00', appointment_status: 'scheduled', source: 'software', server_private_value: 'remove-me' }] }], private_store_value: 'remove-me' }],
+      days: [{ date: dateKey(openSlotDate), day_key: 'mon', day_name: 'Monday', reason: 'open', is_open: true, available_count: 1, available_slots: [{ slot_id: 'calendar-slot-1', start_time: '10:00', end_time: '10:30', available: true, booked_count: 0 }],
+        appointments: [{ appointment_id: 'calendar-appt-1', order_id: 'calendar-appt-1', customer_name: 'Calendar Customer', appointment_time: '11:00', appointment_status: 'scheduled', order_type: 'dealer_appointment', source_context: 'nexa_smart_office_bot_dealer', source_label: 'Nexa Smart Office Bot', created_by_platform: 'Nexa Smart Office Bot', server_private_value: 'remove-me' }] }], private_store_value: 'remove-me' }],
     server_private_value: 'remove-me'
   } },
   'appointment-create': { ok: true, resource: 'appointment-create', data: { order_id: 'ord-contract-1', lead_id: 'ord-contract-1', appointment_id: 'remote-contract-1', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: 'thread-contract-1', customer_name: 'Customer Name', customer_phone: '7865553333', appointment_date: '2026-07-22', appointment_time: '10:30', appointment_status: 'scheduled', reserved: true, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-contract-1' } }
@@ -112,7 +113,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.12');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.14');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
@@ -155,8 +156,12 @@ const notificationService = new NotificationService({
     assert.equal(normalizePhone('+1 786 555 3333'), '7865553333');
   });
   await test('account plans are different for dealer, reseller and admin', function () {
+    assert.equal(NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7, 'NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7');
     assert(resourcePlan({ account_type:'dealer', available_resources:['orders'], scopes:['orders:read'] }).some((item)=>item.resource === 'orders'));
     assert(resourcePlan({ account_type:'reseller', available_resources:['reseller-profile'], scopes:['reseller-profile:read'] }).some((item)=>item.resource === 'reseller-profile'));
+    const resellerV7 = resourcePlan({ account_type:'reseller', available_resources:['orders','listings'], scopes:['reseller:read'] });
+    assert(resellerV7.some((item)=>item.resource === 'orders'));
+    assert(resellerV7.some((item)=>item.resource === 'listings'));
     assert(resourcePlan({ account_type:'admin', available_resources:['validation'], scopes:['validation:read'] }).some((item)=>item.resource === 'validation'));
   });
   await test('missing scopes remain visible in the synchronization plan', function () {
@@ -273,6 +278,15 @@ const notificationService = new NotificationService({
     assert.equal(db.getIntegrationStatus().sync_state, 'ready');
     assert.equal(db.integrationCacheCount('agenda'), 2);
     assert.equal(db.integrationCacheCount('orders'), 1);
+    const connectedLead = db.listIntegrationCache('orders', '', 10)[0];
+    assert.equal(connectedLead.order_id, 'order-1');
+    assert.equal(connectedLead.lead_id, 'order-1');
+    assert.equal(connectedLead.customer_name, 'Customer One');
+    assert.equal(connectedLead.customer_phone, '(786) 555-3333');
+    assert.equal(connectedLead.source_context, 'nexa_smart_office_bot_dealer');
+    assert.equal(connectedLead.source_label, 'Nexa Smart Office Bot');
+    assert.equal(connectedLead.created_by_platform, 'Nexa Smart Office Bot');
+    assert.equal(connectedLead.server_private_value, undefined);
     assert.equal(db.integrationCacheCount('dealer-appointment-availability'), 2);
     assert.equal(db.integrationCacheCount('dealer-agenda-calendar'), 2);
     const availabilityRequest = requestedQueries.find(function findRequest(item) { return item.resource === 'dealer-appointment-availability'; });
@@ -289,10 +303,17 @@ const notificationService = new NotificationService({
     const appointment = cached.find(function findAppointment(item) { return item.record_type === 'calendar_appointment'; });
     assert.equal(snapshot.stores[0].store_name, 'Demo Motors');
     assert.equal(snapshot.stores[0].blocked_dates[0], dateKey(blockedDate));
+    assert.equal(snapshot.stores[0].days[0].day_key, 'mon');
+    assert.equal(snapshot.stores[0].days[0].reason, 'open');
+    assert.equal(snapshot.stores[0].days[0].available_count, 1);
+    assert.equal(snapshot.stores[0].days[0].available_slots[0].booked_count, 0);
     assert.equal(snapshot.stores[0].private_store_value, undefined);
     assert.equal(snapshot.server_private_value, undefined);
     assert.equal(appointment.appointment_id, 'calendar-appt-1');
     assert.equal(appointment.customer_name, 'Calendar Customer');
+    assert.equal(appointment.source_context, 'nexa_smart_office_bot_dealer');
+    assert.equal(appointment.source_label, 'Nexa Smart Office Bot');
+    assert.equal(appointment.created_by_platform, 'Nexa Smart Office Bot');
     assert.equal(appointment.server_private_value, undefined);
     assert.match(appointment.start_at, /^20\d{2}-\d{2}-\d{2}T11:00/);
   });

@@ -1,6 +1,21 @@
-# Nexa Smart Office Bot 1.6.12
+# Nexa Smart Office Bot 1.6.14
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
+
+## New in 1.6.14
+
+- Rewrites the website-root and Dealer Lead link helpers with conservative string operations so the page's Local build validation no longer mistakes regular-expression slash delimiters for comments and reports a false extra `}` in `src/app.js`.
+- Keeps the complete AutoMarket Pro V7 Dealer Agenda, availability, appointment-create and Dealer Office Lead synchronization from 1.6.13.
+- Adds a permanent compatibility marker and implementation checks for the exact helper paths that triggered the local validator.
+
+## Existing 1.6.13 improvements
+
+- Matches the attached AutoMarket Pro Leads Appointment API V7 contract. A confirmed conversation appointment is created through `appointment-create`, stored by the website as a Lead/order and reserved in Dealer Appointment Agenda.
+- After a successful reservation Nexa immediately refreshes `dealer-appointment-availability`, `dealer-agenda-calendar`, and `orders`, so the consumed slot disappears and the new Lead is visible locally without waiting for the next full sync.
+- Dealer and reseller order responses preserve and normalize the safe V7 Lead fields, including customer contact data, appointment fields, `source_context`, `source_label`, and `created_by_platform`.
+- Reseller synchronization follows the website's real V7 resources: `reseller:read` can load `orders`, `listings`, and `resellers` when connection-map advertises them.
+- Connected Business and Agenda include HTTPS shortcuts to Dealer Appointment Agenda, Edit Availability, and Dealer Office Leads. Editing availability remains an authenticated Dealer Office operation because the website exposes no availability-write API.
+- If the website returns HTTP 409 because a slot changed between selection and reservation, Nexa reloads live availability and offers updated verified alternatives.
 
 ## New in 1.6.12
 

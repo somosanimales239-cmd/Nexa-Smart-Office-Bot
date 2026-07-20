@@ -1,9 +1,11 @@
-Nexa Smart Office Bot 1.6.12 Validation Report
+Nexa Smart Office Bot 1.6.14 Validation Report
 
 Package feature
 Date-scoped bilingual appointment state, guarded thread-to-Lead creation,
 Store-aware Dealer Appointment Agenda synchronization and local/website
 collision protection.
+AutoMarket Pro V7 Dealer Agenda, Edit Availability and Dealer Office Leads
+roundtrip synchronization.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -14,8 +16,9 @@ Preserved platform features
 - Installer, Portable and Windows ZIP targets
 
 Validation scope
-- Website Local build validator compatibility for the two reported JavaScript files
-- Standalone Node.js syntax validation of those files before and after ZIP extraction
+- Website Local build validator compatibility for the reported src/app.js delimiter failure
+- Standalone Node.js syntax validation of src/app.js before and after ZIP extraction
+- Conservative URL parsing without regular-expression slash delimiters in the affected helpers
 - Project and delivery validators
 - Nexa contract gate
 - JavaScript syntax
@@ -80,8 +83,13 @@ Appointment communication regression verified
   appointment-create-from-thread all discover the same guarded capability.
 - Lead/order/appointment IDs, source metadata, reserved status and Lead URL are
   retained in the automatic-action audit record.
-- After successful website creation the Dealer Agenda calendar is refreshed
-  immediately and the local read cache is replaced.
+- After successful website creation, dealer availability, Dealer Agenda calendar
+  and orders/Dealer Leads are refreshed immediately and their local caches are replaced.
+- AutoMarket Pro V7 `orders` fields are normalized into the connected Lead view,
+  including customer contact, appointment and Nexa source metadata.
+- Dealer Appointment Agenda, Edit Availability and each synchronized Lead have
+  safe HTTPS shortcuts to their authenticated Dealer Office pages.
+- A website 409 slot race refreshes live sources and produces verified alternatives.
 - Authorized appointments are saved to the local Agenda when remote creation is
   unavailable or disabled.
 

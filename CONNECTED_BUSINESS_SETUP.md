@@ -1,5 +1,16 @@
 # Connected Business setup
 
+## AutoMarket Pro appointment/Lead V7
+
+Nexa 1.6.14 uses the website's stable API resources rather than automating authenticated HTML forms:
+
+1. Read `dealer-appointment-availability` and `dealer-agenda-calendar`.
+2. Create the confirmed appointment with `appointment-create` and `appointment-create:write`.
+3. Require a successful response containing a Lead/order/appointment ID and `reserved: true`.
+4. Immediately reload availability, Dealer Agenda, and `orders` so Dealer Office Leads reflects the new record.
+
+Dealer Office availability has no write endpoint in the supplied V7 website. Nexa therefore provides an HTTPS shortcut to `dealer/resellers.php#dealer-availability`; the dealer signs in and edits availability there. Leads open at `dealer/orders.php?highlight_order=...` for authorized manual editing.
+
 ## API endpoint and authentication
 
 Nexa accepts the public AutoMarket Pro website URL and adds `/api/v1/index.php` automatically.

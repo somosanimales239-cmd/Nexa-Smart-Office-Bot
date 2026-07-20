@@ -1,0 +1,52 @@
+NEXA SMART OFFICE BOT 1.6.13
+
+INTEGRACION COMPLETA CON AUTOMARKET PRO V7
+
+Esta version fue comparada directamente con el codigo PHP de la pagina entregada.
+
+FLUJO DE RESERVA
+
+1. Nexa lee dealer-appointment-availability.
+2. Nexa lee dealer-agenda-calendar.
+3. El cliente confirma una fecha, hora y telefono.
+4. Nexa publica appointment-create con thread_id, fecha, hora y telefono.
+5. La pagina crea el registro en orders, que se muestra como Dealer Office -> Leads.
+6. La pagina reserva la hora en Dealer Appointment Agenda.
+7. Nexa exige reserved=true y un lead_id/order_id/appointment_id.
+8. Nexa vuelve a leer disponibilidad, Agenda y Leads antes de confirmar al cliente.
+
+ACCESOS DESDE NEXA
+
+- Open Dealer Appointment Agenda
+- Edit Availability
+- Open Dealer Office Leads
+- Edit Lead para cada Lead sincronizado
+
+Estos accesos abren la pagina HTTPS configurada. El usuario debe iniciar sesion en Dealer Office. La pagina V7 no incluye un endpoint para editar disponibilidad mediante API; por eso esa edicion se hace en el panel web autenticado.
+
+API KEY DEALER RECOMENDADA
+
+store:read
+dealer:read
+listings:read
+orders:read
+agenda:read
+dealer-agenda-calendar:read
+dealer-appointment-availability:read
+appointment-create:write
+messages:read
+messages:write
+resellers:read
+
+API KEY RESELLER RECOMENDADA
+
+reseller-profile:read
+reseller:read
+dealer-appointment-availability:read
+dealer-agenda-calendar:read
+appointment-create:write
+agenda:read
+messages:read
+messages:write
+
+Si la pagina responde 409 porque otra persona tomo la hora, Nexa refresca la disponibilidad y ofrece horarios verificados nuevos.
