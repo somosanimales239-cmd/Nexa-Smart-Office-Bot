@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
     "application_version": "1.6.8",
-    "workspace_revision": "1.0.42",
+    "workspace_revision": "1.0.43",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -30,5 +30,5 @@
         "SBO-18-dealer-agenda-calendar-sync-v6"
     ],
     "version": "1.6.8",
-    "updated_at": "2026-07-19 23:58:51"
+    "updated_at": "2026-07-20 00:53:19"
 }

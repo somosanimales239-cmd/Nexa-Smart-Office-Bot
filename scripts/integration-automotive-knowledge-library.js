@@ -163,7 +163,7 @@ test('live website availability becomes dynamic Knowledge and respects a blocked
   assert.equal(match.matched, true);
   assert.equal(match.dynamic, true);
   assert.equal(match.libraryVersion, 'website-live');
-  assert.match(match.response, /día off|fecha bloqueada/i);
+  assert.match(match.response, /día off|fecha bloqueada|bloquead[oa](?:\s+en)?(?:\s+su)?\s+Agenda/i);
   assert.match(match.response, /siguiente fecha disponible|próxima fecha disponible|siguiente fecha con disponibilidad/i);
   assert.match(match.response, /Agenda|horas de cita verificadas|horario verificado/i);
 });

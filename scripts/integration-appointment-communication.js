@@ -104,7 +104,7 @@ test('unavailable time offers other verified times on the same day', function ()
     message: '¿Puedo hacer una cita el ' + usDate(firstDay) + ' a las 11:00 AM?', locale: 'es', referenceDate: now
   });
   assert.equal(plan.decision, 'offer_same_day');
-  assert.match(plan.response, /hora solicitada no está disponible/i);
+  assert.match(plan.response, /hora solicitada no está disponible|ese horario ya no aparece disponible/i);
   assert.match(plan.response, /10:00 AM/);
   assert.match(plan.response, /1:00 PM/);
 });
@@ -115,7 +115,7 @@ test('blocked day offers the next verified available day', function () {
     message: 'Necesito una cita el ' + usDate(blockedDay), locale: 'es', referenceDate: now
   });
   assert.equal(plan.decision, 'blocked_day');
-  assert.match(plan.response, /día off|fecha bloqueada/i);
+  assert.match(plan.response, /día off|fecha bloqueada|bloquead[oa](?:\s+en)?(?:\s+su)?\s+Agenda/i);
   assert.match(plan.response, /siguiente fecha disponible|próxima fecha disponible|siguiente fecha con disponibilidad/i);
   assert.match(plan.response, /10:00 AM/);
 });

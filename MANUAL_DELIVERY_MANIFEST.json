@@ -122,8 +122,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "faa1260c08509ea92bd52b774113353bb42766c489d4fb00b2da9ee640332288",
-      "size": 6236,
+      "sha256": "e0d44145a80a86de610906e7e40b907ad8a5fa4aaf3fe2a19d2ecf6419c12021",
+      "size": 6374,
       "operation": "replace_or_create"
     },
     {
@@ -218,8 +218,8 @@
     },
     {
       "path": "scripts/integration-appointment-communication.js",
-      "sha256": "9f6c659118de904dff1670e2e9467301fe185cc146b62a3beaec3bf10393d939",
-      "size": 13616,
+      "sha256": "3f1d937b7bad865a861f9a820988c013e9a7882591a62991fa2dfbc7404f4ddb",
+      "size": 13695,
       "operation": "replace_or_create"
     },
     {
@@ -230,8 +230,8 @@
     },
     {
       "path": "scripts/integration-automotive-knowledge-library.js",
-      "sha256": "87e03ab24ecb7fefd8eb90e35f9ab0af31c08bfeb6da41e368ba6df9446c6373",
-      "size": 11482,
+      "sha256": "a89cbc108eb70186bc153def73777becb918dc49609dda10776598472a39929f",
+      "size": 11524,
       "operation": "replace_or_create"
     },
     {
@@ -608,8 +608,8 @@
     },
     {
       "path": "VALIDATION_1.6.8.txt",
-      "sha256": "c6567487a40bbf9e1d706b6c0113ee84a2f1d1b7b6c2936874e85cc18f14f5dc",
-      "size": 1057,
+      "sha256": "d8844d201771406fe16b4ffe1009c65306cdad02d29bd3218e7af04fac59c47b",
+      "size": 1213,
       "operation": "replace_or_create"
     },
     {

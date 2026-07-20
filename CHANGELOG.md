@@ -2,6 +2,7 @@
 
 ## 1.6.8
 
+- Made appointment wording regression assertions accept every equivalent bundled natural response on Windows, UTC and local-time runners.
 - Added `dealer-agenda-calendar` discovery, safe synchronization, cache replacement and Agenda/Knowledge integration.
 - Added V6 capability detection for availability, calendar and appointment creation using enable flags, endpoint fields, resources and scopes.
 - Added guarded `appointment-create` POST support with the documented date/time/customer body.

@@ -11,6 +11,7 @@ Validated contract:
 - V6 POST body uses appointment_date, appointment_time and customer fields.
 - dealer-agenda-calendar refresh runs immediately after successful website creation.
 - Explicit AI Control authorization and no-delete boundaries preserved.
+- Cross-platform appointment assertions accept every equivalent bundled unavailable-time and blocked-date response, including “bloqueado en su Agenda”.
 
 Automated validation includes the core workspace suite, full API synchronization,
 real-time messages, automotive Knowledge, bilingual appointment communication,
