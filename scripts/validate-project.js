@@ -57,6 +57,8 @@ const requiredMarkers = [
   'appointment-create:write',
   'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1',
   'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1',
+  'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1',
+  'NEXA_CONTEXTUAL_TIME_SELECTION_V1',
   'ai-control'
 ];
 const failures = requiredMarkers.filter(function missingMarker(marker) {

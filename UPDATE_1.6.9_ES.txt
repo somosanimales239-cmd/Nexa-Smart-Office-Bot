@@ -1,0 +1,31 @@
+NEXA SMART OFFICE BOT 1.6.9
+CORRECCION DE CONSISTENCIA DE CITAS
+
+Este ZIP modifica solamente el software Nexa. No incluye ni reemplaza archivos de la pagina web.
+
+PROBLEMA CORREGIDO
+
+Nexa podia ofrecer un horario verificado y, al recibir la seleccion del cliente, decir que la misma fecha era dia off. Habia dos causas:
+
+1. Al combinar dealer-appointment-availability con dealer-agenda-calendar, una fecha bloqueada perteneciente a otra tienda podia afectar los slots del dealer conectado.
+2. Una respuesta corta como "1:30" se interpretaba literalmente como 1:30 AM aunque Nexa acabara de ofrecer 1:30 PM.
+
+CAMBIOS
+
+- Los horarios, dias off y citas ocupadas ahora se comparan con store_id, dealer_id y listing_id.
+- Los slots abiertos verificados del dealer correcto no se eliminan por metadata contradictoria de otra tienda.
+- Nexa lee stores[], days[], slots[] y available_slots[] del Dealer Appointment Agenda.
+- Entiende "2 de la tarde", "7 de la noche", "10 de la manana" y horas cortas dentro del contexto.
+- "Que tal a las 2" consulta disponibilidad; no autoriza crear la cita.
+- "1:30 esta bien, alla nos vemos" selecciona el 1:30 PM previamente ofrecido y autoriza la cita.
+- Una cita ocupada de otra tienda no bloquea el mismo horario del dealer conectado.
+- Si un horario realmente desaparece durante el refresco, Nexa ofrece las opciones actuales y no afirma falsamente que todo el dia esta cerrado.
+
+PASOS DESPUES DE INSTALAR
+
+1. Abra Connected Business y ejecute Test connection.
+2. Ejecute Sync now.
+3. Confirme que dealer-appointment-availability y dealer-agenda-calendar muestran informacion actual.
+4. Mantenga appointment-create:write en la API Key si quiere crear la cita tambien en la pagina.
+
+No es necesario cambiar archivos de la pagina para esta correccion.

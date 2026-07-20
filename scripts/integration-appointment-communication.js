@@ -2,12 +2,14 @@
 
 const assert = require('node:assert/strict');
 const {
+  NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1,
   availabilityCacheItems,
   filterSlotsAgainstAppointments,
   localDateKey,
   normalizeAvailability
 } = require('../src/services/dealer-availability-service');
 const {
+  NEXA_CONTEXTUAL_TIME_SELECTION_V1,
   NEXA_PRO_APPOINTMENT_COMMUNICATION_V1,
   appointmentConfirmation,
   appointmentConversationPlan
@@ -78,6 +80,8 @@ function test(name, fn) {
 
 test('professional appointment communication contract marker is present', function () {
   assert.equal(NEXA_PRO_APPOINTMENT_COMMUNICATION_V1, 'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1');
+  assert.equal(NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1, 'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1');
+  assert.equal(NEXA_CONTEXTUAL_TIME_SELECTION_V1, 'NEXA_CONTEXTUAL_TIME_SELECTION_V1');
   assert.equal(NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1, 'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1');
   const summary = libraryStatistics();
   assert.deepEqual(summary.locales, ['en', 'es']);
@@ -190,6 +194,121 @@ test('local Agenda conflicts are removed before the appointment library can reco
   const filtered = filterSlotsAgainstAppointments(slots, [{ status: 'Scheduled', start_at: occupied.start.toISOString(), end_at: occupied.end.toISOString() }]);
   assert.equal(filtered.some(function stillOffered(slot) { return slot.id === 'first-10'; }), false);
   assert.equal(filtered.some(function remains(slot) { return slot.id === 'first-13'; }), true);
+});
+
+test('reported July 22 selection keeps verified dealer availability despite another store being off', function () {
+  const reference = new Date(2026, 6, 20, 11, 8, 0, 0);
+  function july22(hour, minute) { return new Date(2026, 6, 22, hour, minute || 0, 0, 0).toISOString(); }
+  const dealerAvailability = {
+    dealer_id: 'dealer-somerset', dealer_name: 'Somerset Automotive Sales Network Inc',
+    store_id: 'store-somerset', store_name: 'Somerset', phone: '239-799-1416',
+    weekly_schedule: { wednesday: { open: '09:00', close: '19:00' } },
+    verified_open_slots: [
+      { slot_id: 'somerset-1330', store_id: 'store-somerset', start_at: july22(13, 30), available: true },
+      { slot_id: 'somerset-1400', store_id: 'store-somerset', start_at: july22(14), available: true },
+      { slot_id: 'somerset-1430', store_id: 'store-somerset', start_at: july22(14, 30), available: true }
+    ]
+  };
+  const mixedCalendar = {
+    record_type: 'calendar_snapshot',
+    stores: [
+      {
+        store_id: 'store-somerset', weekly_schedule: { wednesday: { open: '09:00', close: '19:00' } },
+        days: [{ date: '2026-07-22', is_open: true, available_slots: dealerAvailability.verified_open_slots }]
+      },
+      {
+        store_id: 'store-other', blocked_dates: ['2026-07-22'],
+        weekly_schedule: { wednesday: { is_open: false } },
+        days: [{ date: '2026-07-22', is_open: false, blocked: true }]
+      }
+    ]
+  };
+  const livePayload = availabilityCacheItems(dealerAvailability).concat([mixedCalendar]);
+  const liveSlots = normalizeAvailability(livePayload, {
+    auto_appointments_min_notice_hours: 0,
+    auto_appointments_max_days: 30,
+    auto_appointments_duration_minutes: 30
+  }, reference);
+  assert.deepEqual(liveSlots.map(function ids(slot) { return slot.id; }), ['somerset-1330', 'somerset-1400', 'somerset-1430']);
+
+  const inquiry = 'y que tal el miercoles a las 2 de la tarde';
+  const inquiryContext = { messages: [{ direction: 'inbound', body: 'Quiero coordinar una cita para ver el vehículo.' }] };
+  const inquiryPlan = appointmentConversationPlan({ payload: livePayload, slots: liveSlots, conversation: inquiryContext, message: inquiry, locale: 'es', referenceDate: reference });
+  assert.equal(inquiryPlan.decision, 'exact_available');
+  assert.equal(inquiryPlan.selectedSlot.id, 'somerset-1400');
+
+  const messages = [
+    { direction: 'inbound', body: inquiry, sent_at: new Date(2026, 6, 20, 11, 6).toISOString() },
+    { direction: 'outbound', body: 'Hola, para el miércoles que viene, 22 de julio, tenemos disponibilidad a las 2:00 PM. También puedo ofrecerle 1:30 PM o 2:30 PM. ¿Cuál le queda mejor para confirmar su cita?', sent_at: new Date(2026, 6, 20, 11, 7).toISOString() },
+    { direction: 'inbound', body: 'ok a las 1:30 esta bien, alla nos vemos', sent_at: new Date(2026, 6, 20, 11, 8).toISOString() }
+  ];
+  const selection = appointmentConversationPlan({ payload: livePayload, slots: liveSlots, conversation: { messages: messages }, message: messages[2].body, locale: 'es', referenceDate: reference });
+  assert.equal(selection.decision, 'select_slot');
+  assert.equal(selection.shouldCreate, true);
+  assert.equal(selection.selectedSlot.id, 'somerset-1330');
+  assert.doesNotMatch(selection.response, /día off|fecha bloqueada/i);
+
+  const otherStoreAppointment = [{ status: 'scheduled', store_id: 'store-other', start_at: july22(13, 30), end_at: july22(14) }];
+  assert.equal(filterSlotsAgainstAppointments(liveSlots, otherStoreAppointment).length, 3);
+});
+
+test('if a previously offered time disappears, Nexa offers current alternatives without calling the whole day off', function () {
+  const reference = new Date(2026, 6, 20, 11, 9, 0, 0);
+  function july22(hour, minute) { return new Date(2026, 6, 22, hour, minute || 0, 0, 0).toISOString(); }
+  const refreshedPayload = {
+    blocked_dates: ['2026-07-22'],
+    verified_open_slots: [
+      { slot_id: 'remaining-1400', store_id: 'store-somerset', start_at: july22(14), available: true },
+      { slot_id: 'remaining-1430', store_id: 'store-somerset', start_at: july22(14, 30), available: true }
+    ]
+  };
+  const refreshedCached = availabilityCacheItems(refreshedPayload);
+  const refreshedSlots = normalizeAvailability(refreshedCached, { auto_appointments_min_notice_hours: 0, auto_appointments_max_days: 30, auto_appointments_duration_minutes: 30 }, reference);
+  const messages = [
+    { direction: 'inbound', body: 'y que tal el miercoles a las 2 de la tarde' },
+    { direction: 'outbound', body: 'Tenemos 1:30 PM, 2:00 PM y 2:30 PM el miércoles, 22 de julio. ¿Cuál prefiere para confirmar su cita?' },
+    { direction: 'inbound', body: 'ok a las 1:30 esta bien, alla nos vemos' }
+  ];
+  const plan = appointmentConversationPlan({ payload: refreshedCached, slots: refreshedSlots, conversation: { messages: messages }, message: messages[2].body, locale: 'es', referenceDate: reference });
+  assert.equal(plan.decision, 'offer_same_day');
+  assert.match(plan.response, /hora solicitada no está disponible|ese horario ya no aparece disponible/i);
+  assert.match(plan.response, /2:00 PM/);
+  assert.match(plan.response, /2:30 PM/);
+  assert.doesNotMatch(plan.response, /día off|fecha bloqueada/i);
+});
+
+test('an explicit day off for the same dealer remains authoritative', function () {
+  const reference = new Date(2026, 6, 20, 11, 10, 0, 0);
+  const sameStoreConflict = [{
+    dealer_id: 'dealer-somerset', store_id: 'store-somerset',
+    verified_open_slots: [{ slot_id: 'stale-slot', store_id: 'store-somerset', start_at: new Date(2026, 6, 22, 13, 30).toISOString(), available: true }]
+  }, {
+    record_type: 'calendar_snapshot',
+    stores: [{ store_id: 'store-somerset', blocked_dates: ['2026-07-22'], days: [{ date: '2026-07-22', is_open: false, is_off: true }] }]
+  }];
+  const normalizedSlots = normalizeAvailability(sameStoreConflict, { auto_appointments_min_notice_hours: 0, auto_appointments_max_days: 30, auto_appointments_duration_minutes: 30 }, reference);
+  assert.equal(normalizedSlots.length, 0);
+});
+
+test('the message thread store scopes identical times to the correct dealer', function () {
+  const reference = new Date(2026, 6, 20, 11, 11, 0, 0);
+  const date = new Date(2026, 6, 22, 14, 0, 0, 0);
+  const multiStorePayload = { verified_open_slots: [
+    { slot_id: 'store-a-1400', store_id: 'store-a', start_at: date.toISOString(), available: true },
+    { slot_id: 'store-b-1400', store_id: 'store-b', start_at: date.toISOString(), available: true }
+  ] };
+  const multiStoreSlots = normalizeAvailability(multiStorePayload, { auto_appointments_min_notice_hours: 0, auto_appointments_max_days: 30, auto_appointments_duration_minutes: 30 }, reference);
+  const message = '¿Hay una cita disponible el 07/22/2026 a las 2:00 PM?';
+  const plan = appointmentConversationPlan({
+    payload: multiStorePayload,
+    slots: multiStoreSlots,
+    conversation: { thread: { store_id: 'store-b' }, messages: [] },
+    message: message,
+    locale: 'es',
+    referenceDate: reference
+  });
+  assert.equal(plan.decision, 'exact_available');
+  assert.equal(plan.selectedSlot.id, 'store-b-1400');
 });
 
 test('reported conversation remains locked to appointments and recommends verified Agenda alternatives', function () {

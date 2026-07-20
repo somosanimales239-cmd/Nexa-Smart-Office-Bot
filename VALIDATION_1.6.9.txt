@@ -1,0 +1,22 @@
+Nexa Smart Office Bot 1.6.9 - Validation Summary
+
+Validated behavior:
+- Nested Dealer Agenda stores, days, slots and available_slots are read.
+- Blocked dates and weekly schedules are evaluated against the slot's dealer/store/listing context.
+- Another store's blocked Wednesday cannot remove Somerset's verified Wednesday slots.
+- A verified open slot remains available when mixed stale metadata reports a generic day off.
+- Spanish "2 de la tarde" resolves to 2:00 PM.
+- A contextual "1:30" selects the previously offered 1:30 PM slot.
+- A time inquiry does not create an appointment without a booking commitment.
+- "1:30 esta bien, alla nos vemos" authorizes the exact verified selection.
+- If the selected offer disappears after refresh, Nexa offers current same-day alternatives without saying the whole day is off.
+- Appointments from another store do not block the connected dealer's slot.
+- Website and local exact-slot collision guards remain active.
+- V6 appointment-create and post-create dealer-agenda-calendar refresh remain active.
+
+Permanent regression:
+The reported July 20, 2026 Wednesday 2:00 PM -> 1:30 PM conversation is executed by the automated appointment communication suite.
+
+Markers:
+- NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1
+- NEXA_CONTEXTUAL_TIME_SELECTION_V1

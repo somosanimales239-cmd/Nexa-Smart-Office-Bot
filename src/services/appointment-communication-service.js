@@ -19,12 +19,40 @@ const {
 } = require('./appointment-communication-library-service');
 
 const NEXA_PRO_APPOINTMENT_COMMUNICATION_V1 = 'NEXA_PRO_APPOINTMENT_COMMUNICATION_V1';
+const NEXA_CONTEXTUAL_TIME_SELECTION_V1 = 'NEXA_CONTEXTUAL_TIME_SELECTION_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function normalized(value) { return libraryNormalize(value); }
 
 function conversationMessages(conversation) {
   return conversation && Array.isArray(conversation.messages) ? conversation.messages : [];
+}
+
+function conversationAppointmentScope(conversation) {
+  const thread = conversation && conversation.thread && typeof conversation.thread === 'object' ? conversation.thread : {};
+  let payload = {};
+  try { payload = typeof thread.payload_json === 'string' ? JSON.parse(thread.payload_json) : thread.payload_json || {}; } catch (_) { payload = {}; }
+  const contextType = normalized(thread.context_type || payload.context_type);
+  const contextId = text(thread.context_id || payload.context_id);
+  return {
+    store_id: text(thread.store_id || payload.store_id),
+    dealer_id: text(thread.dealer_id || payload.dealer_id),
+    listing_id: text(thread.listing_id || payload.listing_id || (/listing|vehicle|inventory/.test(contextType) ? contextId : ''))
+  };
+}
+
+function scopeSlotsForConversation(slots, conversation) {
+  const scope = conversationAppointmentScope(conversation);
+  if (!scope.store_id && !scope.dealer_id && !scope.listing_id) return (slots || []).slice();
+  return (slots || []).filter(function inConversationScope(slot) {
+    if (!slot) return false;
+    for (const key of ['store_id', 'dealer_id', 'listing_id']) {
+      const expected = text(scope[key]);
+      const actual = text(slot[key] || slot.raw && slot.raw[key]);
+      if (expected && actual && expected !== actual) return false;
+    }
+    return true;
+  });
 }
 
 function detectAppointmentLocale(message, conversation, fallback) {
@@ -136,6 +164,14 @@ function previousOrEarliestDay(conversation, latestMessage, groups, referenceDat
 
 function slotMinutes(slot) { return slot.start.getHours() * 60 + slot.start.getMinutes(); }
 
+function slotMatchesRequestedTime(slot, requestedTime) {
+  if (!slot || !requestedTime) return false;
+  const hour = slot.start.getHours();
+  if (slot.start.getMinutes() !== requestedTime.minute) return false;
+  if (hour === requestedTime.hour) return true;
+  return requestedTime.ambiguous === true && hour % 12 === requestedTime.hour % 12;
+}
+
 function rankSlotsForPreference(slots, preference, limit) {
   const source = (slots || []).slice();
   let matched = source.slice();
@@ -201,13 +237,32 @@ function resolveSlotSelection(message, conversation, slots, referenceDate, local
   if (ordinal !== null) return { selected: offered[ordinal] || ranked[ordinal] || null, requested: requested, reference_day: contextDay };
   if (requested.time) {
     const pool = daySlots.length ? daySlots : (slots || []);
-    let matching = offered.filter(function offeredTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
-    if (!matching.length) matching = pool.filter(function sameTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
-    if (!matching.length) matching = (slots || []).filter(function anyDaySameTime(slot) { return slot.start.getHours() === requested.time.hour && slot.start.getMinutes() === requested.time.minute; });
+    let matching = offered.filter(function offeredTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
+    if (!matching.length) matching = pool.filter(function sameTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
+    if (!matching.length) matching = (slots || []).filter(function anyDaySameTime(slot) { return slotMatchesRequestedTime(slot, requested.time); });
     return { selected: matching.length ? matching[0] : null, requested: requested, reference_day: contextDay };
   }
   if (followUpType === 'acceptance') return { selected: offered[0] || ranked[0] || null, requested: requested, reference_day: contextDay };
   return { selected: null, requested: requested, reference_day: contextDay };
+}
+
+function requestedTimeWasOffered(conversation, requestedTime) {
+  if (!requestedTime) return false;
+  return conversationMessages(conversation).slice(-16).reverse().some(function offered(row) {
+    if (normalized(row && row.direction) !== 'outbound') return false;
+    const body = normalized(row && row.body);
+    const matches = body.matchAll(/\b(\d{1,2})(?::(\d{2}))\s*(am|pm)?\b/g);
+    for (const match of matches) {
+      let hour = Number(match[1]);
+      const minute = Number(match[2] || 0);
+      const period = match[3] || '';
+      if (period === 'pm' && hour < 12) hour += 12;
+      if (period === 'am' && hour === 12) hour = 0;
+      if (minute !== requestedTime.minute) continue;
+      if (hour === requestedTime.hour || requestedTime.ambiguous === true && hour % 12 === requestedTime.hour % 12) return true;
+    }
+    return false;
+  });
 }
 
 function explicitBookingCommitment(message, hasContext, followUpType, selected, classification) {
@@ -216,7 +271,9 @@ function explicitBookingCommitment(message, hasContext, followUpType, selected, 
   const source = normalized(message);
   if (/\b(quiero (?:hacer |agendar |reservar )?(?:una |la )?cita|agendame|reservame|puede agendar|puedes agendar|hacer una cita|schedule (?:an|the|my) appointment|book (?:an|the|my) appointment|reserve (?:the|this) time|i ll take|tomare)\b/.test(source)) return true;
   if (/\b(can i schedule|could you schedule|please schedule|me conviene|me sirve|perfecto|that works|works for me)\b/.test(source)) return true;
-  return hasContext && ['selection', 'acceptance'].includes(followUpType);
+  if (/\b(que tal|como seria|tienes|hay|puedo|podria|seria posible|what about|how about|do you have|is it available|is that available)\b/.test(source)) return false;
+  if (hasContext && /\b(ok|okay|esta bien|de acuerdo|nos vemos|confirmado|confirmada|yes|si|sounds good|see you there)\b/.test(source)) return true;
+  return hasContext && followUpType === 'acceptance';
 }
 
 function dealerLabel(contact, locale) {
@@ -336,8 +393,8 @@ function exactAvailableReply(payload, selected, daySlots, locale, referenceDate)
 function appointmentConversationPlan(input) {
   const options = input || {};
   const payload = options.payload || [];
-  const slots = Array.isArray(options.slots) ? options.slots : [];
   const conversation = options.conversation || {};
+  const slots = scopeSlotsForConversation(Array.isArray(options.slots) ? options.slots : [], conversation);
   const message = text(options.message);
   const now = options.referenceDate || new Date();
   const locale = detectAppointmentLocale(message, conversation, options.locale);
@@ -371,7 +428,7 @@ function appointmentConversationPlan(input) {
     const referenceKey = requestedDate ? localDateKey(requestedDate) : lastOfferedGroupKey(conversation, groups, locale);
     const referenceGroup = groups.find(function sameDay(group) { return group.key === referenceKey; });
     const referenceDate = requestedDate || (referenceGroup && referenceGroup.date) || null;
-    const blocked = referenceDate ? dateAvailabilityState(payload, referenceDate).blocked : false;
+    const blocked = referenceDate ? dateAvailabilityState(payload, referenceDate, { verifiedSlots: referenceGroup && referenceGroup.slots }).blocked : false;
     if (referenceGroup && !blocked) {
       const offeredIds = new Set(previouslyOfferedSlots(conversation, referenceGroup, locale).map(function id(slot) { return slot.id; }));
       const remaining = referenceGroup.slots.filter(function notOffered(slot) { return !offeredIds.has(slot.id); });
@@ -399,9 +456,10 @@ function appointmentConversationPlan(input) {
   if (requestedDate) {
     const requestedKey = localDateKey(requestedDate);
     const group = groups.find(function sameDay(item) { return item.key === requestedKey; });
-    const blocked = dateAvailabilityState(payload, requestedDate).blocked;
+    const blocked = dateAvailabilityState(payload, requestedDate, { verifiedSlots: group && group.slots }).blocked;
     if (group && group.slots.length && !blocked) {
-      const prefix = requested.exact ? appointmentResponse('requested_time_unavailable', locale, {}, requestedKey) : '';
+      const prefix = requested.exact || requestedTimeWasOffered(conversation, requested.time)
+        ? appointmentResponse('requested_time_unavailable', locale, {}, requestedKey) : '';
       const offer = dayOffer(payload, group, locale, prefix, { preference: preference, referenceDate: now });
       return { relevant: true, locale: locale, decision: 'offer_same_day', response: offer.response, shouldCreate: false, selectedSlot: null, recommendedSlot: offer.recommendedSlot, offeredSlots: offer.offeredSlots, requested: requested, preference: preference, libraryIntent: classification.intent };
     }
@@ -426,6 +484,7 @@ function appointmentConfirmation(slot, locale, payload) {
 }
 
 module.exports = {
+  NEXA_CONTEXTUAL_TIME_SELECTION_V1,
   NEXA_PRO_APPOINTMENT_COMMUNICATION_V1,
   appointmentConfirmation,
   appointmentConversationActive,
@@ -437,5 +496,6 @@ module.exports = {
   formatTime,
   groupSlotsByDay,
   rankSlotsForPreference,
-  resolveSlotSelection
+  resolveSlotSelection,
+  scopeSlotsForConversation
 };

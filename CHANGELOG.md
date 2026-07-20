@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.9
+
+- Fixed cross-store blocked-date leakage when availability and Dealer Agenda calendar snapshots are merged.
+- Added store/dealer/listing-aware schedule and blocked-date evaluation.
+- Made verified open slots override contradictory generic day-off metadata while exact booked-time conflicts remain authoritative.
+- Added calendar traversal for nested `stores`, `days`, `slots` and `available_slots` records.
+- Added contextual 12-hour selection so a customer can choose “1:30” after Nexa offered 1:30 PM.
+- Added Spanish morning/afternoon/evening time parsing.
+- Prevented appointment availability questions from being treated as booking authorization.
+- Added graceful revalidation when a previously offered slot disappears.
+- Made appointment collision checks store-aware.
+- Added exact July 20 regression coverage for inquiry, offer, selection and agenda refresh behavior.
+
 ## 1.6.8
 
 - Made appointment wording regression assertions accept every equivalent bundled natural response on Windows, UTC and local-time runners.

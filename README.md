@@ -1,8 +1,21 @@
-# Nexa Smart Office Bot 1.6.8
+# Nexa Smart Office Bot 1.6.9
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.8
+## New in 1.6.9
+
+- Keeps Dealer Appointment Agenda availability isolated by `store_id`, `dealer_id` and `listing_id` so a different dealer's day off cannot erase valid slots.
+- Treats current verified open slots as authoritative when a mixed or stale calendar snapshot also contains a conflicting generic blocked date.
+- Reads `stores[]`, `days[]`, `slots[]` and `available_slots[]` from `dealer-agenda-calendar` with inherited dealer/store/date context.
+- Understands Spanish time expressions such as “2 de la tarde” and resolves a short “1:30” against the AM/PM option Nexa just offered.
+- Separates a time inquiry (“¿qué tal a las 2?”) from a booking commitment (“1:30 está bien, allá nos vemos”).
+- If an offered time becomes occupied during refresh, explains that the exact time changed and offers the remaining verified times instead of calling the entire day off.
+- Prevents an appointment belonging to another store from blocking the connected dealer's same-time slot.
+- Adds the reported July 20 conversation as an exact permanent regression test.
+
+After updating, run **Test connection** and **Sync now** once so Nexa replaces both cached appointment snapshots.
+
+## Existing 1.6.8 improvements
 
 - Discovers the complete V6 appointment contract from `connection-map`, including explicit enable flags and endpoint names.
 - Adds read support for `dealer-agenda-calendar` with the `dealer-agenda-calendar:read` scope and a rolling `from` + `days=14` window.

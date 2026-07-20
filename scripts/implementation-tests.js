@@ -46,9 +46,11 @@ assert.equal(automationService.includes('NEXA_GUARDED_AUTOMATIC_ACTIONS_V1'), tr
 assert.equal(automationService.includes('NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1'), true);
 assert.equal(automationService.includes('NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2'), true);
 assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);
+assert.equal(dealerAvailabilityService.includes('NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1'), true);
 assert.equal(dealerAvailabilityService.includes('blocked_dates'), true);
 assert.equal(dealerAvailabilityService.includes('verified_open_slots'), true);
 assert.equal(appointmentCommunicationService.includes('NEXA_PRO_APPOINTMENT_COMMUNICATION_V1'), true);
+assert.equal(appointmentCommunicationService.includes('NEXA_CONTEXTUAL_TIME_SELECTION_V1'), true);
 assert.equal(appointmentCommunicationService.includes('offer_next_day'), true);
 assert.equal(appointmentCommunicationService.includes('contactClosing'), true);
 assert.equal(appointmentLibraryService.includes('NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1'), true);

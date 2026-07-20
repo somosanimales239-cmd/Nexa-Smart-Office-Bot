@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 
 const NEXA_LIVE_DEALER_AVAILABILITY_V1 = 'NEXA_LIVE_DEALER_AVAILABILITY_V1';
+const NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1 = 'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1';
 
 const SLOT_KEYS = new Set([
   'verified_open_slots', 'verified_slots', 'open_slots', 'available_slots', 'slots',
@@ -114,8 +115,9 @@ function availabilitySlotRecords(payload) {
             visit(pair[1], true, inheritedDate, depth + 1);
           });
         } else visit(child, true, slotContext, depth + 1);
-      } else if (['data', 'result', 'items', 'records', 'rows', 'availability_snapshot'].includes(key)) {
-        visit(child, false, value, depth + 1);
+      } else if (['data', 'result', 'items', 'records', 'rows', 'availability_snapshot', 'calendar_snapshot', 'calendar', 'stores', 'store', 'days'].includes(key)) {
+        const childContext = Object.assign({}, inherited || {}, inheritedSlotContext(value));
+        visit(child, false, childContext, depth + 1);
       }
     });
   }
@@ -283,15 +285,16 @@ function scheduleIntervals(entry, depth) {
 
 function dailyScheduleWindow(payload, value, slots) {
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime()) || dateAvailabilityState(payload, date).blocked) return null;
+  const slotContext = commonSlotContext(slots);
+  if (Number.isNaN(date.getTime()) || dateAvailabilityState(payload, date, Object.assign({}, slotContext, { verifiedSlots: slots })).blocked) return null;
   const dateKey = localDateKey(date);
-  const specialOpen = collectNamedValues(payload, OPEN_DATE_KEYS, 500).find(function matchingOpenDate(entry) {
+  const specialOpen = slotContext.ambiguous ? null : collectScopedNamedValues(payload, OPEN_DATE_KEYS, slotContext, 500).find(function matchingOpenDate(entry) {
     return entry && typeof entry === 'object' && dateKeyFromValue(entry) === dateKey;
   });
   let intervals = scheduleIntervals(specialOpen, 0);
   let source = intervals.length ? 'special_open_date' : '';
-  if (!intervals.length) {
-    const schedule = firstNamedValue(payload, WEEKLY_SCHEDULE_KEYS);
+  if (!intervals.length && !slotContext.ambiguous) {
+    const schedule = firstScopedNamedValue(payload, WEEKLY_SCHEDULE_KEYS, slotContext);
     const entry = weekdayScheduleEntry(schedule, date);
     intervals = scheduleIntervals(entry, 0);
     if (intervals.length) source = 'weekly_schedule';
@@ -313,13 +316,174 @@ function dailyScheduleWindow(payload, value, slots) {
   return { start_minutes: startMinutes, end_minutes: endMinutes, source: 'verified_slots', intervals: [] };
 }
 
-function dateAvailabilityState(payload, value) {
+function commonSlotContext(slots) {
+  const source = (slots || []).filter(Boolean);
+  const output = {};
+  let ambiguous = false;
+  for (const key of ['store_id', 'dealer_id', 'listing_id']) {
+    const values = Array.from(new Set(source.map(function value(slot) {
+      return text(slot && (slot[key] || slot.raw && slot.raw[key]));
+    }).filter(Boolean)));
+    if (values.length === 1) output[key] = values[0];
+    if (values.length > 1) ambiguous = true;
+  }
+  output.ambiguous = ambiguous;
+  return output;
+}
+
+function recordMatchesContext(record, inherited, context) {
+  if (!context || context.ambiguous) return true;
+  const effective = Object.assign({}, inherited || {}, inheritedSlotContext(record));
+  for (const key of ['store_id', 'dealer_id', 'listing_id']) {
+    const expected = text(context[key]);
+    const actual = text(effective[key]);
+    if (expected && actual && expected !== actual) return false;
+  }
+  return true;
+}
+
+function collectScopedNamedValues(payload, wantedKeys, context, limit) {
+  if (!context || context.ambiguous || (!context.store_id && !context.dealer_id && !context.listing_id)) {
+    return collectNamedValues(payload, wantedKeys, limit);
+  }
+  const output = [];
+  function visit(value, inherited, depth) {
+    if (depth > 7 || value === undefined || value === null || output.length >= limit) return;
+    if (Array.isArray(value)) {
+      value.slice(0, limit).forEach(function visitItem(item) { visit(item, inherited, depth + 1); });
+      return;
+    }
+    if (typeof value !== 'object' || !recordMatchesContext(value, inherited, context)) return;
+    const nextContext = Object.assign({}, inherited || {}, inheritedSlotContext(value));
+    Object.entries(value).forEach(function inspect(entry) {
+      if (output.length >= limit) return;
+      if (wantedKeys.has(normalized(entry[0]))) {
+        const child = entry[1];
+        if (Array.isArray(child)) output.push.apply(output, child.slice(0, limit - output.length));
+        else if (child !== undefined && child !== null) output.push(child);
+      } else visit(entry[1], nextContext, depth + 1);
+    });
+  }
+  visit(payload, {}, 0);
+  return output.slice(0, limit);
+}
+
+function scopedDateKeys(payload, wantedKeys, context) {
+  const dates = new Set();
+  collectScopedNamedValues(payload, wantedKeys, context, 500).forEach(function addDate(value) {
+    const key = dateKeyFromValue(value);
+    if (key) dates.add(key);
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      Object.keys(value).forEach(function keyedDate(candidate) {
+        if (/^20\d{2}-\d{2}-\d{2}$/.test(candidate) && !falsey(value[candidate])) dates.add(candidate);
+      });
+    }
+  });
+  return dates;
+}
+
+function firstScopedNamedValue(payload, wantedKeys, context) {
+  const values = collectScopedNamedValues(payload, wantedKeys, context, 1);
+  return values.length ? values[0] : null;
+}
+
+function valueContainsDate(value, key) {
+  if (dateKeyFromValue(value) === key) return true;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.keys(value).some(function keyedDate(candidate) {
+      return candidate === key && !falsey(value[candidate]);
+    });
+  }
+  return false;
+}
+
+function explicitContextMatch(record, inherited, context) {
+  if (!context || context.ambiguous) return false;
+  const effective = Object.assign({}, inherited || {}, inheritedSlotContext(record));
+  let matched = false;
+  for (const key of ['store_id', 'dealer_id', 'listing_id']) {
+    const expected = text(context[key]);
+    const actual = text(effective[key]);
+    if (expected && actual && expected !== actual) return false;
+    if (expected && actual && expected === actual) matched = true;
+  }
+  return matched;
+}
+
+function hasExplicitScopedDate(payload, wantedKeys, key, context) {
+  let found = false;
+  function visit(value, inherited, depth) {
+    if (found || depth > 7 || value === undefined || value === null) return;
+    if (Array.isArray(value)) {
+      value.slice(0, 1000).forEach(function visitItem(item) { visit(item, inherited, depth + 1); });
+      return;
+    }
+    if (typeof value !== 'object' || !recordMatchesContext(value, inherited, context)) return;
+    const nextContext = Object.assign({}, inherited || {}, inheritedSlotContext(value));
+    Object.entries(value).forEach(function inspect(entry) {
+      if (found) return;
+      if (wantedKeys.has(normalized(entry[0])) && explicitContextMatch(value, inherited, context)) {
+        const values = Array.isArray(entry[1]) ? entry[1] : [entry[1]];
+        if (values.some(function matchingDate(item) { return valueContainsDate(item, key); })) found = true;
+      } else visit(entry[1], nextContext, depth + 1);
+    });
+  }
+  visit(payload, {}, 0);
+  return found;
+}
+
+function calendarDayState(payload, key, context) {
+  const state = { blocked: false, open: false };
+  function visit(value, inherited, depth) {
+    if (depth > 7 || value === undefined || value === null) return;
+    if (Array.isArray(value)) {
+      value.slice(0, 1000).forEach(function visitItem(item) { visit(item, inherited, depth + 1); });
+      return;
+    }
+    if (typeof value !== 'object' || !recordMatchesContext(value, inherited, context)) return;
+    const nextContext = Object.assign({}, inherited || {}, inheritedSlotContext(value));
+    const hasScope = !context || context.ambiguous || (!context.store_id && !context.dealer_id && !context.listing_id)
+      || explicitContextMatch(value, inherited, context);
+    if (hasScope && dateKeyFromValue(value) === key) {
+      if (truthy(value.blocked) || truthy(value.closed) || truthy(value.is_off)
+        || Object.prototype.hasOwnProperty.call(value, 'is_open') && falsey(value.is_open)) state.blocked = true;
+      if (truthy(value.is_open) || truthy(value.open) || truthy(value.available)) state.open = true;
+    }
+    Object.values(value).forEach(function child(item) { visit(item, nextContext, depth + 1); });
+  }
+  visit(payload, {}, 0);
+  return state;
+}
+
+function slotIsVerifiedOpenForDate(slot, key) {
+  if (!slot) return false;
+  const start = slot.start instanceof Date ? slot.start : availabilityStart(slot.raw || slot);
+  if (!start || localDateKey(start) !== key) return false;
+  const raw = slot.raw || slot;
+  const status = normalized(raw.status || raw.state);
+  const unavailableStatus = ['unavailable', 'blocked', 'booked', 'closed', 'disabled', 'off', 'cancelled', 'canceled'].includes(status)
+    || truthy(raw.booked) || truthy(raw.blocked) || truthy(raw.closed) || truthy(raw.is_booked) || truthy(raw.is_blocked);
+  const availabilityValue = raw.available !== undefined ? raw.available : raw.is_available;
+  return availabilityValue === undefined ? !unavailableStatus : truthy(availabilityValue) && !unavailableStatus;
+}
+
+function dateAvailabilityState(payload, value, context) {
   const date = value instanceof Date ? value : new Date(value);
   const key = localDateKey(date);
   if (!key) return { blocked: false, reason: '' };
-  if (collectDateKeys(payload, BLOCKED_DATE_KEYS).has(key)) return { blocked: true, reason: 'blocked_date' };
-  if (collectDateKeys(payload, OPEN_DATE_KEYS).has(key)) return { blocked: false, reason: 'special_open_date' };
-  const schedule = firstNamedValue(payload, WEEKLY_SCHEDULE_KEYS);
+  const options = context || {};
+  const verifiedSlots = [].concat(options.verifiedSlots || [], options.verifiedSlot || []).filter(Boolean);
+  const dayState = calendarDayState(payload, key, options);
+  if (hasExplicitScopedDate(payload, BLOCKED_DATE_KEYS, key, options) || dayState.blocked) {
+    return { blocked: true, reason: dayState.blocked ? 'calendar_day_off' : 'blocked_date' };
+  }
+  if (verifiedSlots.some(function verified(slot) { return slotIsVerifiedOpenForDate(slot, key); })) {
+    return { blocked: false, reason: 'verified_open_slot' };
+  }
+  if (dayState.open) return { blocked: false, reason: 'calendar_open_day' };
+  if (scopedDateKeys(payload, BLOCKED_DATE_KEYS, options).has(key)) return { blocked: true, reason: 'blocked_date' };
+  if (scopedDateKeys(payload, OPEN_DATE_KEYS, options).has(key)) return { blocked: false, reason: 'special_open_date' };
+  const schedule = firstScopedNamedValue(payload, WEEKLY_SCHEDULE_KEYS, options);
   if (!schedule) return { blocked: false, reason: '' };
   const entry = weekdayScheduleEntry(schedule, date);
   return scheduleEntryIsOff(entry) ? { blocked: true, reason: 'weekly_day_off' } : { blocked: false, reason: entry ? 'weekly_schedule' : '' };
@@ -369,13 +533,14 @@ function normalizeAvailability(payload, settings, referenceDate) {
   const unique = new Map();
   availabilitySlotRecords(payload).forEach(function mapSlot(slot, index) {
     const start = availabilityStart(slot);
-    if (!start || dateAvailabilityState(payload, start).blocked) return;
+    if (!start) return;
     const status = normalized(slot.status || slot.state);
     const unavailableStatus = ['unavailable', 'blocked', 'booked', 'closed', 'disabled', 'off', 'cancelled', 'canceled'].includes(status)
       || truthy(slot.booked) || truthy(slot.blocked) || truthy(slot.closed) || truthy(slot.is_booked) || truthy(slot.is_blocked);
     const availabilityValue = slot.available !== undefined ? slot.available : slot.is_available;
     const isAvailable = availabilityValue === undefined ? !unavailableStatus : truthy(availabilityValue) && !unavailableStatus;
-    if (!isAvailable || start.getTime() < now.getTime() + minNotice || start > maxDate) return;
+    if (!isAvailable || dateAvailabilityState(payload, start, Object.assign({}, commonSlotContext([slot]), { verifiedSlot: slot })).blocked
+      || start.getTime() < now.getTime() + minNotice || start > maxDate) return;
     const duration = clamp(slot.duration_minutes || slot.slot_minutes || slotMinutes, 10, 480);
     const directEnd = text(slot.end_at || slot.ends_at || slot.end);
     const endTime = text(slot.end_time || slot.to_time || slot.close_time);
@@ -402,6 +567,7 @@ function slotConflictsWithAppointments(slot, appointments) {
   if (!slot || !(slot.start instanceof Date) || !(slot.end instanceof Date)) return true;
   return (appointments || []).some(function overlaps(appointment) {
     if (String(appointment && appointment.status || '').toLowerCase() !== 'scheduled') return false;
+    if (slot.store_id && appointment.store_id && text(slot.store_id) !== text(appointment.store_id)) return false;
     const start = new Date(appointment.start_at);
     if (Number.isNaN(start.getTime())) return false;
     const parsedEnd = appointment.end_at ? new Date(appointment.end_at) : new Date(start.getTime() + 30 * 60000);
@@ -483,16 +649,22 @@ function compactAvailabilityContext(payload, settings, referenceDate) {
 
 function parseTimeParts(message) {
   const source = normalized(message);
-  const match = source.match(/(?:\bat\s+|\ba\s+las?\s+|\b)(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i)
-    || source.match(/\b(\d{1,2}):(\d{2})\b/);
+  const meridiem = source.match(/(?:\bat\s+|\ba\s+las?\s+|\b)(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
+  const dayPart = source.match(/\ba\s+las?\s+(\d{1,2})(?::(\d{2}))?\s+de\s+la\s+(manana|tarde|noche|madrugada)\b/i);
+  const clock = source.match(/\b(\d{1,2}):(\d{2})\b/);
+  const bare = source.match(/\ba\s+las?\s+(\d{1,2})\b/i);
+  const match = meridiem || dayPart || clock || bare;
   if (!match) return null;
   let hour = Number(match[1]);
   const minute = Number(match[2] || 0);
   const period = text(match[3]).replaceAll('.', '').toLowerCase();
   if (period === 'pm' && hour < 12) hour += 12;
   if (period === 'am' && hour === 12) hour = 0;
+  if (period === 'tarde' && hour < 12) hour += 12;
+  if (period === 'noche' && hour >= 1 && hour < 12) hour += 12;
+  if ((period === 'manana' || period === 'madrugada') && hour === 12) hour = 0;
   if (hour > 23 || minute > 59) return null;
-  return { hour: hour, minute: minute };
+  return { hour: hour, minute: minute, ambiguous: !meridiem && !dayPart };
 }
 
 function parseRequestedDateTime(message, referenceDate) {
@@ -533,6 +705,7 @@ function isAppointmentAvailabilityIntent(message) {
 
 module.exports = {
   BLOCKED_DATE_KEYS,
+  NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1,
   NEXA_LIVE_DEALER_AVAILABILITY_V1,
   OPEN_DATE_KEYS,
   SLOT_KEYS,

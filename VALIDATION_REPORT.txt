@@ -1,9 +1,9 @@
-Nexa Smart Office Bot 1.6.8 Validation Report
+Nexa Smart Office Bot 1.6.9 Validation Report
 
 Package feature
-Live V6 Dealer Appointment Agenda synchronization and guarded website creation,
-combined with bilingual topic-locked appointment communication, verified
-alternatives and local/website collision protection.
+Store-aware V6 Dealer Appointment Agenda synchronization and guarded website
+creation, combined with contextual AM/PM selection, bilingual topic-locked
+appointment communication and local/website collision protection.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -22,7 +22,7 @@ Validation scope
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 13 automotive Knowledge tests, including live schedules and website-calendar conflicts
-- 14 professional appointment communication tests
+- 18 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
 - Implementation and acceptance contracts
@@ -49,6 +49,15 @@ Appointment communication regression verified
 - An appointment decline leaves the dealer's verified contact information.
 - A simple availability question cannot create an appointment.
 - A short contextual selection can create only its exact verified slot.
+- "2 de la tarde" is parsed as 2:00 PM and a later contextual "1:30"
+  resolves to the 1:30 PM option Nexa just offered.
+- A time inquiry is distinct from an explicit booking commitment.
+- Dealer/store/listing identifiers isolate schedules, blocked dates, slots and
+  website appointments when reseller data contains more than one store.
+- Another store's day off cannot erase the connected dealer's verified slots.
+- An explicit day off for the same dealer remains authoritative.
+- If an offered time disappears during refresh, Nexa offers the remaining
+  current times without incorrectly declaring the whole date blocked.
 - A booked or locally occupied time is never used for a new appointment.
 - A booked website-calendar time is never offered or created.
 - Website creation uses the exact V6 date/time/customer request body and requires
