@@ -1,8 +1,8 @@
-Nexa Smart Office Bot 1.6.9 Validation Report
+Nexa Smart Office Bot 1.6.11 Validation Report
 
 Package feature
-Store-aware V6 Dealer Appointment Agenda synchronization and guarded website
-creation, combined with contextual AM/PM selection, bilingual topic-locked
+Store-aware V6 Dealer Appointment Agenda synchronization with guarded date and
+customer-identity recovery, contextual AM/PM selection, bilingual topic-locked
 appointment communication and local/website collision protection.
 
 Preserved platform features
@@ -14,6 +14,8 @@ Preserved platform features
 - Installer, Portable and Windows ZIP targets
 
 Validation scope
+- Website Local build validator compatibility for the two reported JavaScript files
+- Standalone Node.js syntax validation of those files before and after ZIP extraction
 - Project and delivery validators
 - Nexa contract gate
 - JavaScript syntax
@@ -22,7 +24,7 @@ Validation scope
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 13 automotive Knowledge tests, including live schedules and website-calendar conflicts
-- 18 professional appointment communication tests
+- 19 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
 - Implementation and acceptance contracts
@@ -49,6 +51,14 @@ Appointment communication regression verified
 - An appointment decline leaves the dealer's verified contact information.
 - A simple availability question cannot create an appointment.
 - A short contextual selection can create only its exact verified slot.
+- “sababdo en la mañana” resolves to Saturday, July 25 rather than Tuesday,
+  July 21; “en la mañana” is never interpreted as tomorrow by itself.
+- Prior dealer offer dates remain available as conversation context even when
+  that day's slots disappear during refresh.
+- Missing customer identity produces a name/contact request in the same chat,
+  preserves the selected slot and does not end as an internal-only failure.
+- After the customer supplies identity, the exact slot is revalidated, created
+  and confirmed; if it changed, current verified alternatives are sent.
 - "2 de la tarde" is parsed as 2:00 PM and a later contextual "1:30"
   resolves to the 1:30 PM option Nexa just offered.
 - A time inquiry is distinct from an explicit booking commitment.

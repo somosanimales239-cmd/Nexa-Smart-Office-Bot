@@ -59,6 +59,8 @@ const requiredMarkers = [
   'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1',
   'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1',
   'NEXA_CONTEXTUAL_TIME_SELECTION_V1',
+  'NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1',
+  'NEXA_APPOINTMENT_CONTACT_RECOVERY_V1',
   'ai-control'
 ];
 const failures = requiredMarkers.filter(function missingMarker(marker) {

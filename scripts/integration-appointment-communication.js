@@ -311,6 +311,46 @@ test('the message thread store scopes identical times to the correct dealer', fu
   assert.equal(plan.selectedSlot.id, 'store-b-1400');
 });
 
+test('reported Saturday typo changes the active date to Saturday July 25 instead of Tuesday July 21', function () {
+  const reference = new Date(2026, 6, 20, 12, 1, 0, 0);
+  function fixed(day, hour, minute) { return new Date(2026, 6, day, hour, minute || 0, 0, 0).toISOString(); }
+  const saturdayPayload = {
+    store_id: 'store-somerset',
+    verified_open_slots: [
+      { slot_id: 'tuesday-1000', store_id: 'store-somerset', start_at: fixed(21, 10), available: true },
+      { slot_id: 'saturday-1000', store_id: 'store-somerset', start_at: fixed(25, 10), available: true },
+      { slot_id: 'saturday-1030', store_id: 'store-somerset', start_at: fixed(25, 10, 30), available: true },
+      { slot_id: 'saturday-1100', store_id: 'store-somerset', start_at: fixed(25, 11), available: true }
+    ]
+  };
+  const saturdaySlots = normalizeAvailability(saturdayPayload, { auto_appointments_min_notice_hours: 0, auto_appointments_max_days: 30, auto_appointments_duration_minutes: 30 }, reference);
+  const messages = [
+    { direction: 'inbound', body: 'a ver quiero una cita para el jueves a la 7:00pm', sent_at: fixed(20, 11, 59) },
+    { direction: 'outbound', body: 'La Agenda muestra opciones el jueves, 23 de julio. Tengo 5:30 PM, 5:00 PM y 4:30 PM. ¿Le funciona?', sent_at: fixed(20, 12, 0) },
+    { direction: 'inbound', body: 'creo que lo voy a dejar para el sababdo en la manana, que tienes disponible para ese dia', sent_at: fixed(20, 12, 1) }
+  ];
+  const plan = appointmentConversationPlan({ payload: saturdayPayload, slots: saturdaySlots, conversation: { messages: messages }, message: messages[2].body, locale: 'es', referenceDate: reference });
+  assert.equal(plan.decision, 'offer_same_day');
+  assert.match(plan.response, /sábado, 25 de julio/i);
+  assert.match(plan.response, /10:00 AM/);
+  assert.match(plan.response, /11:00 AM/);
+  assert.doesNotMatch(plan.response, /martes, 21 de julio/i);
+
+  const selectionMessage = { direction: 'inbound', body: 'si a las 11 esta bien', sent_at: fixed(20, 12, 2) };
+  const selection = appointmentConversationPlan({
+    payload: saturdayPayload,
+    slots: saturdaySlots,
+    conversation: { messages: messages.concat({ direction: 'outbound', body: plan.response, sent_at: fixed(20, 12, 1) }, selectionMessage) },
+    message: selectionMessage.body,
+    locale: 'es',
+    referenceDate: reference
+  });
+  assert.equal(selection.decision, 'select_slot');
+  assert.equal(selection.shouldCreate, true);
+  assert.equal(selection.selectedSlot.id, 'saturday-1100');
+  assert.equal(localDateKey(selection.selectedSlot.start), '2026-07-25');
+});
+
 test('reported conversation remains locked to appointments and recommends verified Agenda alternatives', function () {
   const reference = new Date(2026, 6, 19, 4, 29, 0, 0);
   function fixed(day, hour, minute) { return new Date(2026, 6, day, hour, minute || 0, 0, 0).toISOString(); }

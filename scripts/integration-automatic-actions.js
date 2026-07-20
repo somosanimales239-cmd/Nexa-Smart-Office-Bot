@@ -11,6 +11,7 @@ const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-auto-actions-'));
 const database = new DatabaseService(path.join(temp, 'workspace.sqlite'));
 let sentMessages = [];
+let remoteMessageSequence = 0;
 let currentThread = null;
 let availabilityPayload = { slots: [] };
 let availabilityFailure = false;
@@ -28,7 +29,8 @@ const apiService = {
   },
   async sendMessage(threadId, body, clientId) {
     sentMessages.push({ threadId, body, clientId });
-    return { payload: { message_id: 'remote-' + sentMessages.length, thread_id: threadId, body, direction: 'outbound', sent_at: new Date().toISOString(), status: 'sent' } };
+    remoteMessageSequence += 1;
+    return { payload: { message_id: 'remote-' + remoteMessageSequence, thread_id: threadId, body, direction: 'outbound', sent_at: new Date().toISOString(), status: 'sent' } };
   },
   async markMessageRead() { return { payload: { status: 'read' } }; },
   async fetchDealerAppointmentAvailability(query) { lastAvailabilityQuery = query; if (availabilityFailure) throw new Error('availability endpoint unavailable'); return { payload: availabilityPayload }; },
@@ -209,6 +211,53 @@ async function run() {
   const collisionResult = await service.runNow('test-local-agenda-collision');
   assert.equal(collisionResult.appointments_created, 0);
   assert.equal(database.listAppointments('').length, 1, 'A verified remote slot must not overlap an existing local Agenda appointment.');
+
+  const contactDay = new Date(tomorrow);
+  contactDay.setDate(contactDay.getDate() + 2);
+  contactDay.setHours(11, 0, 0, 0);
+  const contactDateKey = contactDay.getFullYear() + '-' + String(contactDay.getMonth() + 1).padStart(2, '0') + '-' + String(contactDay.getDate()).padStart(2, '0');
+  availabilityPayload = {
+    store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street',
+    verified_open_slots: [{ slot_id: 'contact-slot', store_id: 'store-1', start_at: contactDay.toISOString(), available: true, location: 'Main dealership' }]
+  };
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '1', auto_appointments_create_remote: '0', auto_appointments_require_contact: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-contact', subject: 'Appointment contact', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  const contactThreadSnapshot = function threadMissingContact(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Appointment contact', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'contact-request', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'Quiero una cita el ' + contactDateKey + ' a las 11:00 AM.', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
+        { message_id: 'contact-offer', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: 'La cita del ' + contactDateKey + ' a las 11:00 AM está disponible. ¿Le reservo esa hora?', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'contact-select', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'Sí, a las 11 está bien.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+      ]
+    };
+  };
+  currentThread = contactThreadSnapshot;
+  database.createAutomaticActionEvent({
+    dedupe_key: 'auto-appointment:contact-select:contact-slot', action_type: 'appointment_create', source_type: 'message', source_id: 'contact-select',
+    thread_id: 'thread-contact', status: 'failed', engine: 'availability', summary: 'Old identity failure', error: 'Customer identity is not available for automatic appointment creation.'
+  });
+  const attentionBefore = notifications.filter((item) => item.title === 'Automatic appointment needs attention').length;
+  const contactRequestResult = await service.runNow('test-missing-contact-request');
+  assert.equal(contactRequestResult.appointments_created, 0);
+  assert.equal(contactRequestResult.messages_sent, 1, 'Missing identity must produce a customer-facing request instead of stopping silently.');
+  assert.match(sentMessages[0].body, /nombre del cliente|customer name/i);
+  assert.match(sentMessages[0].body, /11:00 AM/i);
+  assert.equal(notifications.filter((item) => item.title === 'Automatic appointment needs attention').length, attentionBefore, 'Missing identity should be a recoverable conversation step, not a terminal error notification.');
+
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-contact', subject: 'Appointment contact', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function threadContactProvided(threadId) {
+    const snapshot = contactThreadSnapshot(threadId);
+    snapshot.messages.push({ message_id: 'contact-details', thread_id: threadId, direction: 'inbound', sender_type: 'customer', body: 'Mi nombre es Ana López y mi teléfono es 239-555-0188.', sent_at: new Date().toISOString(), is_read: 0 });
+    return snapshot;
+  };
+  const recoveredContactResult = await service.runNow('test-contact-recovery');
+  assert.equal(recoveredContactResult.appointments_created, 1, 'The same verified slot must be created after the customer supplies identity.');
+  assert.equal(database.listAppointments('Ana López').length, 1);
+  assert.equal(database.listAppointments('Ana López')[0].title, 'Website appointment · Ana López');
+  assert.match(sentMessages[sentMessages.length - 1].body, /11:00 AM/i);
+  assert.match(sentMessages[sentMessages.length - 1].body, /confirmad|confirmed/i);
 
   const remoteDay = new Date(tomorrow);
   remoteDay.setDate(remoteDay.getDate() + 1);

@@ -1,6 +1,6 @@
 {
     "name": "nexa-smart-office-bot",
-    "version": "1.6.9",
+    "version": "1.6.11",
     "description": "Local-first smart office assistant with live Dealer Agenda synchronization, guarded website appointment creation, bilingual appointment communication, automotive knowledge, messages and notifications.",
     "main": "main.js",
     "author": "Nexa",

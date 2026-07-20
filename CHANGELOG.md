@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.11
+
+- Rewrote the customer-contact prompt without an apostrophe embedded inside a differently quoted JavaScript string.
+- Replaced the matching regression-test expression with validator-safe wording.
+- Expressed the permitted name apostrophe as a Unicode escape inside the contact parser character class.
+- Preserved all 1.6.10 appointment recovery behavior and added standalone syntax checks for the two files reported by Local build validation.
+
+## 1.6.10
+
+- Fixed Spanish morning text being misread as “tomorrow” and added common weekday typo recovery, including `sababdo` → Saturday.
+- Added month-name date parsing and date recovery from prior dealer offers independent of currently available groups.
+- Prevented a refreshed slot list from resetting a requested Saturday to the earliest Tuesday.
+- Added a guarded contact-collection step for appointments missing customer identity.
+- Preserved and revalidated the selected slot while asking for name and phone/email.
+- Continued appointment creation after contact details arrive and sent the normal confirmation.
+- Made old failed identity attempts recoverable without deleting their audit record.
+- Added customer-facing explanations for creation failures so the appointment flow cannot stop silently.
+- Added exact regressions for the reported July 20 Saturday date change and missing-identity failure.
+
 ## 1.6.9
 
 - Fixed cross-store blocked-date leakage when availability and Dealer Agenda calendar snapshots are merged.

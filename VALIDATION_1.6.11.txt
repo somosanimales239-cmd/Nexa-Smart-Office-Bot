@@ -1,0 +1,23 @@
+Nexa Smart Office Bot 1.6.11 - Validation Summary
+
+Delivery type: complete software source
+
+Reported Local build validation targets:
+- scripts/integration-automatic-actions.js
+- src/services/automatic-actions-service.js
+
+Required checks:
+- node --check on both reported files
+- npm run validate
+- npm test
+- npm run test:implementation
+- npm run test:acceptance
+- npm run validate:nexa-contract
+- node scripts/nexa-baseline.test.js
+- complete ZIP integrity test
+- extracted ZIP checksum validation
+- extracted ZIP standalone syntax validation
+
+Appointment recovery retained:
+- NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1
+- NEXA_APPOINTMENT_CONTACT_RECOVERY_V1

@@ -1,8 +1,27 @@
-# Nexa Smart Office Bot 1.6.9
+# Nexa Smart Office Bot 1.6.11
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.9
+## New in 1.6.11
+
+- Removes the ambiguous apostrophe constructs that the website Local build validation incorrectly reported as unterminated JavaScript strings.
+- Keeps the complete 1.6.10 appointment date, contact-collection, revalidation and booking recovery behavior unchanged.
+- Validates both affected files as standalone JavaScript before delivery and verifies the complete extracted ZIP.
+
+## Existing 1.6.10 improvements
+
+- Recognizes the reported typo “sababdo” as Saturday and distinguishes “en la mañana” from “mañana” meaning tomorrow.
+- Keeps an explicitly changed appointment date even when the old day's slots disappear during a calendar refresh.
+- Reads natural Spanish/English month dates from prior appointment offers so the conversation cannot fall back to the earliest unrelated day.
+- Converts missing customer identity into a recoverable chat step instead of a terminal automatic-action error.
+- Asks for the customer's name and a phone or email while preserving the selected verified date and time.
+- Revalidates that exact slot after the customer supplies contact information, then creates the appointment and sends confirmation.
+- If the slot changed while collecting details, offers current verified alternatives instead of claiming success or going silent.
+- Explains other appointment-creation failures to the customer rather than leaving only an internal notification.
+- Recovers conversations that already contain the previous “Customer identity is not available” failed action.
+- Adds the reported Saturday July 25 and missing-identity conversations as permanent automated regressions.
+
+## Existing 1.6.9 improvements
 
 - Keeps Dealer Appointment Agenda availability isolated by `store_id`, `dealer_id` and `listing_id` so a different dealer's day off cannot erase valid slots.
 - Treats current verified open slots as authoritative when a mixed or stale calendar snapshot also contains a conflicting generic blocked date.

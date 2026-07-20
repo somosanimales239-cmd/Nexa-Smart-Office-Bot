@@ -45,6 +45,8 @@ Sending a reply no longer teaches Nexa automatically. The Knowledge Engine can b
 
 Version 1.6.8 combines the separate English/Spanish appointment communication library with `dealer-appointment-availability` and `dealer-agenda-calendar`. It keeps the requested date, time preference and offered slots ahead of general automotive Knowledge, excludes both local and website-calendar conflicts, and requires a clear verified-slot selection before creation. Website creation additionally requires `appointment-create:write`; after success Nexa immediately reloads the dealer calendar.
 
+Version 1.6.10 makes missing appointment identity recoverable. When the selected slot is valid but the website thread does not expose a customer name, phone or email, Nexa asks for those details in the same conversation instead of ending with an internal-only error. The exact selected date/time remains pending, is revalidated when the customer answers, and is then created and confirmed. If it changed, Nexa offers current verified alternatives. Common Spanish weekday typos and morning/tomorrow ambiguity are also resolved before slot selection.
+
 ## Notification navigation
 
 Opening an in-app or Windows notification routes to the related conversation, appointment, task, lead, contact, listing or appropriate fallback area.

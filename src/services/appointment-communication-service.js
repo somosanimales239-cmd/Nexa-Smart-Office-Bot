@@ -144,6 +144,9 @@ function lastOfferedGroupKey(conversation, groups, locale) {
     for (const group of groups) {
       if (body.includes(normalized(formatDate(group.date, locale)))) return group.key;
     }
+    const rowReference = row.sent_at || row.created_at ? new Date(row.sent_at || row.created_at) : new Date();
+    const parsed = parseRequestedDateTime(text(row && row.body), Number.isNaN(rowReference.getTime()) ? new Date() : rowReference);
+    if (parsed.date) return localDateKey(parsed.date);
     let best = null;
     groups.forEach(function countTimes(group) {
       const matches = group.slots.filter(function mentioned(slot) { return body.includes(normalized(formatTime(slot.start, locale))); }).length;
@@ -427,7 +430,7 @@ function appointmentConversationPlan(input) {
   if (followUpType === 'same_day_alternative') {
     const referenceKey = requestedDate ? localDateKey(requestedDate) : lastOfferedGroupKey(conversation, groups, locale);
     const referenceGroup = groups.find(function sameDay(group) { return group.key === referenceKey; });
-    const referenceDate = requestedDate || (referenceGroup && referenceGroup.date) || null;
+    const referenceDate = requestedDate || (referenceGroup && referenceGroup.date) || (referenceKey ? new Date(referenceKey + 'T12:00:00') : null);
     const blocked = referenceDate ? dateAvailabilityState(payload, referenceDate, { verifiedSlots: referenceGroup && referenceGroup.slots }).blocked : false;
     if (referenceGroup && !blocked) {
       const offeredIds = new Set(previouslyOfferedSlots(conversation, referenceGroup, locale).map(function id(slot) { return slot.id; }));

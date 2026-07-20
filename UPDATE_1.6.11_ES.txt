@@ -1,0 +1,32 @@
+NEXA SMART OFFICE BOT 1.6.11
+
+CORRECCION DEL BUILD LOCAL
+
+Esta es una entrega completa del software. No es un parche parcial.
+
+Se corrigieron los dos archivos que Local build validation marcaba como:
+Unterminated string or template literal.
+
+Archivos corregidos:
+- scripts/integration-automatic-actions.js
+- src/services/automatic-actions-service.js
+
+La causa era una construccion valida para Node.js, pero ambigua para el analizador
+local de la pagina: un apostrofo ingles dentro del texto y de la expresion de prueba.
+La redaccion y la expresion se cambiaron por equivalentes sin esa ambiguedad. El
+parser de nombres todavia acepta apostrofos mediante una secuencia Unicode segura.
+
+Esta version conserva todas las correcciones 1.6.10:
+- sabado en la manana conserva el sabado correcto;
+- la fecha y hora elegidas se mantienen en la conversacion;
+- si falta identidad, Nexa pide nombre y telefono o correo;
+- el horario se vuelve a verificar antes de reservar;
+- la cita se crea y se confirma o se ofrecen alternativas actuales.
+
+VALIDACION RECOMENDADA
+
+1. Extraer o subir el ZIP completo en la raiz del repositorio.
+2. Ejecutar Local build validation.
+3. Enviar el source a GitHub y volver a ejecutar el build.
+4. Instalar la nueva version.
+5. Ejecutar Test connection y Sync now.

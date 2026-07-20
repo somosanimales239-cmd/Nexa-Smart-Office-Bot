@@ -1,0 +1,21 @@
+Nexa Smart Office Bot 1.6.10 - Validation Summary
+
+Validated behavior:
+- "sababdo en la manana" resolves to Saturday July 25, 2026.
+- Spanish morning period is distinguished from tomorrow.
+- Saturday morning options never fall back to Tuesday July 21.
+- "si a las 11 esta bien" selects the verified Saturday 11:00 AM slot.
+- Prior offer dates survive calendar refreshes even when their old slot group disappears.
+- Missing customer identity sends a bilingual customer-facing request instead of stopping silently.
+- The selected date/time is included in the contact request and remains pending.
+- Name and phone/email are extracted only inside the guarded contact-collection step.
+- The selected slot is revalidated after contact details arrive.
+- A valid slot creates the appointment and sends confirmation.
+- A changed slot produces current verified alternatives.
+- An earlier failed identity event does not prevent the recovery conversation.
+- Explicit cancellation while collecting contact information never creates an appointment.
+- Other creation failures are explained without falsely confirming a booking.
+
+Markers:
+- NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1
+- NEXA_APPOINTMENT_CONTACT_RECOVERY_V1

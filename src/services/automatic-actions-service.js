@@ -11,11 +11,12 @@ const {
   parseRequestedDateTime
 } = require('./dealer-availability-service');
 const { calendarAppointmentsFromCache, calendarCacheItems, calendarItemCount } = require('./dealer-agenda-calendar-service');
-const { appointmentConfirmation, appointmentConversationPlan } = require('./appointment-communication-service');
+const { appointmentConfirmation, appointmentConversationPlan, detectAppointmentLocale, formatDate, formatTime, scopeSlotsForConversation } = require('./appointment-communication-service');
 
 const NEXA_GUARDED_AUTOMATIC_ACTIONS_V1 = 'NEXA_GUARDED_AUTOMATIC_ACTIONS_V1';
 const NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1 = 'NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1';
 const NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 = 'NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2';
+const NEXA_APPOINTMENT_CONTACT_RECOVERY_V1 = 'NEXA_APPOINTMENT_CONTACT_RECOVERY_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -67,6 +68,108 @@ function inQuietHours(settings, date) {
 
 function formatSlot(slot) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(slot.start);
+}
+
+function usableCustomerName(value) {
+  const candidate = text(value);
+  if (!candidate) return '';
+  const generic = candidate.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (['buyer', 'standard buyer', 'customer', 'standard customer', 'cliente', 'comprador', 'user', 'usuario', 'website customer'].includes(generic)) return '';
+  return candidate;
+}
+
+function contactFromConversation(conversation, override) {
+  const thread = conversation && conversation.thread || {};
+  const threadPayload = safeJson(thread.payload_json, {});
+  const result = {
+    customer_name: usableCustomerName(thread.participant_name || thread.customer_name || threadPayload.customer_name || threadPayload.participant_name),
+    customer_phone: text(thread.customer_phone || thread.phone || threadPayload.customer_phone || threadPayload.phone),
+    customer_email: text(thread.customer_email || thread.email || threadPayload.customer_email || threadPayload.email)
+  };
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice().reverse() : [];
+  for (const row of messages) {
+    if (String(row && row.direction || '').toLowerCase() === 'outbound') continue;
+    const payload = safeJson(row && row.payload_json, {});
+    if (!result.customer_name) result.customer_name = usableCustomerName(row && (row.sender_name || row.customer_name) || payload.sender_name || payload.customer_name);
+    if (!result.customer_phone) result.customer_phone = text(row && row.customer_phone || payload.customer_phone || payload.phone);
+    if (!result.customer_email) result.customer_email = text(row && row.customer_email || payload.customer_email || payload.email);
+    if (result.customer_name && (result.customer_phone || result.customer_email)) break;
+  }
+  let collectingContact = false;
+  for (const row of (conversation && Array.isArray(conversation.messages) ? conversation.messages : [])) {
+    const body = text(row && row.body);
+    if (String(row && row.direction || '').toLowerCase() === 'outbound') {
+      const lowered = body.toLowerCase();
+      if (lowered.includes('antes de completar la cita') || lowered.includes('before i complete the appointment')) collectingContact = true;
+      continue;
+    }
+    if (!collectingContact) continue;
+    const suppliedFromChat = extractCustomerContact(body);
+    if (usableCustomerName(suppliedFromChat.customer_name)) result.customer_name = usableCustomerName(suppliedFromChat.customer_name);
+    if (suppliedFromChat.customer_phone) result.customer_phone = suppliedFromChat.customer_phone;
+    if (suppliedFromChat.customer_email) result.customer_email = suppliedFromChat.customer_email;
+  }
+  const supplied = override || {};
+  if (usableCustomerName(supplied.customer_name)) result.customer_name = usableCustomerName(supplied.customer_name);
+  if (text(supplied.customer_phone)) result.customer_phone = text(supplied.customer_phone);
+  if (text(supplied.customer_email)) result.customer_email = text(supplied.customer_email);
+  return result;
+}
+
+function extractCustomerContact(message) {
+  const source = text(message);
+  const emailMatch = source.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+  const phoneMatch = source.match(/(?:\+?\d[\d().\s-]{7,}\d)/);
+  const phoneDigits = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : '';
+  const customerPhone = phoneDigits.length >= 10 && phoneDigits.length <= 15 ? phoneDigits : '';
+  let name = source;
+  if (emailMatch) name = name.replace(emailMatch[0], ' ');
+  if (phoneMatch) name = name.replace(phoneMatch[0], ' ');
+  name = name.replace(/\b(mi nombre es|me llamo|nombre|name is|my name is|telefono|teléfono|phone|correo|email|es|soy)\b\s*[:=-]?/gi, ' ')
+    .replace(/[^A-Za-zÀ-ÿ\u0027 -]/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/\b(?:y\s+mi|and\s+my|mi|my)\b\s*$/i, '').trim();
+  const words = name.split(' ').filter(Boolean);
+  const explicitName = /\b(mi nombre es|me llamo|my name is|i am)\b/i.test(source);
+  const plainName = words.length >= 1 && words.length <= 4 && !/[?]/.test(source)
+    && !/\b(quiero|necesito|por que|porque|cita|horario|gracias|no|si|why|what|when|appointment|schedule|thanks|yes)\b/i.test(source);
+  const customerName = (explicitName || plainName) && name.length >= 2 ? usableCustomerName(name) : '';
+  const customerEmail = emailMatch ? emailMatch[0] : '';
+  return { customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail, provided: Boolean(customerName || customerPhone || customerEmail) };
+}
+
+function contactFlowCancelled(message) {
+  return /\b(no gracias|no quiero|cancelar|cancela|dejalo|déjalo|olvidalo|olvídalo|mejor no|never mind|no thanks|do not book|dont book|cancel it|forget it)\b/i.test(text(message));
+}
+
+function appointmentContactRequest(slot, locale) {
+  const date = new Intl.DateTimeFormat(locale === 'es' ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(slot.start);
+  const time = formatTime(slot.start, locale);
+  if (locale === 'es') {
+    return 'Antes de completar la cita para ' + date + ' a las ' + time + ', necesito el nombre del cliente y por lo menos un teléfono o correo electrónico. Respóndame aquí con esos datos; volveré a verificar ese mismo horario antes de reservarlo.';
+  }
+  return 'Before I complete the appointment for ' + date + ' at ' + time + ', I need the customer name and at least a phone number or email address. Reply here with those details; I will revalidate that same time before booking it.';
+}
+
+function pendingContactSelection(conversation, slots, referenceDate) {
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice(-30).reverse() : [];
+  const request = messages.find(function latestOutbound(row) { return String(row && row.direction || '').toLowerCase() === 'outbound'; });
+  if (!request) return null;
+  const requestBody = text(request && request.body).toLowerCase();
+  if (!requestBody.includes('antes de completar la cita') && !requestBody.includes('before i complete the appointment')) return null;
+  const rowReference = request.sent_at || request.created_at ? new Date(request.sent_at || request.created_at) : referenceDate || new Date();
+  const parsed = parseRequestedDateTime(request.body, Number.isNaN(rowReference.getTime()) ? referenceDate || new Date() : rowReference);
+  if (!parsed.date || !parsed.time) return null;
+  const scoped = scopeSlotsForConversation(slots || [], conversation);
+  const slot = scoped.find(function exact(candidate) {
+    return Math.abs(candidate.start.getTime() - parsed.date.getTime()) <= 15 * 60000;
+  }) || null;
+  return { request: request, parsed: parsed, slot: slot };
+}
+
+function appointmentFailureReply(locale) {
+  return locale === 'es'
+    ? 'No pude completar esa reserva y no voy a marcarla como confirmada. La Agenda debe volver a verificar el horario; por favor elija una de las opciones verificadas que le mostraré o continúe por este chat para que el equipo le ayude.'
+    : 'I could not complete that booking, so I will not mark it as confirmed. The Agenda must revalidate the time; please choose one of the verified options I provide or continue in this chat so the team can help.';
 }
 
 function slotConflictsWithLocalAgenda(slot, appointments) {
@@ -371,9 +474,13 @@ class AutomaticActionsService {
     }
   }
 
-  async createAppointmentFromSlot(candidate, conversation, slot, settings) {
+  async createAppointmentFromSlot(candidate, conversation, slot, settings, contactOverride) {
     const sourceMessageId = text(candidate.inbound_message_id);
     const dedupeKey = 'auto-appointment:' + sourceMessageId + ':' + slot.id;
+    const contact = contactFromConversation(conversation, contactOverride);
+    if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) {
+      return { needsContact: true, reason: 'customer_identity_required', slot: slot };
+    }
     if (this.database.hasAutomaticActionEvent(dedupeKey) || this.database.findAppointmentBySource('automatic-message', sourceMessageId)) return { skipped: true, reason: 'duplicate' };
     const appointmentConflicts = this.database.listAppointments('').concat(calendarAppointmentsAsConflicts(this.database.listIntegrationCache('dealer-agenda-calendar', '', 500)));
     if (slotConflictsWithLocalAgenda(slot, appointmentConflicts)) return { skipped: true, reason: 'agenda_conflict' };
@@ -386,11 +493,9 @@ class AutomaticActionsService {
     try {
       const thread = conversation.thread || {};
       const payload = safeJson(thread.payload_json, {});
-      const verifiedCustomerName = text(thread.participant_name || thread.customer_name || payload.customer_name || payload.participant_name);
-      const customerPhone = text(thread.customer_phone || thread.phone || payload.customer_phone || payload.phone);
-      const customerEmail = text(thread.customer_email || thread.email || payload.customer_email || payload.email);
-      if (enabled(settings.auto_appointments_require_contact) && !verifiedCustomerName && !customerPhone && !customerEmail) throw new Error('Customer identity is not available for automatic appointment creation.');
-      const customerName = verifiedCustomerName || 'Website customer';
+      const customerName = contact.customer_name || 'Website customer';
+      const customerPhone = contact.customer_phone;
+      const customerEmail = contact.customer_email;
       let remoteAppointmentId = null;
       const integration = this.getState().integration;
       let calendarRefresh = null;
@@ -436,6 +541,52 @@ class AutomaticActionsService {
     const availabilityPayload = this.database.listIntegrationCache('dealer-appointment-availability', '', 500);
     const calendarSnapshot = this.database.listIntegrationCache('dealer-agenda-calendar', '', 500).find(function snapshot(item) { return item && item.record_type === 'calendar_snapshot'; });
     const liveAppointmentPayload = calendarSnapshot ? availabilityPayload.concat([calendarSnapshot]) : availabilityPayload;
+    const locale = detectAppointmentLocale(message, conversation);
+    const pendingContact = contactFlowCancelled(message) ? null : pendingContactSelection(conversation, slots, new Date());
+    if (pendingContact) {
+      if (!pendingContact.slot) {
+        const requestedDate = localDateKey(pendingContact.parsed.date);
+        const requestedTime = formatTime(pendingContact.parsed.date, locale);
+        const revalidation = appointmentConversationPlan({
+          payload: liveAppointmentPayload,
+          slots: slots,
+          conversation: conversation,
+          message: locale === 'es' ? '¿Sigue disponible la cita el ' + requestedDate + ' a las ' + requestedTime + '?' : 'Is the appointment on ' + requestedDate + ' at ' + requestedTime + ' still available?',
+          locale: locale,
+          referenceDate: new Date()
+        });
+        const body = text(revalidation.response) || appointmentFailureReply(locale);
+        if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+          const sent = await this.sendAutomaticMessage(candidate.thread_id, body, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment time revalidated after contact collection');
+          return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: sent && sent.failed ? 'appointment_revalidation_send_failed' : '' };
+        }
+        return { handled: true, skipped: true, reason: 'appointment_time_changed' };
+      }
+      const suppliedContact = extractCustomerContact(message);
+      if (!suppliedContact.provided) {
+        if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+          const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
+          return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
+        }
+        return { handled: true, skipped: true, reason: 'customer_identity_required' };
+      }
+      const recovered = await this.createAppointmentFromSlot(candidate, conversation, pendingContact.slot, settings, suppliedContact);
+      if (recovered.created && enabled(settings.auto_messages_enabled) && enabled(settings.auto_appointments_send_confirmation) && this.canSendMore(settings)) {
+        const confirmation = appointmentConfirmation(pendingContact.slot, locale, liveAppointmentPayload);
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, confirmation, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment confirmation sent after contact collection');
+        return { handled: true, appointment: recovered, confirmation: sent, failed: Boolean(sent && sent.failed), error: sent && sent.error };
+      }
+      if (recovered.created) return { handled: true, appointment: recovered };
+      if (recovered.needsContact && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(pendingContact.slot, locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested again');
+        return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
+      }
+      if ((recovered.failed || recovered.skipped) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentFailureReply(locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment creation failure explained');
+        return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: recovered.error || sent && sent.error, reason: recovered.reason || 'appointment_creation_failed' };
+      }
+      return { handled: true, appointment: recovered, reason: recovered.reason || 'appointment_creation_failed', failed: Boolean(recovered.failed), error: recovered.error };
+    }
     const plan = appointmentConversationPlan({
       payload: liveAppointmentPayload,
       slots: slots,
@@ -446,11 +597,22 @@ class AutomaticActionsService {
     if (!plan.relevant) return { handled: false };
     if (plan.shouldCreate && plan.selectedSlot) {
       const created = await this.createAppointmentFromSlot(candidate, conversation, plan.selectedSlot, settings);
+      if (created.needsContact) {
+        if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+          const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentContactRequest(plan.selectedSlot, plan.locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact information requested');
+          return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'customer_identity_required' };
+        }
+        return { handled: true, skipped: true, reason: 'customer_identity_required' };
+      }
       if (created.created && enabled(settings.auto_messages_enabled) && enabled(settings.auto_appointments_send_confirmation) && this.canSendMore(settings)) {
         const confirmation = appointmentConfirmation(plan.selectedSlot, plan.locale, liveAppointmentPayload);
         await this.sendAutomaticMessage(candidate.thread_id, confirmation, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment confirmation sent');
       }
-      return { handled: true, appointment: created };
+      if ((created.failed || created.skipped) && enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+        const sent = await this.sendAutomaticMessage(candidate.thread_id, appointmentFailureReply(plan.locale), candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment creation failure explained');
+        return { handled: true, appointment: created, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: created.error || sent && sent.error, reason: created.reason || 'appointment_creation_failed' };
+      }
+      return { handled: true, appointment: created, failed: Boolean(created.failed), error: created.error, reason: created.reason || '' };
     }
     const isOffer = !['decline', 'no_availability'].includes(plan.decision);
     if (isOffer && !enabled(settings.auto_appointments_offer_slots)) return { handled: true, skipped: true, reason: 'appointment_slot_offers_disabled' };
@@ -609,6 +771,7 @@ module.exports = {
   NEXA_GUARDED_AUTOMATIC_ACTIONS_V1,
   NEXA_AUTOMATION_NO_CUSTOMER_MUTATION_OR_DELETE_V1,
   NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2,
+  NEXA_APPOINTMENT_CONTACT_RECOVERY_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,

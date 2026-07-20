@@ -1,0 +1,30 @@
+NEXA SMART OFFICE BOT 1.6.10
+RECUPERACION DE FECHA, IDENTIDAD Y CREACION DE CITAS
+
+Este ZIP modifica solamente el software Nexa. No reemplaza archivos de la pagina web.
+
+PROBLEMAS CORREGIDOS
+
+1. "sababdo en la manana" podia interpretarse como manana y cambiar la cita al martes 21 en vez del sabado 25.
+2. Si faltaba la identidad del comprador, Nexa generaba "Automatic appointment needs attention" y dejaba la conversacion sin respuesta.
+3. Un refresco de Agenda podia perder la fecha que Nexa acababa de ofrecer.
+
+NUEVO COMPORTAMIENTO
+
+- Nexa reconoce errores comunes como "sababdo" y conserva sabado 25.
+- "En la manana" significa periodo de la manana; no significa automaticamente el dia siguiente.
+- Las fechas escritas con nombre de mes se recuperan de las ofertas anteriores.
+- Cuando falta identidad, Nexa pide por el mismo chat el nombre del cliente y un telefono o correo.
+- La fecha y la hora seleccionadas permanecen pendientes mientras se solicitan esos datos.
+- Cuando el cliente responde, Nexa vuelve a verificar el mismo slot antes de crear la cita.
+- Si continua disponible, crea la cita local/remota autorizada y envia confirmacion.
+- Si ya no esta disponible, ofrece horarios actuales verificados.
+- Otros errores de creacion reciben una respuesta para el cliente; no quedan solamente como alerta interna.
+- Un error viejo de identidad puede continuar con este nuevo flujo sin borrar el historial de auditoria.
+
+DESPUES DE INSTALAR
+
+1. Ejecute Test connection.
+2. Ejecute Sync now.
+3. Mantenga Automatic Messages y Automatic Appointments autorizados si quiere que Nexa solicite los datos y complete la cita por chat.
+4. Mantenga appointment-create:write si quiere crear la cita tambien en la pagina.

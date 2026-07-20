@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 
 const NEXA_LIVE_DEALER_AVAILABILITY_V1 = 'NEXA_LIVE_DEALER_AVAILABILITY_V1';
 const NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1 = 'NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1';
+const NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1 = 'NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1';
 
 const SLOT_KEYS = new Set([
   'verified_open_slots', 'verified_slots', 'open_slots', 'available_slots', 'slots',
@@ -17,7 +18,14 @@ const UNAVAILABLE_TIME_KEYS = new Set(['booked_times', 'unavailable_times', 'blo
 const ASSIGNED_LISTING_KEYS = new Set(['assigned_listings', 'listings']);
 const WEEKDAYS = {
   sunday: 0, domingo: 0, monday: 1, lunes: 1, tuesday: 2, martes: 2, wednesday: 3, miercoles: 3,
-  thursday: 4, jueves: 4, friday: 5, viernes: 5, saturday: 6, sabado: 6
+  wendsday: 3, miercole: 3, thursday: 4, jueves: 4, juves: 4,
+  friday: 5, viernes: 5, saturday: 6, sabado: 6, sababdo: 6, sabdo: 6, savado: 6
+};
+const MONTHS = {
+  january: 0, enero: 0, february: 1, febrero: 1, march: 2, marzo: 2, april: 3, abril: 3,
+  may: 4, mayo: 4, june: 5, junio: 5, july: 6, julio: 6, august: 7, agosto: 7,
+  september: 8, septiembre: 8, setiembre: 8, october: 9, octubre: 9,
+  november: 10, noviembre: 10, december: 11, diciembre: 11
 };
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
@@ -673,13 +681,17 @@ function parseRequestedDateTime(message, referenceDate) {
   let date = null;
   const iso = source.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
   const slash = source.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}|\d{2}))?\b/);
+  const spanishMonth = source.match(/\b(\d{1,2})\s+de\s+([a-z]+)(?:\s+de\s+(20\d{2}))?\b/);
+  const englishMonth = source.match(/\b([a-z]+)\s+(\d{1,2})(?:,?\s+(20\d{2}))?\b/);
   if (iso) date = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
   else if (slash) {
     let year = slash[3] ? Number(slash[3]) : now.getFullYear();
     if (year < 100) year += 2000;
     date = new Date(year, Number(slash[1]) - 1, Number(slash[2]));
-  } else if (/\b(tomorrow|manana)\b/.test(source)) {
-    date = new Date(now); date.setDate(date.getDate() + 1);
+  } else if (spanishMonth && MONTHS[spanishMonth[2]] !== undefined) {
+    date = new Date(Number(spanishMonth[3] || now.getFullYear()), MONTHS[spanishMonth[2]], Number(spanishMonth[1]));
+  } else if (englishMonth && MONTHS[englishMonth[1]] !== undefined) {
+    date = new Date(Number(englishMonth[3] || now.getFullYear()), MONTHS[englishMonth[1]], Number(englishMonth[2]));
   } else if (/\b(today|hoy)\b/.test(source)) {
     date = new Date(now);
   } else {
@@ -691,6 +703,10 @@ function parseRequestedDateTime(message, referenceDate) {
         date.setDate(date.getDate() + add);
         break;
       }
+    }
+    const withoutMorningPeriod = source.replace(/\b(?:en|por|de)\s+la\s+manana\b/g, ' ');
+    if (!date && (/\btomorrow\b/.test(source) || /\bmanana\b/.test(withoutMorningPeriod))) {
+      date = new Date(now); date.setDate(date.getDate() + 1);
     }
   }
   const time = parseTimeParts(source);
@@ -706,6 +722,7 @@ function isAppointmentAvailabilityIntent(message) {
 module.exports = {
   BLOCKED_DATE_KEYS,
   NEXA_APPOINTMENT_CONSISTENCY_GUARD_V1,
+  NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1,
   NEXA_LIVE_DEALER_AVAILABILITY_V1,
   OPEN_DATE_KEYS,
   SLOT_KEYS,
