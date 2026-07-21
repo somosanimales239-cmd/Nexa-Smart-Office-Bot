@@ -1,14 +1,15 @@
 # Changelog
 
-## 1.6.15
+## 1.6.16
 
-- Added AutoMarket Pro appointment reservation V8 discovery, aliases, response fields and four-resource post-create refresh.
-- Reused customer phone/email from thread participants, structured message metadata and free-text conversation history.
-- Made phone the minimum contact requirement for authorized automatic appointment creation without requesting it twice.
-- Removed duplicate dealer addresses from appointment confirmations.
-- Refreshed website Agenda contacts and retained `reserved_slot_key` after reservation.
-- Linked the remote reservation to the local calendar and deduplicated the corresponding Lead/Dealer Agenda copies.
-- Added the Dealer Agenda `Reserve Appointment` shortcut and end-to-end V8 regressions.
+- Added strict remote reservation commit verification. Nexa now requires a reserved response, remote appointment/Lead ID, complete Lead fields, a matching Dealer Agenda appointment and removal of the selected availability slot.
+- Prevented the reported partial-success case where the website created a Lead but did not reserve the day/time.
+- Added a no-duplicate-POST verification retry: Nexa refreshes page state again but never creates a second Lead.
+- Sends existing customer name, phone, email, location, listing context, date, time and notes to the page Reserve Appointment API.
+- Preserves V8 `reserved_slot_key`, `refresh_resources` and the seven appointment reservation aliases.
+- Refreshes `dealer-appointment-availability`, `dealer-agenda-calendar`, `orders` and `agenda` after a reservation.
+- Reuses contact data from thread participants and messages, requests only missing information, removes repeated addresses from confirmations and deduplicates remote/local calendar entries.
+- Added an end-to-end regression where a Lead-only response must not create a local appointment or send a false confirmation.
 
 ## 1.6.14
 

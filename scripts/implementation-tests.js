@@ -52,12 +52,14 @@ assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V7_SYNC_V1'), tru
 assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V8_SYNC_V1'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_CONTACT_CONTEXT_V3'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1'), true);
 assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8'), true);
-assert.equal(appSource.includes('Open Dealer Appointment Agenda'), true);
+assert.equal(apiService.includes('reserve-appointment-slot'), true);
+assert.equal(appSource.includes('NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1'), true);
 assert.equal(appSource.includes('Reserve Appointment'), true);
+assert.equal(appSource.includes('Open Dealer Appointment Agenda'), true);
 assert.equal(appSource.includes('Edit Availability'), true);
 assert.equal(appSource.includes('Open Dealer Office Leads'), true);
-assert.equal(appSource.includes('NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1'), true);
 assert.equal(appSource.includes('NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2'), true);
 assert.equal(appSource.includes("pathname.toLowerCase().endsWith(apiSuffix)"), true);
 assert.equal(appSource.includes("suppliedLeadUrl.toLowerCase().startsWith('https://')"), true);

@@ -1,0 +1,41 @@
+NEXA SMART OFFICE BOT 1.6.16
+
+RESERVA COMPLETA EN DEALER AGENDA
+
+Esta version corrige el caso donde la pagina creaba un Lead parcial pero no
+marcaba el dia y la hora como ocupados.
+
+Una cita remota solo se considera terminada cuando Nexa verifica todo esto:
+
+1. La pagina devuelve reserved=true.
+2. Devuelve appointment_id, lead_id u order_id.
+3. Dealer -> Leads contiene nombre, telefono, fecha y hora.
+4. dealer-agenda-calendar muestra el appointment reservado.
+5. dealer-appointment-availability ya no muestra ese slot como disponible.
+
+Si falta una de esas pruebas, Nexa no crea la cita local y no le dice al
+cliente que la cita esta confirmada. Refresca la pagina una vez mas, sin
+repetir el POST y sin crear otro Lead.
+
+DATOS ENVIADOS AL FORMULARIO RESERVE APPOINTMENT
+
+- thread_id
+- customer_name
+- customer_phone
+- customer_email, si existe
+- customer_location, si existe
+- listing_id, si existe
+- appointment_date
+- appointment_time
+- reason / notes
+
+CONTACTO Y MENSAJES
+
+- Reutiliza nombre, telefono y email existentes en el hilo.
+- Si falta un dato, pide solamente ese dato.
+- La direccion del dealer aparece una sola vez en la confirmacion.
+
+SINCRONIZACION
+
+Despues de reservar actualiza disponibilidad, Dealer Agenda, Dealer Leads,
+Agenda/contactos y el calendario local de Nexa, sin duplicar la misma cita.

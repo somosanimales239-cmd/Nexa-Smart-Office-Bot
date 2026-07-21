@@ -1,5 +1,11 @@
 # Nexa AI Control and Message Runtime Diagnostics
 
+## Dealer Agenda reservation commit (1.6.16)
+
+Remote appointment creation is not complete merely because `appointment-create` returned a Lead ID. Nexa sends the complete customer, thread, date, time, optional listing/location and notes payload, then reloads `dealer-appointment-availability`, `dealer-agenda-calendar`, `orders` and `agenda`.
+
+Nexa confirms the appointment only when the response says `reserved=true`, a remote ID exists, the completed Lead contains name/phone/date/time, Dealer Agenda contains the matching appointment, and the selected slot is no longer available. If verification fails, Nexa may repeat the read refresh once but never repeats the reservation POST.
+
 Nexa Smart Office Bot 1.6.1 keeps the guarded autonomy introduced in 1.6.0 and adds a second explicit control inside Messages.
 
 ## Two required message controls
@@ -49,7 +55,7 @@ Version 1.6.10 makes missing appointment identity recoverable. When the selected
 
 Version 1.6.12 introduced the date-scoped appointment state machine. The newest customer correction becomes the active date, and a time mentioned on several days can be selected only inside that active date. A stale contact request is cancelled when the customer corrects the date or time. If the message thread already supplies the customer name, Nexa asks only for a phone number; the customer may also include that phone in the same message as the selected time.
 
-Version 1.6.15 implements the AutoMarket Pro V8 reservation roundtrip. Nexa reuses phone/email already present anywhere in the conversation, asks only for a missing phone, sends `thread_id`, phone, date and time, requires `reserved: true`, keeps `reserved_slot_key`, and reloads availability, Dealer Appointment Agenda, `orders`/Dealer Leads and website Agenda contacts before confirming. The local calendar stores the same remote appointment ID so synchronized copies are not displayed twice. A 409 slot conflict triggers a fresh availability check and updated verified alternatives.
+Version 1.6.16 preserves the earlier roundtrip and adds strict AutoMarket Pro V8 reservation commit verification. With website appointment creation authorized, Nexa sends the complete thread and customer data, requires `reserved: true`, reloads availability, Dealer Appointment Agenda, `orders`/Dealer Leads and `agenda`, and verifies that the Lead is complete, the appointment exists and the slot is consumed before confirming the reservation. A 409 slot conflict triggers a fresh availability check and updated customer-facing alternatives.
 
 ## Notification navigation
 

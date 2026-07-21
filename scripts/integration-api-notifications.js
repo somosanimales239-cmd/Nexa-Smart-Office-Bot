@@ -67,7 +67,9 @@ const responses = {
     ok: true,
     allowed_scopes: dealerScopes.slice(),
     permissions: dealerScopes.slice(),
-    allowed_endpoints: ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread'],
+    allowed_endpoints: ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread','reserve-appointment-slot'],
+    appointment_create_aliases: ['appointment-create','lead-appointment-create','nexa-appointment-create','appointment-create-from-thread','reserve-appointment-slot','agenda-reserve-appointment','lead-appointment-reserve'],
+    reserve_slot_contract: 'Dealer Agenda Reserve Appointment',
     messages_write_enabled: true,
     message_send_endpoint: 'message-send',
     two_way_chat_enabled: true,
@@ -77,8 +79,6 @@ const responses = {
     dealer_agenda_calendar_endpoint: 'dealer-agenda-calendar',
     appointment_create_enabled: true,
     appointment_create_endpoint: 'appointment-create',
-    appointment_create_aliases: ['appointment-create','lead-appointment-create','nexa-appointment-create','appointment-create-from-thread','reserve-appointment-slot','agenda-reserve-appointment','lead-appointment-reserve'],
-    reserve_slot_contract: { method: 'POST', resource: 'appointment-create', required_fields: ['appointment_date','appointment_time','customer_phone'] },
     data: { contract: 'NEXA_AUTOMARKET_API_V1', account_type: 'dealer', owner_type: 'dealer', account_id: 'dealer-7', owner_id: 'dealer-7', user_id: 'user-7', store_id: 'store-7', api_version: 'v1', available_resources: ['store','dealer-summary','orders','messages','listings','agenda','resellers','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'] }
   },
   store: { ok: true, data: { store_id: 'store-7', store_name: 'Demo Motors', city: 'Naples', status: 'active', public_store_url: 'https://example.com/store/demo-motors', server_private_value: 'must-not-enter-cache', secret_transport_value: 'must-not-enter-cache' } },
@@ -105,7 +105,7 @@ const responses = {
         appointments: [{ appointment_id: 'calendar-appt-1', order_id: 'calendar-appt-1', customer_name: 'Calendar Customer', appointment_time: '11:00', appointment_status: 'scheduled', order_type: 'dealer_appointment', source_context: 'nexa_smart_office_bot_dealer', source_label: 'Nexa Smart Office Bot', created_by_platform: 'Nexa Smart Office Bot', server_private_value: 'remove-me' }] }], private_store_value: 'remove-me' }],
     server_private_value: 'remove-me'
   } },
-  'appointment-create': { ok: true, resource: 'appointment-create', data: { order_id: 'ord-contract-1', lead_id: 'ord-contract-1', appointment_id: 'remote-contract-1', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: 'thread-contract-1', customer_name: 'Customer Name', customer_phone: '7865553333', appointment_date: '2026-07-22', appointment_time: '10:30', appointment_status: 'scheduled', reserved: true, reserved_slot_key: 'store-7|2026-07-22|10:30', lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-contract-1', refresh_resources: ['dealer-agenda-calendar','dealer-appointment-availability','orders','agenda'], software_next_step: 'Refresh dealer-agenda-calendar after this response so the slot becomes booked in the local software agenda.' } }
+  'appointment-create': { ok: true, resource: 'appointment-create', data: { order_id: 'ord-contract-1', lead_id: 'ord-contract-1', appointment_id: 'remote-contract-1', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: 'thread-contract-1', customer_name: 'Customer Name', customer_phone: '7865553333', appointment_date: '2026-07-22', appointment_time: '10:30', appointment_status: 'scheduled', reserved: true, reserved_slot_key: '2026-07-22|10:30', refresh_resources: ['dealer-agenda-calendar','dealer-appointment-availability','orders','agenda'], software_next_step: 'refresh', lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-contract-1' } }
 };
 
 let requestedResources = [];
@@ -116,7 +116,7 @@ const originalFetch = global.fetch;
 global.fetch = async function fakeFetch(url, options) {
   assert.equal(options.headers.Authorization, 'Bearer test-api-key-value');
   assert.equal(options.headers['X-Nexa-Api-Key'], 'test-api-key-value');
-  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.15');
+  assert.equal(options.headers['X-Nexa-Client'], 'Nexa-Smart-Office-Bot/1.6.16');
   const parsed = new URL(url);
   const resource = parsed.searchParams.get('resource');
   requestedResources.push(resource);
@@ -206,7 +206,8 @@ const notificationService = new NotificationService({
     assert.equal(result.identity.scopes.includes('messages:write'), true);
     assert.equal(result.identity.available_resources.includes('message-send'), true);
     assert.deepEqual(result.connectionMap.allowed_scopes, dealerScopes);
-    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread']);
+    assert.deepEqual(result.connectionMap.allowed_endpoints, ['messages-thread','messages-send','messages-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create-from-thread','reserve-appointment-slot']);
+    assert.equal(result.connectionMap.appointment_create_aliases.includes('agenda-reserve-appointment'), true);
     assert.equal(result.identity.available_resources.includes('appointment-create'), true);
     assert.equal(result.connectionMap.messages_write_enabled, true);
     assert.equal(result.connectionMap.message_send_endpoint, 'message-send');
@@ -224,7 +225,6 @@ const notificationService = new NotificationService({
     assert.equal(appointmentCapabilities.createWrite, true);
     assert.equal(result.connectionMap.dealer_agenda_calendar_endpoint, 'dealer-agenda-calendar');
     assert.equal(result.connectionMap.appointment_create_endpoint, 'appointment-create');
-    assert.equal(result.connectionMap.reserve_slot_contract.required_fields.includes('customer_phone'), true);
     assert.deepEqual(requestedResources, ['ping','connection-map']);
     assert(result.resources.some((entry)=>entry.resource === 'agenda'));
   });
@@ -238,8 +238,9 @@ const notificationService = new NotificationService({
     assert.equal(response.payload.appointment_id, 'remote-contract-1');
     assert.equal(response.payload.lead_id, 'ord-contract-1');
     assert.equal(response.payload.reserved, true);
-    assert.equal(response.payload.reserved_slot_key, 'store-7|2026-07-22|10:30');
+    assert.equal(response.payload.reserved_slot_key, '2026-07-22|10:30');
     assert.deepEqual(response.payload.refresh_resources, ['dealer-agenda-calendar','dealer-appointment-availability','orders','agenda']);
+    assert.equal(response.payload.software_next_step, 'refresh');
     assert.equal(response.payload.source, 'Nexa Smart Office Bot');
     const request = requestedOptions.find((item)=>item.resource === 'appointment-create');
     assert.equal(request.method, 'POST');

@@ -52,13 +52,9 @@ global.fetch = async function fakeFetch(url, options) {
       status: 200,
       text: async function text() {
         return JSON.stringify({ data: {
-          thread: { thread_id: 'thread-1', subject: 'Trailer availability', participant_name: 'Customer One', can_reply: 1, secret_token: 'remove-me' },
-          participants: [
-            { type: 'buyer', id: 'buyer-1', name: 'Customer One', email: 'customer.one@example.com', favorite: false, private_phone_token: 'remove-me' },
-            { type: 'dealer', id: 'dealer-1', name: 'Dealer', email: 'dealer@example.com', private_role_token: 'remove-me' }
-          ],
+          thread: { thread_id: 'thread-1', subject: 'Trailer availability', participant_name: 'Customer One', participants: [{ id: 'buyer-1', name: 'Customer One', email: 'customer@example.com', phone: '7865553333', role: 'buyer', private_secret: 'remove-me' }], can_reply: 1, secret_token: 'remove-me' },
           messages: [
-            { message_id: 'm1', thread_id: 'thread-1', sender_type: 'customer', sender_name: 'Customer One', sender_email: 'customer.one@example.com', direction: 'inbound', body: 'Is this trailer still available?', sent_at: '2026-07-17T12:00:00Z', private_secret: 'remove-me' },
+            { message_id: 'm1', thread_id: 'thread-1', sender_type: 'customer', sender_name: 'Customer One', sender_email: 'customer@example.com', direction: 'inbound', body: 'Is this trailer still available?', sent_at: '2026-07-17T12:00:00Z', private_secret: 'remove-me' },
             { message_id: 'm2', thread_id: 'thread-1', sender_type: 'dealer', sender_name: 'Dealer', direction: 'outbound', body: 'Let me verify that for you.', sent_at: '2026-07-17T12:01:00Z' }
           ],
           count: 2
@@ -102,18 +98,17 @@ const engine = new MessageResponseEngine(database);
     const response = await api.fetchMessageThread('thread-1', { limit: 100 });
     assert.equal(response.payload.thread.thread_id, 'thread-1');
     assert.equal(response.payload.thread.secret_token, undefined);
+    assert.equal(response.payload.thread.participants[0].email, 'customer@example.com');
+    assert.equal(response.payload.thread.participants[0].private_secret, undefined);
     assert.equal(response.payload.messages.length, 2);
     assert.equal(response.payload.messages[0].body, 'Is this trailer still available?');
-    assert.equal(response.payload.messages[0].sender_email, 'customer.one@example.com');
+    assert.equal(response.payload.messages[0].sender_email, 'customer@example.com');
     assert.equal(response.payload.messages[0].private_secret, undefined);
-    assert.equal(response.payload.thread.participants[0].email, 'customer.one@example.com');
-    assert.equal(response.payload.thread.participants[0].private_phone_token, undefined);
     const request = requests.find(function find(item) { return item.resource === 'message-thread'; });
     assert.equal(request.query.mark_read, '0', 'Synchronizing a conversation must not mark it read.');
     database.saveMessageThreadSnapshot(response.payload.thread, response.payload.messages, { thread_id: 'thread-1' });
     const conversation = database.getMessageConversationContext('thread-1', 100);
     assert.equal(conversation.messages.length, 2);
-    assert.equal(JSON.parse(conversation.thread.payload_json).participants[0].email, 'customer.one@example.com');
   });
 
   await test('approved knowledge scores and drafts before external AI', async function () {

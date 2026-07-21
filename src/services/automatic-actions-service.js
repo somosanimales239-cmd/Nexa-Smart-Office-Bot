@@ -22,6 +22,7 @@ const NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2 = 'NEXA_APPOINTMENT_THREAD_LEAD_C
 const NEXA_APPOINTMENT_PAGE_V7_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1';
 const NEXA_APPOINTMENT_PAGE_V8_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1';
 const NEXA_APPOINTMENT_CONTACT_CONTEXT_V3 = 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3';
+const NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1 = 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -97,20 +98,20 @@ function isAppointmentContactPrompt(value) {
 function contactFromConversation(conversation, override) {
   const thread = conversation && conversation.thread || {};
   const threadPayload = safeJson(thread.payload_json, {});
+  const participants = [];
+  if (Array.isArray(thread.participants)) participants.push.apply(participants, thread.participants);
+  if (Array.isArray(threadPayload.participants)) participants.push.apply(participants, threadPayload.participants);
   const result = {
     customer_name: usableCustomerName(thread.participant_name || thread.customer_name || threadPayload.customer_name || threadPayload.participant_name),
     customer_phone: text(thread.customer_phone || thread.phone || threadPayload.customer_phone || threadPayload.phone),
     customer_email: text(thread.customer_email || thread.email || threadPayload.customer_email || threadPayload.email)
   };
-  const participants = Array.isArray(thread.participants)
-    ? thread.participants
-    : Array.isArray(threadPayload.participants) ? threadPayload.participants : [];
   for (const participant of participants) {
-    const type = text(participant && (participant.type || participant.user_type)).toLowerCase();
-    if (['admin','dealer','dealer_staff','reseller'].includes(type)) continue;
-    if (!result.customer_name) result.customer_name = usableCustomerName(participant && (participant.name || participant.user_name));
-    if (!result.customer_email) result.customer_email = text(participant && (participant.email || participant.user_email));
-    if (result.customer_name && result.customer_email) break;
+    const role = text(participant && (participant.role || participant.type || participant.participant_type || participant.sender_type)).toLowerCase();
+    if (/dealer|store|admin|reseller|business|agent/.test(role)) continue;
+    if (!result.customer_name) result.customer_name = usableCustomerName(participant && (participant.name || participant.display_name));
+    if (!result.customer_phone) result.customer_phone = text(participant && participant.phone);
+    if (!result.customer_email) result.customer_email = text(participant && participant.email);
   }
   const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice().reverse() : [];
   for (const row of messages) {
@@ -162,6 +163,103 @@ function extractCustomerContact(message) {
   return { customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail, provided: Boolean(customerName || customerPhone || customerEmail) };
 }
 
+function phoneKey(value) { return text(value).replace(/\D/g, ''); }
+
+function reservationTrue(value) {
+  return value === true || value === 1 || ['1','true','yes','reserved','scheduled'].includes(text(value).toLowerCase());
+}
+
+function timeKey(value) {
+  const source = text(value);
+  const match = source.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?\b/i);
+  if (!match) return '';
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = text(match[3]).toUpperCase();
+  if (meridiem === 'PM' && hour < 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return '';
+  return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+}
+
+function recordDateTime(record) {
+  const item = record && typeof record === 'object' ? record : {};
+  let date = text(item.appointment_date || item.date);
+  let time = timeKey(item.appointment_time || item.start_time || item.time);
+  const startAt = text(item.start_at || item.starts_at || item.datetime || item.date_time);
+  if ((!date || !time) && startAt) {
+    const parsed = new Date(startAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      if (!date) date = localDateKey(parsed);
+      if (!time) time = String(parsed.getHours()).padStart(2, '0') + ':' + String(parsed.getMinutes()).padStart(2, '0');
+    }
+  }
+  return { date: date.slice(0, 10), time: time };
+}
+
+function recordIdentifiers(record) {
+  const item = record && typeof record === 'object' ? record : {};
+  return [item.appointment_id, item.order_id, item.lead_id, item.id].map(text).filter(Boolean);
+}
+
+function reservationRecordMatches(record, expected) {
+  const wantedIds = new Set(expected.ids || []);
+  if (recordIdentifiers(record).some(function sameId(id) { return wantedIds.has(id); })) return true;
+  const dateTime = recordDateTime(record);
+  if (dateTime.date !== expected.appointment_date || dateTime.time !== expected.appointment_time) return false;
+  const expectedStore = text(expected.store_id);
+  if (expectedStore && text(record && record.store_id) && expectedStore !== text(record.store_id)) return false;
+  const expectedPhone = phoneKey(expected.customer_phone);
+  const actualPhone = phoneKey(record && (record.customer_phone || record.phone));
+  const expectedName = usableCustomerName(expected.customer_name).toLowerCase();
+  const actualName = usableCustomerName(record && (record.customer_name || record.name)).toLowerCase();
+  return Boolean(expectedPhone && actualPhone && expectedPhone === actualPhone || expectedName && actualName && expectedName === actualName);
+}
+
+function leadContainsReservation(record, expected) {
+  if (!record || !reservationRecordMatches(record, expected)) return false;
+  const dateTime = recordDateTime(record);
+  const name = usableCustomerName(record.customer_name || record.name);
+  const phone = phoneKey(record.customer_phone || record.phone);
+  return Boolean(name && phone && dateTime.date === expected.appointment_date && dateTime.time === expected.appointment_time);
+}
+
+function remoteReservationVerification(database, slot, remotePayload, expected, settings, websiteRefresh) {
+  const remote = remotePayload && typeof remotePayload === 'object' ? remotePayload : {};
+  const ids = recordIdentifiers(remote);
+  const wanted = Object.assign({}, expected, { ids: ids });
+  const calendarRows = calendarAppointmentsFromCache(database.listIntegrationCache('dealer-agenda-calendar', '', 500));
+  const calendarAppointment = calendarRows.find(function findCalendar(item) { return reservationRecordMatches(item, wanted); }) || null;
+  const orderRows = database.listIntegrationCache('orders', '', 500);
+  const lead = orderRows.find(function findLead(item) { return reservationRecordMatches(item, wanted); }) || null;
+  const leadsWereReadable = Boolean(websiteRefresh && websiteRefresh.leads && websiteRefresh.leads.refreshed);
+  const leadEvidence = leadsWereReadable ? lead : (lead || remote);
+  const remainingSlots = normalizeAvailability(database.listIntegrationCache('dealer-appointment-availability', '', 500), Object.assign({}, settings || {}, {
+    auto_appointments_min_notice_hours: 0,
+    auto_appointments_max_days: 365
+  }), new Date());
+  const slotStillAvailable = remainingSlots.some(function sameSlot(item) {
+    if (text(slot && slot.id) && text(item.id) === text(slot.id)) return true;
+    return localDateKey(item.start) === wanted.appointment_date
+      && String(item.start.getHours()).padStart(2, '0') + ':' + String(item.start.getMinutes()).padStart(2, '0') === wanted.appointment_time
+      && (!text(wanted.store_id) || !text(item.store_id) || text(item.store_id) === text(wanted.store_id));
+  });
+  const responseReserved = reservationTrue(remote.reserved);
+  const calendarReserved = Boolean(calendarAppointment);
+  const leadComplete = leadContainsReservation(leadEvidence, wanted);
+  return {
+    marker: NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1,
+    verified: Boolean(responseReserved && ids.length && calendarReserved && leadComplete && !slotStillAvailable),
+    response_reserved: responseReserved,
+    remote_id_present: ids.length > 0,
+    calendar_reserved: calendarReserved,
+    lead_complete: leadComplete,
+    slot_removed_from_availability: !slotStillAvailable,
+    calendar_appointment_id: calendarAppointment ? text(calendarAppointment.appointment_id || calendarAppointment.id) : '',
+    lead_id: lead ? text(lead.lead_id || lead.order_id || lead.id) : ''
+  };
+}
+
 function contactFlowCancelled(message) {
   return /\b(no gracias|no quiero|cancelar|cancela|dejalo|déjalo|olvidalo|olvídalo|mejor no|never mind|no thanks|do not book|dont book|cancel it|forget it)\b/i.test(text(message));
 }
@@ -172,6 +270,12 @@ function appointmentContactRequest(slot, locale, contact, missingFields) {
   const fields = Array.isArray(missingFields) ? missingFields : [];
   const known = contact && typeof contact === 'object' ? contact : {};
   const phoneOnly = fields.length === 1 && fields[0] === 'customer_phone' || Boolean(known.customer_name) && !known.customer_phone;
+  const nameOnly = fields.length === 1 && fields[0] === 'customer_name';
+  if (nameOnly) {
+    return locale === 'es'
+      ? 'Para completar la reserva del ' + date + ' a las ' + time + ', ya tengo su teléfono. Solo necesito el nombre del cliente para llenar el Lead y reservar esa hora en la Agenda.'
+      : 'To complete the reservation for ' + date + ' at ' + time + ', I already have your phone number. I only need the customer name to complete the Lead and reserve that time in the Agenda.';
+  }
   return appointmentResponse(phoneOnly ? 'contact_phone_request' : 'contact_identity_request', locale, { date: date, time: time }, slot.id);
 }
 
@@ -619,7 +723,10 @@ class AutomaticActionsService {
     const integration = this.getState().integration;
     const remoteRequested = enabled(settings.auto_appointments_create_remote) && integration.appointment_create;
     const missingFields = [];
-    if ((remoteRequested || enabled(settings.auto_appointments_require_contact)) && !contact.customer_phone) missingFields.push('customer_phone');
+    if (remoteRequested) {
+      if (!contact.customer_name) missingFields.push('customer_name');
+      if (!contact.customer_phone) missingFields.push('customer_phone');
+    } else if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) missingFields.push('customer_name', 'customer_phone');
     if (missingFields.length) {
       return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: missingFields };
     }
@@ -646,6 +753,7 @@ class AutomaticActionsService {
       let remoteLeadUrl = '';
       let remoteReservedSlotKey = '';
       let remoteRefreshResources = [];
+      let reservationVerification = null;
       if (remoteRequested) {
         const appointmentDate = localDateKey(slot.start);
         const appointmentTime = String(slot.start.getHours()).padStart(2, '0') + ':' + String(slot.start.getMinutes()).padStart(2, '0');
@@ -655,25 +763,49 @@ class AutomaticActionsService {
         // listing_id lets AutoMarket Pro V7 derive the real listing safely.
         const listingId = text(slot.listing_id || payload.listing_id || contextListingId);
         const remote = await this.apiService.createRemoteAppointment({
-          thread_id: candidate.thread_id, listing_id: listingId, customer_name: contact.customer_name, customer_phone: customerPhone, customer_email: customerEmail,
+          thread_id: candidate.thread_id, listing_id: listingId, customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail,
           customer_location: text(payload.customer_location || thread.customer_location || slot.location),
           appointment_date: appointmentDate, appointment_time: appointmentTime,
-          notes: 'Customer confirmed appointment through Nexa Smart Office Bot.'
+          notes: 'Customer confirmed the appointment through Nexa Smart Office Bot. Reserve this exact Dealer Agenda slot and add the completed appointment to Dealer Leads.'
         }, dedupeKey);
         const remotePayload = remote.payload && typeof remote.payload === 'object' ? remote.payload : {};
         remoteAppointmentId = text(remotePayload.appointment_id || remotePayload.lead_id || remotePayload.order_id || remotePayload.id);
         remoteLeadId = text(remotePayload.lead_id || remotePayload.order_id);
         remoteOrderId = text(remotePayload.order_id || remotePayload.lead_id);
-        remoteReserved = remotePayload.reserved !== false;
+        remoteReserved = reservationTrue(remotePayload.reserved);
         remoteLeadUrl = text(remotePayload.lead_url);
         remoteReservedSlotKey = text(remotePayload.reserved_slot_key);
         remoteRefreshResources = Array.isArray(remotePayload.refresh_resources) ? remotePayload.refresh_resources.map(text).filter(Boolean) : [];
         if (remote.raw && remote.raw.ok === false) throw new Error(text(remote.raw.message) || 'The website did not create the appointment Lead.');
-        if (!remoteAppointmentId || !remoteReserved) throw new Error('The website did not confirm the Lead appointment reservation.');
+        if (!remoteAppointmentId || !remoteReserved) throw new Error('The website created an incomplete Lead response but did not confirm reserved=true for the Dealer Agenda slot.');
         websiteRefresh = await this.refreshAppointmentWebsiteState(settings, {
           appointment_date: appointmentDate,
           store_id: slot.store_id || remotePayload.store_id || ''
         });
+        const expectedReservation = {
+          appointment_date: appointmentDate,
+          appointment_time: appointmentTime,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          store_id: text(slot.store_id || remotePayload.store_id)
+        };
+        reservationVerification = remoteReservationVerification(this.database, slot, remotePayload, expectedReservation, settings, websiteRefresh);
+        if (!reservationVerification.verified) {
+          // Never repeat the POST. Refresh the website state once more so a
+          // hosting cache cannot cause a false failure or a duplicate Lead.
+          websiteRefresh = await this.refreshAppointmentWebsiteState(settings, {
+            appointment_date: appointmentDate,
+            store_id: slot.store_id || remotePayload.store_id || ''
+          });
+          reservationVerification = remoteReservationVerification(this.database, slot, remotePayload, expectedReservation, settings, websiteRefresh);
+        }
+        if (!reservationVerification.verified) {
+          const missing = [];
+          if (!reservationVerification.calendar_reserved) missing.push('Dealer Agenda appointment');
+          if (!reservationVerification.lead_complete) missing.push('completed Dealer Lead');
+          if (!reservationVerification.slot_removed_from_availability) missing.push('blocked availability slot');
+          throw new Error('The website did not finish the reservation transaction: missing ' + missing.join(', ') + '. Nexa did not confirm the appointment to the customer.');
+        }
       }
       const reminder = slot.start.getTime() - Date.now() > 24 * 3600000 ? new Date(slot.start.getTime() - 24 * 3600000).toISOString() : new Date(Math.max(Date.now(), slot.start.getTime() - 2 * 3600000)).toISOString();
       const saved = this.database.saveAppointment({
@@ -683,20 +815,15 @@ class AutomaticActionsService {
         source_type: 'automatic-message', source_id: sourceMessageId, thread_id: candidate.thread_id,
         remote_appointment_id: remoteAppointmentId, created_by: 'nexa-automatic-actions'
       });
-      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created and synchronized with Dealer Office', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
+      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead and Dealer Agenda reservation verified', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, reservation_verification: reservationVerification, website_refresh: websiteRefresh } });
       await this.notify('Nexa created an authorized appointment', customerName + ' · ' + formatSlot(slot), 'success', 'auto-appointment-notification:' + sourceMessageId, { appointment_id: saved.id, thread_id: candidate.thread_id });
-      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, website_refresh: websiteRefresh };
+      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, reservation_verification: reservationVerification, website_refresh: websiteRefresh };
     } catch (error) {
       if (Number(error && error.status || 0) === 409) {
         const appointmentDate = localDateKey(slot.start);
         const websiteRefresh = await this.refreshAppointmentWebsiteState(settings, { appointment_date: appointmentDate, store_id: slot.store_id || '' });
         this.database.completeAutomaticActionEvent(event.id, { status: 'blocked', engine: 'availability', summary: 'Website slot changed before reservation', error: error.message, payload: { slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
         return { slotUnavailable: true, reason: 'website_slot_changed', error: error.message, website_refresh: websiteRefresh };
-      }
-      if (Number(error && error.status || 0) === 422 && /customer_(?:phone|name)|contact phone/i.test(text(error.message))) {
-        const requestedFields = /customer_phone|contact phone/i.test(text(error.message)) ? ['customer_phone'] : ['customer_name'];
-        this.database.completeAutomaticActionEvent(event.id, { status: 'blocked', engine: 'availability', summary: 'Website requested customer contact information', error: error.message, payload: { slot_id: slot.id, thread_id: candidate.thread_id, missing_fields: requestedFields } });
-        return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: requestedFields };
       }
       this.database.completeAutomaticActionEvent(event.id, { status: 'failed', engine: 'availability', summary: 'Appointment creation failed', error: error.message });
       await this.notify('Automatic appointment needs attention', error.message, 'danger', 'auto-appointment-error:' + sourceMessageId, { thread_id: candidate.thread_id });
@@ -940,6 +1067,7 @@ module.exports = {
   NEXA_APPOINTMENT_PAGE_V7_SYNC_V1,
   NEXA_APPOINTMENT_PAGE_V8_SYNC_V1,
   NEXA_APPOINTMENT_CONTACT_CONTEXT_V3,
+  NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,

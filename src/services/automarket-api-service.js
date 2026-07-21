@@ -69,7 +69,7 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   orders: ['id','order_id','lead_id','appointment_id','listing_id','store_id','listing_title','listing_url','listing_image_url','name','email','phone','location','customer_name','customer_email','customer_phone','customer_location','message','order_notes','order_type','source','source_context','source_label','created_by_platform','status','created_at','updated_at','reseller_id','reseller_name','reseller_email','appointment_date','appointment_time','appointment_label','appointment_status','appointment_result_status','sale_status','sale_price','appointment_commission_percent','appointment_commission_amount','commission_percent','commission_amount','dealer_status_note','lead_url'],
   agenda: ['id','contact_id','store_id','owner_id','name','email','phone','location','source_type','times_seen','first_seen_at','last_seen_at','created_from'],
   messages: ['id','thread_id','subject','context_type','context_id','store_id','sender_type','receiver_type','participant_name','participant_type','last_message_id','last_message_at','created_at','updated_at','message_count','unread_count','is_favorite','is_pinned','is_announcement','audience','can_reply','message_preview','last_message_preview','capabilities'],
-  'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','listing_id','status','participant_name','participant_type','participants','customer_name','customer_phone','customer_email','customer_location','sender_type','receiver_type','last_message','last_message_id','last_message_at','message_count','unread_count','is_announcement','is_broadcast','broadcast_group','is_pinned','allow_reply','favorite','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
+  'message-thread': ['id','thread_id','subject','context_type','context_id','store_id','listing_id','participant_name','participant_type','participants','customer_name','customer_phone','customer_email','customer_location','sender_type','receiver_type','last_message_id','last_message','last_message_at','message_count','unread_count','is_announcement','is_broadcast','is_favorite','is_pinned','status','can_reply','next_cursor','sync_cursor','created_at','updated_at'],
   'message-send': ['id','message_id','thread_id','client_message_id','sender_type','sender_id','sender_name','receiver_type','direction','body','body_format','sent_at','created_at','updated_at','status','is_read'],
   'message-read': ['thread_id','message_id','last_message_id','read_at','updated_at','status'],
   resellers: ['id','reseller_id','reseller_name','reseller_email','reseller_phone','status','assigned_listings','appointment_count','pending_appointments','completed_appointments','positive_sales','commission_percent','commission_amount','last_activity','appointments','availability','available_slots','appointment_availability','dealer_appointment_availability'],
@@ -104,7 +104,7 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
     'slots','available_slots','verified_open_slots','open_slots','booked_slots','unavailable_slots','available_times','booked_times','start_at','end_at','start_time','end_time','appointment_date','appointment_time','time','available','is_available','booked','is_booked','verified','capacity','available_count','booked_count',
     'appointments','appointment_count','verified_open_slots_count','id','appointment_id','order_id','lead_id','listing_id','listing_title','listing_url','customer_name','customer_phone','customer_email','customer_location','message','order_type','source','source_context','source_label','created_by_platform','appointment_label','appointment_status','appointment_result_status','sale_price','commission_percent','commission_amount','reseller_id','reseller_name','reseller_email','created_at','updated_at','appointment_create_enabled','appointment_create_endpoint','appointment_create_aliases','reserve_slot_contract','data','result','items','records','rows'
   ],
-  'appointment-create': ['ok','resource','id','appointment_id','order_id','lead_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_label','start_at','end_at','status','appointment_status','location','notes','source','source_context','reserved','reserved_slot_key','lead_url','refresh_resources','software_next_step','created_at','updated_at']
+  'appointment-create': ['ok','resource','id','appointment_id','order_id','lead_id','thread_id','store_id','dealer_id','reseller_id','listing_id','customer_name','customer_phone','customer_email','customer_location','appointment_date','appointment_time','appointment_label','start_at','end_at','status','appointment_status','location','notes','source','source_context','reserved','reserved_slot_key','refresh_resources','software_next_step','lead_url','created_at','updated_at']
 });
 
 const LIST_CONTAINER_KEYS = Object.freeze(['items','records','rows','listings','orders','contacts','agenda','messages','threads','resellers','appointments','assignments','stores','users','validations','api_keys','slots','availability']);
@@ -223,10 +223,11 @@ function sanitizeMessageEntry(entry) {
 function sanitizeMessageParticipant(participant) {
   if (!participant || typeof participant !== 'object' || Array.isArray(participant)) return null;
   const output = {};
-  for (const key of ['type','id','name','email','favorite','last_read_at','created_at']) {
-    if (Object.prototype.hasOwnProperty.call(participant, key)) output[key] = participant[key];
+  for (const key of ['id','user_id','account_id','name','display_name','email','phone','location','role','type','participant_type','sender_type']) {
+    if (participant[key] === undefined || participant[key] === null) continue;
+    output[key] = typeof participant[key] === 'string' ? participant[key].slice(0, 500) : participant[key];
   }
-  return output.id || output.name || output.email ? output : null;
+  return Object.keys(output).length ? output : null;
 }
 
 function sanitizeMessageThreadPayload(payload) {
@@ -234,16 +235,14 @@ function sanitizeMessageThreadPayload(payload) {
   const source = unwrapPayload(payload);
   const threadSource = source.thread && typeof source.thread === 'object' ? source.thread : source;
   const thread = sanitizeRecord('message-thread', threadSource);
-  const participantSource = Array.isArray(source.participants)
-    ? source.participants
-    : Array.isArray(threadSource.participants) ? threadSource.participants : [];
-  const participants = participantSource.slice(0, 30).map(sanitizeMessageParticipant).filter(Boolean);
-  if (participants.length) thread.participants = participants;
   const entries = Array.isArray(source.messages) ? source.messages : Array.isArray(source.items) ? source.items : Array.isArray(source.entries) ? source.entries : [];
+  const participantsSource = Array.isArray(threadSource.participants) ? threadSource.participants : Array.isArray(source.participants) ? source.participants : [];
+  const participants = participantsSource.slice(0, 20).map(sanitizeMessageParticipant).filter(Boolean);
+  if (participants.length) thread.participants = participants;
   return {
     thread: thread,
-    participants: participants,
     messages: entries.map(sanitizeMessageEntry),
+    participants: participants,
     next_cursor: source.next_cursor || source.cursor || null,
     has_more: Boolean(source.has_more),
     count: Number(source.count !== undefined ? source.count : entries.length)

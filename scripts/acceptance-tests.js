@@ -35,6 +35,11 @@ assert.equal(automationService.includes('NEXA_APPOINTMENT_CONTACT_RECOVERY_V1'),
 assert.equal(automationService.includes('NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V7_SYNC_V1'), true);
 assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V8_SYNC_V1'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1'), true);
+assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8'), true);
+assert.equal(appSource.includes('NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1'), true);
+assert.equal(appSource.includes('Reserve Appointment'), true);
 assert.equal(appSource.includes('Open Dealer Appointment Agenda'), true);
 assert.equal(appSource.includes('Open Dealer Office Leads'), true);
 assert.equal(dealerAvailabilityService.includes('NEXA_LIVE_DEALER_AVAILABILITY_V1'), true);

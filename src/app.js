@@ -423,18 +423,21 @@ function remoteAppointmentDate(item) {
 
 const NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1 = 'NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1';
 
-function connectedAppointmentIdentity(item) {
-  return String(item && (item.appointment_id || item.order_id || item.lead_id || item.id) || '').trim();
+function connectedAppointmentIdentities(item) {
+  if (!item) return [];
+  const identities = [item.remote_appointment_id, item.appointment_id, item.order_id, item.lead_id].filter(Boolean).map(function id(value) { return 'id:' + String(value); });
+  const date = remoteAppointmentDate(item);
+  const contact = String(item.customer_phone || item.phone || item.customer_email || item.email || item.customer_name || item.name || '').toLowerCase().replace(/\s+/g, '');
+  if (date && contact) identities.push('slot:' + dateKey(date) + ':' + String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0') + ':' + contact);
+  return identities;
 }
 
 function agendaEvents() {
   const events = [];
-  const localRemoteIds = new Set(state.appointments.map(function remoteId(item) {
-    return String(item.remote_appointment_id || '').trim();
-  }).filter(Boolean));
-  const connectedAppointmentIds = new Set();
+  const representedAppointments = new Set();
   state.appointments.forEach(function appointment(item) {
     const date = toValidDate(item.start_at); if (!date) return;
+    connectedAppointmentIdentities(item).forEach(function remember(identity) { representedAppointments.add(identity); });
     events.push({ id:item.id, kind:'appointment', source:'Local appointment', title:item.title, detail:item.contact_name || item.lead_name || item.description || '', status:item.status, date:date, local:true, item:item });
   });
   state.tasks.forEach(function task(item) {
@@ -447,21 +450,18 @@ function agendaEvents() {
   });
   ['orders','reseller-appointments'].forEach(function resource(resource) {
     integrationRemote(resource).forEach(function connected(item,index) {
-      const identity = connectedAppointmentIdentity(item);
-      if (identity && (localRemoteIds.has(identity) || connectedAppointmentIds.has(identity))) return;
       const date = remoteAppointmentDate(item); if (!date || !(item.appointment_date || item.appointment_time || String(item.order_type || '').toLowerCase().includes('appointment') || resource === 'reseller-appointments')) return;
-      if (identity) connectedAppointmentIds.add(identity);
+      const identities = connectedAppointmentIdentities(item);
+      if (identities.some(function represented(identity) { return representedAppointments.has(identity); })) return;
+      identities.forEach(function remember(identity) { representedAppointments.add(identity); });
       events.push({ id:remoteItemId(resource,item,index), kind:'connected', resource:resource, source:resource==='orders'?'Website order':'Reseller appointment', title:item.customer_name || item.listing_title || 'Connected appointment', detail:item.listing_title || item.store_name || item.dealer_name || '', status:item.appointment_status || item.status || item.sale_status || 'Pending', date:date, local:false, item:item });
     });
   });
-  integrationRemote('dealer-agenda-calendar').filter(function calendarAppointment(item) {
-    if (!item || item.record_type !== 'calendar_appointment') return false;
-    const identity = connectedAppointmentIdentity(item);
-    return !identity || (!localRemoteIds.has(identity) && !connectedAppointmentIds.has(identity));
-  }).forEach(function connectedCalendar(item,index) {
+  integrationRemote('dealer-agenda-calendar').filter(function calendarAppointment(item) { return item && item.record_type === 'calendar_appointment'; }).forEach(function connectedCalendar(item,index) {
     const date = remoteAppointmentDate(item); if (!date) return;
-    const identity = connectedAppointmentIdentity(item);
-    if (identity) connectedAppointmentIds.add(identity);
+    const identities = connectedAppointmentIdentities(item);
+    if (identities.some(function represented(identity) { return representedAppointments.has(identity); })) return;
+    identities.forEach(function remember(identity) { representedAppointments.add(identity); });
     events.push({ id:remoteItemId('dealer-agenda-calendar',item,index), kind:'connected', resource:'dealer-agenda-calendar', source:'Dealer Agenda website', title:item.customer_name || item.listing_title || 'Dealer appointment', detail:item.store_name || item.customer_phone || item.listing_title || '', status:item.appointment_status || item.status || 'Scheduled', date:date, local:false, item:item });
   });
   return events.sort(function sortEvents(a,b){ return a.date-b.date; });
@@ -814,7 +814,7 @@ function renderAgenda() {
   const dealerCalendar=dealerAgendaSnapshotRemote();
   const dealerAppointments=dealerAgendaAppointmentsRemote();
   const dealerCalendarStatus=integrationResourceStatus('dealer-agenda-calendar');
-  const dealerAgendaCard='<article class="panel-card"><div class="panel-header"><div><h3>Dealer Appointment Agenda</h3><p>Live website calendar used by Knowledge and collision protection. Nexa V8 reserves verified slots, creates the Lead, refreshes website Agenda contacts and keeps one synchronized local calendar entry.</p></div>'+badge(dealerCalendar?'Synchronized':'Not loaded',dealerCalendar?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Website appointments</span><strong>'+esc(dealerAppointments.length)+'</strong><small>Includes page and software-created appointments</small></article><article><span>Open slots reported</span><strong>'+esc(dealerCalendar&&dealerCalendar.verified_open_slots||0)+'</strong><small>Verified by the connected dealer</small></article><article><span>Calendar window</span><strong>'+esc(dealerCalendar&&dealerCalendar.days_count||14)+' days</strong><small>'+esc(dealerCalendar&&dealerCalendar.from||'Run Sync now to load')+'</small></article><article><span>Last website sync</span><strong>'+esc(dealerCalendarStatus&&dealerCalendarStatus.status||'pending')+'</strong><small>'+esc(dealerCalendarStatus&&dealerCalendarStatus.last_success_at?formatDate(dealerCalendarStatus.last_success_at):'No successful sync yet')+'</small></article></div>'+dealerOfficeShortcuts()+'</article>';
+  const dealerAgendaCard='<article class="panel-card"><div class="panel-header"><div><h3>Dealer Appointment Agenda</h3><p>Live website calendar used by Knowledge and appointment collision protection. Nexa reserves verified slots through appointment-create; availability editing stays inside the authenticated Dealer Office.</p></div>'+badge(dealerCalendar?'Synchronized':'Not loaded',dealerCalendar?'success':'warning')+'</div><div class="knowledge-summary-grid"><article><span>Website appointments</span><strong>'+esc(dealerAppointments.length)+'</strong><small>Includes page and software-created appointments</small></article><article><span>Open slots reported</span><strong>'+esc(dealerCalendar&&dealerCalendar.verified_open_slots||0)+'</strong><small>Verified by the connected dealer</small></article><article><span>Calendar window</span><strong>'+esc(dealerCalendar&&dealerCalendar.days_count||14)+' days</strong><small>'+esc(dealerCalendar&&dealerCalendar.from||'Run Sync now to load')+'</small></article><article><span>Last website sync</span><strong>'+esc(dealerCalendarStatus&&dealerCalendarStatus.status||'pending')+'</strong><small>'+esc(dealerCalendarStatus&&dealerCalendarStatus.last_success_at?formatDate(dealerCalendarStatus.last_success_at):'No successful sync yet')+'</small></article></div>'+dealerOfficeShortcuts()+'</article>';
   return sectionHeader('Agenda','A visual command center for local tasks, appointments, reminders and the live Dealer Appointment Agenda.','<div class="button-row"><button class="secondary-button" data-nexa-action="task-create">+ Task</button><button class="primary-button" data-nexa-action="appointment-create">+ Appointment</button></div>')+toolbar('Agenda items','appointment-create','appointment-search','new-appointment')+dealerAgendaCard+'<article class="panel-card calendar-panel">'+controls+calendar+'</article><article class="panel-card agenda-work-panel"><div class="panel-header"><div><h3>Organized work</h3><p>Everything with a date, in chronological order</p></div><strong>'+events.length+'</strong></div><div class="agenda-work-list">'+list+'</div>'+renderPagination(page,'agenda-list','agenda items')+'</article>';
 }
 

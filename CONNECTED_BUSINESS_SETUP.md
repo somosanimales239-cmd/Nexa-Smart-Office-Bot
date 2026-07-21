@@ -1,16 +1,20 @@
 # Connected Business setup
 
-## AutoMarket Pro appointment reservation V8
+## Reserve Appointment verification
 
-Nexa 1.6.15 uses the website's stable API resources rather than automating authenticated HTML forms:
+For page-backed appointments, include `appointment-create:write`, `dealer-agenda-calendar:read`, `dealer-appointment-availability:read`, `agenda:read` and the applicable Lead scope (`orders:read` for dealer or `reseller:read` for reseller). Nexa uses `appointment-create` or any advertised V8 alias, then proves that the Lead is complete, the appointment exists in Dealer Agenda and the slot has disappeared from availability before notifying the customer.
+
+## AutoMarket Pro appointment/Lead V8
+
+Nexa 1.6.16 uses the website's stable API resources rather than automating authenticated HTML forms:
 
 1. Read `dealer-appointment-availability` and `dealer-agenda-calendar`.
 2. Create the confirmed appointment with `appointment-create` and `appointment-create:write`.
 3. Require a successful response containing a Lead/order/appointment ID and `reserved: true`.
-4. Preserve `reserved_slot_key` and the server-provided `refresh_resources` list.
-5. Immediately reload availability, Dealer Agenda, `orders` and `agenda` so Dealer Office Leads, contacts and Nexa's local calendar reflect the same reservation.
+4. Reload availability, Dealer Agenda, `orders` and `agenda`.
+5. Verify the Lead fields, matching calendar appointment and consumed slot before confirming the customer.
 
-Dealer Office availability has no write endpoint in the supplied V8 website. Nexa therefore provides authenticated HTTPS shortcuts to Dealer Appointment Agenda, Reserve Appointment, Edit Availability and Dealer Leads. Leads open at `dealer/orders.php?highlight_order=...` for authorized manual editing.
+Dealer Office availability editing remains an authenticated page action. Nexa provides HTTPS shortcuts to Dealer Agenda Reserve Appointment, Edit Availability and Dealer Leads. Leads open at `dealer/orders.php?highlight_order=...` for authorized manual editing.
 
 ## API endpoint and authentication
 
@@ -55,7 +59,7 @@ Recommended reseller keys should include `reseller-profile:read`, `reseller:read
 
 The website may require a separate appointment-write scope for optional remote appointment creation.
 
-For conversation-originated appointments, Nexa posts `thread_id`, `appointment_date`, `appointment_time`, `customer_phone` and notes to `appointment-create`. It also accepts `lead-appointment-create`, `nexa-appointment-create`, `appointment-create-from-thread`, `reserve-appointment-slot`, `agenda-reserve-appointment` and `lead-appointment-reserve`. The website may derive the customer name and listing/order context from the thread, create the Lead, reserve the slot and return the resulting IDs.
+For conversation-originated appointments, Nexa posts `thread_id`, `appointment_date`, `appointment_time`, `customer_phone` and notes to `appointment-create`. The same capability may be advertised as `lead-appointment-create`, `nexa-appointment-create` or `appointment-create-from-thread`; Nexa normalizes all three aliases. The website may derive the customer name and listing/order context from the thread, create the Lead, reserve the slot and return the resulting IDs.
 
 ## Message resources
 
@@ -82,7 +86,7 @@ For optional website-side creation, the connection map must advertise:
 
 - `appointment-create`
 
-It must also grant `appointment-create:write`. Nexa requires at least a customer phone, but first searches the complete conversation and participant metadata so it never asks twice. After a successful POST, Nexa reloads `dealer-appointment-availability`, `dealer-agenda-calendar`, `orders` and `agenda`, then links the returned remote ID to its local calendar entry.
+It must also grant `appointment-create:write`. After a successful POST, Nexa reloads `dealer-agenda-calendar` immediately so website and local Agenda state stay aligned.
 
 ## Dealer Agenda Calendar
 

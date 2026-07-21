@@ -1,0 +1,32 @@
+Nexa Smart Office Bot 1.6.16 - Validation Summary
+
+Remote reservation commit contract:
+- NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8
+- NEXA_APPOINTMENT_PAGE_V8_SYNC_V1
+- NEXA_APPOINTMENT_CONTACT_CONTEXT_V3
+- NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1
+- NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1
+
+Verified behavior:
+- complete Reserve Appointment body is sent
+- reserved=true and a remote ID are mandatory
+- completed Lead is visible with customer name, phone, date and time
+- matching appointment is visible in Dealer Agenda
+- consumed slot disappears from verified availability
+- a Lead-only partial response is rejected
+- no false customer confirmation is sent for a partial reservation
+- read verification may retry without repeating the POST
+- remote reservation is synchronized into the local calendar
+- local, Lead and Dealer Agenda representations are deduplicated
+- existing thread/message contact is reused
+- dealer address appears once in confirmations
+
+Validation:
+- JavaScript syntax and project validators
+- 28 core integration tests
+- 27 API synchronization tests
+- 9 real-time message tests
+- 13 automotive Knowledge tests
+- 21 professional appointment communication tests
+- guarded automatic-action reservation regressions
+- implementation, acceptance and Nexa contract gates

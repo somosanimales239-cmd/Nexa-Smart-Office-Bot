@@ -1,6 +1,6 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.6.15",
+  "update_version": "1.6.16",
   "minimum_base_version": "1.6.0",
   "delivery_type": "complete_software_source_replacement",
   "website_files_included": false,
@@ -53,6 +53,7 @@
     "refreshes_availability_after_create": true,
     "refreshes_orders_leads_after_create": true,
     "refreshes_agenda_contacts_after_create": true,
+    "remote_commit_verification": true,
     "remote_local_calendar_deduplication": true,
     "dealer_office_shortcuts": true,
     "reserve_appointment_shortcut": true
@@ -94,14 +95,16 @@
     "categories": 9
   },
   "features": [
-    "AutoMarket Pro V8 Dealer Agenda Reserve Appointment compatibility",
-    "all seven V8 appointment-create and reserve aliases",
-    "thread participant and message contact reuse without duplicate prompts",
-    "phone-only recovery before Lead and appointment reservation",
+    "all-or-nothing Dealer Agenda remote reservation verification",
+    "complete Reserve Appointment Lead fields",
+    "Lead-only partial reservation rejection",
+    "matching Dealer Agenda appointment proof before confirmation",
+    "consumed availability slot proof before confirmation",
+    "read-only verification retry without a duplicate POST",
+    "AutoMarket Pro V8 seven-alias reservation compatibility",
+    "thread participant and message contact reuse",
     "single-address appointment confirmation",
-    "post-reservation availability, Dealer Agenda, Dealer Leads and Agenda contact refresh",
     "remote and local calendar appointment deduplication",
-    "Dealer Agenda Reserve Appointment HTTPS shortcut",
     "local build delimiter compatibility for src/app.js URL helpers",
     "order-thread context ID protection from listing-ID confusion",
     "HTTP 409 slot-race recovery with refreshed verified alternatives",
@@ -176,8 +179,8 @@
     },
     {
       "path": "AUTOMATIC_ACTIONS.md",
-      "sha256": "9bc815fb5a9cb58e07234408ad3c8ba977b8757a9083fa455556d32354358cfb",
-      "size": 4569,
+      "sha256": "a0b118cd5c591c906dd604ad076d294ae09a26ed524007873a68a82ed9c39970",
+      "size": 5212,
       "operation": "replace_or_create"
     },
     {
@@ -188,14 +191,14 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "b6d5f634824d64e0018b161e77e735624701f7cba496b16d9c60a4cc988f39af",
-      "size": 11794,
+      "sha256": "aecd9d911e75764241164c431183a3de8bd96f143a186ebfc24bf2dadd9ba052",
+      "size": 12188,
       "operation": "replace_or_create"
     },
     {
       "path": "CONNECTED_BUSINESS_SETUP.md",
-      "sha256": "50383134e48d3de8fa07f894945697768ab5c3273c2c2d0ae2a72a2d0fb68af0",
-      "size": 5617,
+      "sha256": "d9c4f57e5e769fb31dbcdcab25c5527f4541b02c28dd9b4bd6680b0503c6f4ee",
+      "size": 5765,
       "operation": "replace_or_create"
     },
     {
@@ -212,7 +215,7 @@
     },
     {
       "path": "main.js",
-      "sha256": "05be46b9faa14531963313a54c661611c0ca8663675c55d982a8ab3061dba4e4",
+      "sha256": "e30f6c988698bb4847856240ecd1d3c496d3b3cdc68e71427dbdc61d69fe3a89",
       "size": 10957,
       "operation": "replace_or_create"
     },
@@ -230,20 +233,20 @@
     },
     {
       "path": "nexa.project.json",
-      "sha256": "fc6e20f0523d20c1ba9be4b966de30aa2cee3f7ba3a99c9d2e00871919663abc",
-      "size": 1589,
+      "sha256": "d013f6957af7a12b9b9cd409d170af580c91e2064b51df0e4ebc21e0e44a2fec",
+      "size": 1646,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "c4ae7c21046129847a4309874f950057044837044403220801fe0e97876fafad",
+      "sha256": "4c79dc723f5bac391db5dea727988d97920d91e07aeacce091dc891465c08271",
       "size": 102949,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "e422f1a2a03924ee96e15beb47fd3afc8b30945d9dc70a39811bf49e5f150605",
-      "size": 3495,
+      "sha256": "1daf3f7910de86ca0feecba3b5ae7ef89c214eeea68c7417536a20923a89e74b",
+      "size": 3493,
       "operation": "replace_or_create"
     },
     {
@@ -254,14 +257,14 @@
     },
     {
       "path": "README.md",
-      "sha256": "f700c7f05faa13c4aa9d44f20b1682e7e92bec8b586b0d66acf3a66db502f2df",
-      "size": 15654,
+      "sha256": "96f90165350db5421e656b5065207e562d3ce627cb000d1449ce7846d5215710",
+      "size": 15748,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/acceptance-tests.js",
-      "sha256": "6029d99af251f4c5ed1b67b45a28ec89ccc83229403e55c20a42dacb8eeed860",
-      "size": 4709,
+      "sha256": "7f118e1043c27bff4b799dd96a55c693f77047f57a1899e82069a13003e0e4bb",
+      "size": 5124,
       "operation": "replace_or_create"
     },
     {
@@ -272,32 +275,32 @@
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "c1c0ba3f71eaa3d19794c76a961e8df20d1f76bd29bf4505a1be26a616a71ac0",
-      "size": 7557,
+      "sha256": "800b54f2622936ecc905946a3a48d35c9687c56f103f0a7839d31b220e7722c9",
+      "size": 7724,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "f9c05c72a19b7e77cecc9106dae5235130919bb7dd5ede2a36588537d29e428f",
-      "size": 32682,
+      "sha256": "32c9d6f6d6df2b54144977f2363a0472ff048d9928aec129204ccd1cfd8b4207",
+      "size": 32597,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-appointment-communication.js",
-      "sha256": "09d0bf3d555fdd28ab3d9f75bb450302955ad08246fda4de8ec2c1b0d301e93c",
-      "size": 27153,
+      "sha256": "1cc428e10e52415873226db12d6bb5eeb1452063c2629373b575eb8a976cb30b",
+      "size": 27189,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automatic-actions.js",
-      "sha256": "1cb437748e59813204e4905c0c88f5af012a52c4bbf20553828f46ba26ec2f4a",
-      "size": 40667,
+      "sha256": "64ffe6e2d2dba30a175be6fd3cc085f597cf07e897358ca578aa7ccfb9f6e1c9",
+      "size": 44620,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automotive-knowledge-library.js",
-      "sha256": "5bcd338511dfbdcc1dab27ff170d7ef37b19de8bd7826bff96b85b87595f53a1",
-      "size": 11559,
+      "sha256": "a89cbc108eb70186bc153def73777becb918dc49609dda10776598472a39929f",
+      "size": 11524,
       "operation": "replace_or_create"
     },
     {
@@ -308,8 +311,8 @@
     },
     {
       "path": "scripts/integration-realtime-messages.js",
-      "sha256": "84cf03f45ff66ffa3c16b0d8bed5e1378b0a1cfe688f326054a3a7b8291d428d",
-      "size": 11434,
+      "sha256": "c5f218bf9b3cda8185e068fc6eedf27b7009c593b478fe3e1eff2c0bd8ff85b3",
+      "size": 11138,
       "operation": "replace_or_create"
     },
     {
@@ -350,8 +353,8 @@
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "571b7817acca8beae02c95f11379d0a733949aee4fe4320dd1320a824d197ff7",
-      "size": 3602,
+      "sha256": "1dffe5e8a9326d08808a9c5af609765fe71ecb51bf3d2e6900e72f6362cb5992",
+      "size": 3654,
       "operation": "replace_or_create"
     },
     {
@@ -368,8 +371,8 @@
     },
     {
       "path": "src/app.js",
-      "sha256": "01c6243203c2ccf08ffa5911c0d40049a0246a62e52de3bafec966cdb2824e68",
-      "size": 174366,
+      "sha256": "424b78d4378e95d5904908b460b34eaceedc409a5038a3d633832da8b74e3eea",
+      "size": 174881,
       "operation": "replace_or_create"
     },
     {
@@ -416,7 +419,7 @@
     },
     {
       "path": "src/index.html",
-      "sha256": "2f4da08f57771b9fb05ebdb1bc3b306965a2af2caa8d975695ca43d90f41990a",
+      "sha256": "c9c24bdf74b4bd6060656d75d9742edb4248bf151627a7d8e1d4fddcaf6e505a",
       "size": 8393,
       "operation": "replace_or_create"
     },
@@ -524,20 +527,20 @@
     },
     {
       "path": "src/services/appointment-communication-service.js",
-      "sha256": "3abc60d26cae110e3338cdd4b9438419f51457029fcaf7b97d30e94faa43beae",
-      "size": 34715,
+      "sha256": "0b23c1f6bd0646fde084fc767f6386a36b0d99c06f18d800d890524ea4040c97",
+      "size": 34463,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automarket-api-service.js",
-      "sha256": "61c8197351be687da518bfd989c5ca4fa7000fe791dc4414e97528429acddc9d",
-      "size": 49545,
+      "sha256": "590a3847099f1eca08158d648c97c45a3b19de08517e5a61e7f77c91610af487",
+      "size": 49645,
       "operation": "replace_or_create"
     },
     {
       "path": "src/services/automatic-actions-service.js",
-      "sha256": "6335f9eed1be82f8c4fe92138d9704cce570d090224271817c848e706a29a3cb",
-      "size": 65927,
+      "sha256": "f45ff0b9fac90c8c94de1f5ab59c5501b5f2f15cc8729134e135c6f8589c97fb",
+      "size": 73587,
       "operation": "replace_or_create"
     },
     {
@@ -631,9 +634,9 @@
       "operation": "replace_or_create"
     },
     {
-      "path": "UPDATE_1.6.15_ES.txt",
-      "sha256": "b3f386c15dbb533b787b270750e15820b9c7463e2aeceaf422b3504b88ed332e",
-      "size": 2078,
+      "path": "UPDATE_1.6.16_ES.txt",
+      "sha256": "e1b8bfce292200d7c53d0e23c94194eb6b1c3b1eb661a036de50bee8bc3d2228",
+      "size": 1321,
       "operation": "replace_or_create"
     },
     {
@@ -715,9 +718,9 @@
       "operation": "replace_or_create"
     },
     {
-      "path": "VALIDATION_1.6.15.txt",
-      "sha256": "61b811bf99e8bd35a58341bcb4b9d06009d8cf1c28e06eed090c5083df9b6470",
-      "size": 1907,
+      "path": "VALIDATION_1.6.16.txt",
+      "sha256": "a3f4451dc76413b4859baa4ffe51881cc976528844b3f1c69c6eb55ce8bffcdb",
+      "size": 1293,
       "operation": "replace_or_create"
     },
     {
@@ -764,8 +767,8 @@
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "1d58ca145dc7771340fd5e777fed2d5406680c3ba660ef16c8d95ca43e413f96",
-      "size": 6250,
+      "sha256": "0c34375a603a351110bab03f93ef2435b5223a6643aac7ee70c26ab4dfd186fe",
+      "size": 6255,
       "operation": "replace_or_create"
     }
   ],
@@ -816,16 +819,18 @@
     "api_contract": "NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8",
     "compatibility_api_contract": "NEXA_AUTOMARKET_APPOINTMENT_LEADS_V7",
     "contact_context_contract": "NEXA_APPOINTMENT_CONTACT_CONTEXT_V3",
+    "commit_verification_contract": "NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1",
     "agenda_deduplication_contract": "NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1",
     "refreshes_dealer_availability_after_create": true,
     "refreshes_dealer_leads_after_create": true,
     "refreshes_agenda_contacts_after_create": true,
-    "preserves_reserved_slot_key": true,
-    "preserves_server_refresh_resources": true,
-    "existing_thread_phone_and_email_reused": true,
-    "missing_phone_requested_once": true,
+    "requires_matching_calendar_appointment": true,
+    "requires_complete_lead": true,
+    "requires_consumed_availability_slot": true,
+    "rejects_lead_only_partial_success": true,
+    "verification_retry_does_not_repeat_post": true,
+    "existing_thread_contact_reused": true,
     "confirmation_address_appears_once": true,
-    "local_remote_calendar_deduplication": true,
     "order_thread_context_is_not_listing_id": true,
     "http_409_refreshes_verified_alternatives": true
   }
