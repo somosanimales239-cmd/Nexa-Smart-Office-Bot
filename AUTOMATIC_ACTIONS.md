@@ -49,7 +49,7 @@ Version 1.6.10 makes missing appointment identity recoverable. When the selected
 
 Version 1.6.12 introduced the date-scoped appointment state machine. The newest customer correction becomes the active date, and a time mentioned on several days can be selected only inside that active date. A stale contact request is cancelled when the customer corrects the date or time. If the message thread already supplies the customer name, Nexa asks only for a phone number; the customer may also include that phone in the same message as the selected time.
 
-Version 1.6.14 preserves the AutoMarket Pro V7 roundtrip from 1.6.13 and adds local-builder-safe URL helpers. With website appointment creation authorized, Nexa sends `thread_id`, phone, date and time, requires the website to confirm `reserved: true`, and then reloads availability, Dealer Appointment Agenda and `orders`/Dealer Leads before confirming the reservation. A 409 slot conflict triggers a fresh availability check and updated customer-facing alternatives.
+Version 1.6.15 implements the AutoMarket Pro V8 reservation roundtrip. Nexa reuses phone/email already present anywhere in the conversation, asks only for a missing phone, sends `thread_id`, phone, date and time, requires `reserved: true`, keeps `reserved_slot_key`, and reloads availability, Dealer Appointment Agenda, `orders`/Dealer Leads and website Agenda contacts before confirming. The local calendar stores the same remote appointment ID so synchronized copies are not displayed twice. A 409 slot conflict triggers a fresh availability check and updated verified alternatives.
 
 ## Notification navigation
 

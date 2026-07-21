@@ -1,11 +1,11 @@
-Nexa Smart Office Bot 1.6.14 Validation Report
+Nexa Smart Office Bot 1.6.15 Validation Report
 
 Package feature
 Date-scoped bilingual appointment state, guarded thread-to-Lead creation,
 Store-aware Dealer Appointment Agenda synchronization and local/website
 collision protection.
-AutoMarket Pro V7 Dealer Agenda, Edit Availability and Dealer Office Leads
-roundtrip synchronization.
+AutoMarket Pro V8 Dealer Agenda, Reserve Appointment, Edit Availability,
+Dealer Office Leads and Agenda/contact roundtrip synchronization.
 
 Preserved platform features
 - Guarded AI Control and Emergency pause
@@ -27,7 +27,7 @@ Validation scope
 - Complete workspace reflection
 - 9 real-time messaging tests
 - 13 automotive Knowledge tests, including live schedules and website-calendar conflicts
-- 20 professional appointment communication tests
+- 21 professional appointment communication tests
 - Guarded automatic actions, including professional offers, cordial declines and
   local Agenda collision prevention
 - Implementation and acceptance contracts
@@ -62,8 +62,10 @@ Appointment communication regression verified
   July 21; “en la mañana” is never interpreted as tomorrow by itself.
 - Prior dealer offer dates remain available as conversation context even when
   that day's slots disappear during refresh.
-- Missing customer identity produces a name/contact request in the same chat,
+- Missing customer phone produces a phone-only request in the same chat,
   preserves the selected slot and does not end as an internal-only failure.
+- Phone/email already present in thread participants, structured message metadata
+  or inbound message text is reused and never requested twice.
 - After the customer supplies identity, the exact slot is revalidated, created
   and confirmed; if it changed, current verified alternatives are sent.
 - "2 de la tarde" is parsed as 2:00 PM and a later contextual "1:30"
@@ -79,16 +81,19 @@ Appointment communication regression verified
 - A booked website-calendar time is never offered or created.
 - Website creation sends thread_id, date, time and customer phone, accepts optional
   listing/name/email/location context and requires appointment-create:write.
-- appointment-create, lead-appointment-create, nexa-appointment-create and
-  appointment-create-from-thread all discover the same guarded capability.
-- Lead/order/appointment IDs, source metadata, reserved status and Lead URL are
+- All seven V8 appointment-create and reserve aliases discover the same guarded capability.
+- Lead/order/appointment IDs, source metadata, reserved status, reserved_slot_key,
+  refresh_resources and Lead URL are
   retained in the automatic-action audit record.
 - After successful website creation, dealer availability, Dealer Agenda calendar
-  and orders/Dealer Leads are refreshed immediately and their local caches are replaced.
-- AutoMarket Pro V7 `orders` fields are normalized into the connected Lead view,
+  orders/Dealer Leads and website Agenda contacts are refreshed immediately.
+- AutoMarket Pro V8 `orders` fields are normalized into the connected Lead view,
   including customer contact, appointment and Nexa source metadata.
-- Dealer Appointment Agenda, Edit Availability and each synchronized Lead have
+- Dealer Appointment Agenda, Reserve Appointment, Edit Availability and each synchronized Lead have
   safe HTTPS shortcuts to their authenticated Dealer Office pages.
+- Appointment confirmations mention the dealer address only once.
+- Local calendar entries are linked to the remote appointment ID and duplicate
+  Lead/Dealer Agenda representations are suppressed.
 - A website 409 slot race refreshes live sources and produces verified alternatives.
 - Authorized appointments are saved to the local Agenda when remote creation is
   unavailable or disabled.

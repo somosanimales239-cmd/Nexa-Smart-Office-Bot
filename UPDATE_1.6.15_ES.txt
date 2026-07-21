@@ -1,0 +1,53 @@
+NEXA SMART OFFICE BOT 1.6.15
+
+RESERVA V8, CONTACTO Y AGENDA SIN DUPLICADOS
+
+Esta version fue comparada con el nuevo paquete de la pagina que agrega:
+
+Dealer Office -> Agenda -> Dealer Appointment Agenda -> Reserve Appointment
+
+CAMBIOS DE COMUNICACION
+
+1. La direccion de la cita aparece una sola vez en la confirmacion.
+2. La parte de cambios usa telefono, email y este mismo chat, sin repetir la direccion.
+3. Nexa busca nombre, telefono y email en:
+   - datos principales del hilo
+   - participantes de la conversacion
+   - campos estructurados de cada mensaje
+   - texto completo de los mensajes entrantes
+4. Si el cliente ya dio el telefono, Nexa no lo vuelve a pedir.
+5. Si falta, Nexa conserva la fecha y hora elegidas y solicita solamente un telefono.
+6. El telefono es el contacto minimo antes de crear el Lead y reservar la hora.
+
+FLUJO DE RESERVA V8
+
+1. Lee connection-map.
+2. Lee dealer-appointment-availability y dealer-agenda-calendar.
+3. Selecciona solamente un espacio de available_slots.
+4. Publica appointment-create con thread_id, fecha, hora y telefono.
+5. Exige reserved=true y un appointment_id / lead_id / order_id.
+6. Conserva reserved_slot_key y refresh_resources.
+7. Refresca disponibilidad, Dealer Agenda, Dealer Leads y Agenda/contactos.
+8. Guarda la misma reserva en el calendario local de Nexa con el ID remoto.
+9. Evita mostrar duplicados del mismo appointment provenientes de Leads y Dealer Agenda.
+
+ALIASES V8 ACEPTADOS
+
+appointment-create
+lead-appointment-create
+nexa-appointment-create
+appointment-create-from-thread
+reserve-appointment-slot
+agenda-reserve-appointment
+lead-appointment-reserve
+
+ACCESO RAPIDO
+
+Connected Business y Agenda ahora incluyen Reserve Appointment para abrir directamente el formulario autenticado de Dealer Agenda.
+
+DESPUES DE INSTALAR
+
+1. Confirma que la API Key incluya appointment-create:write, dealer-agenda-calendar:read, dealer-appointment-availability:read, agenda:read y orders:read o reseller:read.
+2. Ejecuta Test connection.
+3. Ejecuta Sync now.
+4. Autoriza las acciones automaticas de citas en AI Control.

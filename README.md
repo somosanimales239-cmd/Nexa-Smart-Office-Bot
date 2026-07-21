@@ -1,8 +1,18 @@
-# Nexa Smart Office Bot 1.6.14
+# Nexa Smart Office Bot 1.6.15
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.14
+## New in 1.6.15
+
+- Matches AutoMarket Pro Dealer Leads Appointment Reservation API V8 and the new Dealer Agenda → Reserve Appointment workflow.
+- Requires a customer phone before automatic Lead reservation, but reuses phone/email already present in the thread, participant metadata or any inbound message instead of asking twice.
+- Keeps the selected verified date/time fixed while requesting a missing phone number.
+- Confirms the appointment address only once; the change-contact clause now contains phone, email and chat without repeating the same location.
+- Preserves `reserved_slot_key` and `refresh_resources`, supports the three new V8 reservation aliases and refreshes availability, Dealer Agenda, Dealer Leads and website Agenda contacts after creation.
+- Saves the reservation in Nexa's local calendar with the remote appointment ID and suppresses duplicate copies from Leads and Dealer Agenda.
+- Adds a direct authenticated **Reserve Appointment** shortcut beside Dealer Appointment Agenda and Edit Availability.
+
+## Existing 1.6.14 improvements
 
 - Rewrites the website-root and Dealer Lead link helpers with conservative string operations so the page's Local build validation no longer mistakes regular-expression slash delimiters for comments and reports a false extra `}` in `src/app.js`.
 - Keeps the complete AutoMarket Pro V7 Dealer Agenda, availability, appointment-create and Dealer Office Lead synchronization from 1.6.13.

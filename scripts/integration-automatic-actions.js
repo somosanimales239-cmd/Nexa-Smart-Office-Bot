@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-auto-actions-'));
@@ -19,8 +19,10 @@ let lastAvailabilityQuery = null;
 let availabilityFetchCount = 0;
 let calendarFetchCount = 0;
 let leadsFetchCount = 0;
+let agendaFetchCount = 0;
 let calendarPayload = { stores: [], appointment_count: 0, verified_open_slots: 0 };
 let remoteOrdersPayload = [];
+let remoteAgendaPayload = [];
 let remoteAppointmentBody = null;
 let remoteAppointmentFailure = null;
 const apiService = {
@@ -29,6 +31,10 @@ const apiService = {
     if (resource === 'orders') {
       leadsFetchCount += 1;
       return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: remoteOrdersPayload };
+    }
+    if (resource === 'agenda') {
+      agendaFetchCount += 1;
+      return { status: 200, durationMs: 1, receivedAt: new Date().toISOString(), payload: remoteAgendaPayload };
     }
     throw new Error('Unsupported test resource: ' + resource);
   },
@@ -56,7 +62,8 @@ const apiService = {
     }
     calendarPayload = { appointment_count: 1, verified_open_slots: 0, stores: [{ store_id: 'store-1', store_name: 'Main dealership', days: [{ date: payload.appointment_date, appointments: [{ appointment_id: 'remote-appt-v6', listing_id: payload.listing_id, customer_name: payload.customer_name, appointment_time: payload.appointment_time, appointment_status: 'scheduled', source: 'software' }] }] }] };
     remoteOrdersPayload = [{ id: 'ord-nexa-v7', name: payload.customer_name, phone: payload.customer_phone, email: payload.customer_email, status: 'new', order_type: 'reseller_appointment', source_context: 'nexa_smart_office_bot_reseller:assignment-1', source_label: 'Nexa Smart Office Bot', created_by_platform: 'Nexa Smart Office Bot', appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled' }];
-    return { raw: { ok: true, resource: 'appointment-create' }, payload: { order_id: 'ord-nexa-v6', lead_id: 'ord-nexa-v6', appointment_id: 'remote-appt-v6', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: payload.thread_id, customer_name: payload.customer_name, customer_phone: payload.customer_phone, appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled', reserved: true, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-nexa-v6' } };
+    remoteAgendaPayload = [{ contact_id: 'agenda-nexa-v8', name: payload.customer_name, phone: payload.customer_phone, email: payload.customer_email, source_type: 'order', last_seen_at: new Date().toISOString() }];
+    return { raw: { ok: true, resource: 'appointment-create' }, payload: { order_id: 'ord-nexa-v6', lead_id: 'ord-nexa-v6', appointment_id: 'remote-appt-v6', source: 'Nexa Smart Office Bot', source_context: 'nexa_smart_office_bot_dealer', thread_id: payload.thread_id, customer_name: payload.customer_name, customer_phone: payload.customer_phone, appointment_date: payload.appointment_date, appointment_time: payload.appointment_time, appointment_status: 'scheduled', reserved: true, reserved_slot_key: 'store-1|' + payload.appointment_date + '|' + payload.appointment_time, lead_url: 'https://example.com/dealer/orders.php?highlight_order=ord-nexa-v6', refresh_resources: ['dealer-agenda-calendar','dealer-appointment-availability','orders','agenda'] } };
   }
 };
 const settingsService = {
@@ -102,6 +109,8 @@ function saveBaseSettings(extra) {
 
 async function run() {
   assert.equal(NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1');
+  assert.equal(NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1');
+  assert.equal(NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3');
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
@@ -232,7 +241,7 @@ async function run() {
   assert.equal(database.listAppointments('').length, 1, 'A verified remote slot must not overlap an existing local Agenda appointment.');
 
   const contactDay = new Date(tomorrow);
-  contactDay.setDate(contactDay.getDate() + 2);
+  contactDay.setDate(contactDay.getDate() + 1);
   contactDay.setHours(11, 0, 0, 0);
   const contactDateKey = contactDay.getFullYear() + '-' + String(contactDay.getMonth() + 1).padStart(2, '0') + '-' + String(contactDay.getDate()).padStart(2, '0');
   availabilityPayload = {
@@ -261,7 +270,8 @@ async function run() {
   const contactRequestResult = await service.runNow('test-missing-contact-request');
   assert.equal(contactRequestResult.appointments_created, 0);
   assert.equal(contactRequestResult.messages_sent, 1, 'Missing identity must produce a customer-facing request instead of stopping silently.');
-  assert.match(sentMessages[0].body, /nombre del cliente|nombre y teléfono|customer name/i);
+  assert.match(sentMessages[0].body, /número de teléfono|un teléfono|phone number/i);
+  assert.doesNotMatch(sentMessages[0].body, /nombre del cliente|nombre y teléfono|customer name/i);
   assert.match(sentMessages[0].body, /11:00 AM/i);
   assert.equal(notifications.filter((item) => item.title === 'Automatic appointment needs attention').length, attentionBefore, 'Missing identity should be a recoverable conversation step, not a terminal error notification.');
 
@@ -286,9 +296,9 @@ async function run() {
   database.saveIntegrationStatus({
     connected: 1,
     account_type: 'reseller',
-    scopes_json: JSON.stringify(['reseller:read','messages:read','messages:write','dealer-appointment-availability:read','dealer-agenda-calendar:read','appointment-create:write']),
+    scopes_json: JSON.stringify(['reseller:read','agenda:read','messages:read','messages:write','dealer-appointment-availability:read','dealer-agenda-calendar:read','appointment-create:write']),
     connection_map_json: JSON.stringify({
-      available_resources: ['orders','listings','messages','message-thread','message-send','message-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
+      available_resources: ['orders','listings','agenda','messages','message-thread','message-send','message-read','dealer-appointment-availability','dealer-agenda-calendar','appointment-create'],
       dealer_appointment_availability_enabled: true,
       dealer_appointment_availability_endpoint: 'dealer-appointment-availability',
       dealer_agenda_calendar_enabled: true,
@@ -304,12 +314,14 @@ async function run() {
   calendarFetchCount = 0;
   availabilityFetchCount = 0;
   leadsFetchCount = 0;
+  agendaFetchCount = 0;
+  remoteAgendaPayload = [];
   saveBaseSettings({ auto_messages_enabled: '0', auto_appointments_enabled: '1', auto_appointments_create_remote: '1' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-v6', subject: 'Website appointment', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
   currentThread = function threadV6(threadId) {
     return {
-      thread: { thread_id: threadId, subject: 'Website appointment', context_type: 'listing', context_id: 'listing-77', participant_name: 'Remote Customer', customer_phone: '7865553333', customer_email: 'remote@example.com', customer_location: 'Miami, FL', can_reply: 1, is_announcement: 0 },
-      messages: [{ message_id: 'inbound-v6', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Remote Customer', body: 'Please book my appointment on ' + remoteDateText + ' at 2:30 PM.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
+      thread: { thread_id: threadId, subject: 'Website appointment', context_type: 'listing', context_id: 'listing-77', participant_name: 'Remote Customer', participants: [{ type: 'buyer', id: 'buyer-remote', name: 'Remote Customer', email: 'remote@example.com' }], customer_location: 'Miami, FL', can_reply: 1, is_announcement: 0 },
+      messages: [{ message_id: 'inbound-v6', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Remote Customer', sender_email: 'remote@example.com', body: 'Please book my appointment on ' + remoteDateText + ' at 2:30 PM. My phone is 786-555-3333 and my email is remote@example.com.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }]
     };
   };
   const remoteResult = await service.runNow('test-v6-remote-appointment');
@@ -322,19 +334,27 @@ async function run() {
   assert.equal(calendarFetchCount, 2, 'Dealer Agenda calendar must refresh before evaluation and immediately after website creation.');
   assert.equal(availabilityFetchCount, 2, 'Dealer availability must refresh before evaluation and immediately after website creation.');
   assert.equal(leadsFetchCount, 1, 'Dealer Office Leads must refresh immediately after website creation.');
+  assert.equal(agendaFetchCount, 1, 'Website Agenda contacts must refresh immediately after website creation.');
   const websiteCalendar = database.listIntegrationCache('dealer-agenda-calendar', '', 20);
   assert(websiteCalendar.some((item) => item.appointment_id === 'remote-appt-v6'));
   const websiteLeads = database.listIntegrationCache('orders', '', 20);
   assert.equal(websiteLeads.length, 1);
   assert.equal(websiteLeads[0].id, 'ord-nexa-v7');
   assert.equal(websiteLeads[0].source_context, 'nexa_smart_office_bot_reseller:assignment-1');
+  const websiteAgendaContacts = database.listIntegrationCache('agenda', '', 20);
+  assert.equal(websiteAgendaContacts.length, 1);
+  assert.equal(websiteAgendaContacts[0].phone, '7865553333');
   const completedWebsiteAction = database.listAutomaticActionEvents(20).find((item) => item.source_id === 'inbound-v6');
   assert.ok(completedWebsiteAction);
   const completedWebsitePayload = JSON.parse(completedWebsiteAction.payload_json || '{}');
-  assert.equal(completedWebsitePayload.website_refresh.marker, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1);
+  assert.equal(completedWebsitePayload.website_refresh.marker, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1);
+  assert.equal(completedWebsitePayload.website_refresh.compatibility_marker, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1);
   assert.equal(completedWebsitePayload.website_refresh.availability.refreshed, true);
   assert.equal(completedWebsitePayload.website_refresh.calendar.refreshed, true);
   assert.equal(completedWebsitePayload.website_refresh.leads.refreshed, true);
+  assert.equal(completedWebsitePayload.website_refresh.agenda.refreshed, true);
+  assert.equal(completedWebsitePayload.reserved_slot_key, 'store-1|' + remoteDateKey + '|14:30');
+  assert.deepEqual(completedWebsitePayload.refresh_resources, ['dealer-agenda-calendar','dealer-appointment-availability','orders','agenda']);
   assert.equal(service.getState().readiness.dealer_agenda_calendar_scope, true);
   assert.equal(service.getState().readiness.appointment_create_scope, true);
 
@@ -442,6 +462,7 @@ async function run() {
   assert.ok(savedCorrectedAppointment);
   assert.match(sentMessages[sentMessages.length - 1].body, /sábado, 25 de julio/i);
   assert.doesNotMatch(sentMessages[sentMessages.length - 1].body, /martes, 21 de julio/i);
+  assert.equal(sentMessages[sentMessages.length - 1].body.split('13500 Intrepid Lane, Fort Myers, Florida 33913').length - 1, 1, 'The confirmation must mention the appointment address only once.');
 
   sentMessages = [];
   saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_send_confirmation: '1' });

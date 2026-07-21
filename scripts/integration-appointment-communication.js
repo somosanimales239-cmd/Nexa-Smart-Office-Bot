@@ -184,6 +184,20 @@ test('appointment confirmation includes date, time, location and change contact'
   assert.match(confirmation, /cambiarla|cualquier cambio/i);
 });
 
+test('appointment confirmation mentions the dealer address only once', function () {
+  const address = '13500 Intrepid Lane, Fort Myers, Florida 33913';
+  const slot = Object.assign({}, slots.find(function find(item) { return item.id === 'first-10'; }), { location: address });
+  const confirmation = appointmentConfirmation(slot, 'en', [{
+    store_id: 'store-address', store_name: 'Address Motors', phone: '239-799-1416',
+    email: 'appointments@example.com', location: address
+  }]);
+  assert.equal(confirmation.split(address).length - 1, 1);
+  assert.match(confirmation, /239-799-1416/);
+  assert.match(confirmation, /appointments@example\.com/);
+  assert.match(confirmation, /same chat/i);
+  assert.doesNotMatch(confirmation, /visit us at/i);
+});
+
 test('appointment library recognizes the exact contextual phrase that previously fell into inventory Knowledge', function () {
   const match = classifyAppointmentMessage('y tienes algo mas disponible para ese dia', 'es', true);
   assert.equal(match.matched, true);

@@ -318,13 +318,23 @@ function dealerLabel(contact, locale) {
   return text(contact.store_name || contact.dealer_name) || (locale === 'es' ? 'el dealer' : 'the dealer');
 }
 
-function contactAction(contact, locale) {
+function joinedContactMethods(methods, locale) {
+  const values = Array.isArray(methods) ? methods.filter(Boolean) : [];
+  if (!values.length) return locale === 'es' ? 'escribirnos por este mismo chat' : 'message us in this same chat';
+  if (values.length === 1) return values[0];
+  if (values.length === 2) return values[0] + (locale === 'es' ? ' o ' : ' or ') + values[1];
+  const finalMethod = values[values.length - 1];
+  return values.slice(0, -1).join(', ') + (locale === 'es' ? ' o ' : ', or ') + finalMethod;
+}
+
+function contactAction(contact, locale, options) {
+  const input = options && typeof options === 'object' ? options : {};
   const methods = [];
   if (contact.phone) methods.push(locale === 'es' ? 'llamarnos al ' + contact.phone : 'call us at ' + contact.phone);
   if (contact.email) methods.push(locale === 'es' ? 'escribir a ' + contact.email : 'email ' + contact.email);
-  if (contact.location) methods.push(locale === 'es' ? 'visitarnos en ' + contact.location : 'visit us at ' + contact.location);
+  if (input.includeLocation !== false && contact.location) methods.push(locale === 'es' ? 'visitarnos en ' + contact.location : 'visit us at ' + contact.location);
   methods.push(locale === 'es' ? 'escribirnos por este mismo chat' : 'message us in this same chat');
-  return methods.join(', ');
+  return joinedContactMethods(methods, locale);
 }
 
 function contactClosing(contact, locale, seed) {
@@ -522,7 +532,9 @@ function appointmentConfirmation(slot, locale, payload) {
   return appointmentResponse('confirmation', locale, {
     date: formatDate(slot.start, locale), time: formatTime(slot.start, locale),
     location: slot.location ? (locale === 'es' ? ' en ' : ' at ') + slot.location : contact.location ? (locale === 'es' ? ' en ' : ' at ') + contact.location : '',
-    contact: contactAction(contact, locale), dealer: dealerLabel(contact, locale)
+    // The confirmation already places the appointment at the address. Keep
+    // location out of the change-contact clause so it appears only once.
+    contact: contactAction(contact, locale, { includeLocation: false }), dealer: dealerLabel(contact, locale)
   }, slot.id);
 }
 

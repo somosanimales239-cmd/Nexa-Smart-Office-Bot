@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.15
+
+- Added AutoMarket Pro appointment reservation V8 discovery, aliases, response fields and four-resource post-create refresh.
+- Reused customer phone/email from thread participants, structured message metadata and free-text conversation history.
+- Made phone the minimum contact requirement for authorized automatic appointment creation without requesting it twice.
+- Removed duplicate dealer addresses from appointment confirmations.
+- Refreshed website Agenda contacts and retained `reserved_slot_key` after reservation.
+- Linked the remote reservation to the local calendar and deduplicated the corresponding Lead/Dealer Agenda copies.
+- Added the Dealer Agenda `Reserve Appointment` shortcut and end-to-end V8 regressions.
+
 ## 1.6.14
 
 - Removed regular-expression slash delimiters from the new website-root and Dealer Lead URL helpers in `src/app.js`.

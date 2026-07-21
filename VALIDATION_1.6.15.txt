@@ -1,0 +1,47 @@
+Nexa Smart Office Bot 1.6.15 - Validation Summary
+
+Delivery: complete software source
+
+Website reviewed:
+- NEXA / AutoMarket Pro Dealer Leads Appointment Reservation API v8
+- Dealer Agenda -> Reserve Appointment
+- POST resource=appointment-create
+- V8 reservation aliases
+- reserved_slot_key
+- refresh_resources: dealer-agenda-calendar, dealer-appointment-availability, orders, agenda
+
+Communication regressions:
+- appointment address appears exactly once in English and Spanish confirmation flow
+- contact clause does not repeat the location
+- existing thread/message phone is reused without another request
+- participant and sender email metadata remain available to appointment creation
+- missing phone produces a recoverable phone-only request
+- selected date/time stays fixed while contact is collected
+
+Reservation regressions:
+- only verified available_slots may be selected
+- customer_phone is required before POST
+- reserved=true and remote appointment/Lead ID are required before confirmation
+- reserved_slot_key and refresh_resources remain in the action audit
+- availability refreshes after creation
+- Dealer Agenda refreshes after creation
+- Dealer Leads refresh after creation
+- website Agenda contacts refresh after creation
+- local Nexa appointment stores remote_appointment_id
+- local, Lead and Dealer Agenda copies are deduplicated in the Nexa calendar
+- HTTP 409 refreshes sources and offers verified alternatives
+
+Contracts:
+- NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8
+- NEXA_APPOINTMENT_PAGE_V8_SYNC_V1
+- NEXA_APPOINTMENT_CONTACT_CONTEXT_V3
+- NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1
+- NEXA_LOCAL_BUILD_DELIMITER_COMPATIBILITY_V2
+
+Required delivery checks:
+- standalone JavaScript syntax validation
+- project and delivery validation
+- complete integration test suite
+- implementation and acceptance contracts
+- Nexa contract gate
+- archive integrity and extracted checksum verification

@@ -20,6 +20,8 @@ const NEXA_AUTOMATION_DIAGNOSTIC_RESULT_V2 = 'NEXA_AUTOMATION_DIAGNOSTIC_RESULT_
 const NEXA_APPOINTMENT_CONTACT_RECOVERY_V1 = 'NEXA_APPOINTMENT_CONTACT_RECOVERY_V1';
 const NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2 = 'NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2';
 const NEXA_APPOINTMENT_PAGE_V7_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1';
+const NEXA_APPOINTMENT_PAGE_V8_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1';
+const NEXA_APPOINTMENT_CONTACT_CONTEXT_V3 = 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -100,13 +102,23 @@ function contactFromConversation(conversation, override) {
     customer_phone: text(thread.customer_phone || thread.phone || threadPayload.customer_phone || threadPayload.phone),
     customer_email: text(thread.customer_email || thread.email || threadPayload.customer_email || threadPayload.email)
   };
+  const participants = Array.isArray(thread.participants)
+    ? thread.participants
+    : Array.isArray(threadPayload.participants) ? threadPayload.participants : [];
+  for (const participant of participants) {
+    const type = text(participant && (participant.type || participant.user_type)).toLowerCase();
+    if (['admin','dealer','dealer_staff','reseller'].includes(type)) continue;
+    if (!result.customer_name) result.customer_name = usableCustomerName(participant && (participant.name || participant.user_name));
+    if (!result.customer_email) result.customer_email = text(participant && (participant.email || participant.user_email));
+    if (result.customer_name && result.customer_email) break;
+  }
   const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice().reverse() : [];
   for (const row of messages) {
     if (String(row && row.direction || '').toLowerCase() === 'outbound') continue;
     const payload = safeJson(row && row.payload_json, {});
     if (!result.customer_name) result.customer_name = usableCustomerName(row && (row.sender_name || row.customer_name) || payload.sender_name || payload.customer_name);
     if (!result.customer_phone) result.customer_phone = text(row && row.customer_phone || payload.customer_phone || payload.phone);
-    if (!result.customer_email) result.customer_email = text(row && row.customer_email || payload.customer_email || payload.email);
+    if (!result.customer_email) result.customer_email = text(row && (row.customer_email || row.sender_email) || payload.customer_email || payload.sender_email || payload.email);
     if (result.customer_name && (result.customer_phone || result.customer_email)) break;
   }
   let collectingContact = false;
@@ -475,17 +487,31 @@ class AutomaticActionsService {
     return this.saveConnectedResource('orders', response, items, requiredScope, items.length);
   }
 
+  async cacheDealerAgendaContacts(queryInput) {
+    const integration = this.database.getIntegrationStatus();
+    const map = safeJson(integration.connection_map_json, {});
+    const scopes = normalizeScopes(safeJson(integration.scopes_json, []), map.scopes, map.allowed_scopes, map.permissions);
+    const resources = extractAvailableResources(map);
+    if (resources.length && !resources.includes('agenda')) return { refreshed: false, reason: 'agenda_resource_not_advertised' };
+    if (scopes.length && !scopes.includes('agenda:read')) return { refreshed: false, reason: 'agenda_scope_not_authorized', required_scope: 'agenda:read' };
+    const response = await this.apiService.fetchResource('agenda', Object.assign({ limit: 100 }, queryInput || {}));
+    const items = listFromPayload(response.payload);
+    return this.saveConnectedResource('agenda', response, items, 'agenda:read', items.length);
+  }
+
   async refreshAppointmentWebsiteState(settings, appointment) {
     const details = appointment && typeof appointment === 'object' ? appointment : {};
     const query = { from: text(details.appointment_date) || localDateKey(new Date()), days: 14 };
     if (text(details.store_id)) query.store_id = text(details.store_id);
-    const result = { marker: NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, availability: null, calendar: null, leads: null };
+    const result = { marker: NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, compatibility_marker: NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, availability: null, calendar: null, leads: null, agenda: null };
     try { result.availability = await this.cacheDealerAppointmentAvailability(settings, query); }
     catch (error) { result.availability = { refreshed: false, error: error.message }; }
     try { result.calendar = await this.cacheDealerAgendaCalendar(settings, query); }
     catch (error) { result.calendar = { refreshed: false, error: error.message }; }
     try { result.leads = await this.cacheDealerLeads({ limit: 100 }); }
     catch (error) { result.leads = { refreshed: false, error: error.message }; }
+    try { result.agenda = await this.cacheDealerAgendaContacts({ limit: 100 }); }
+    catch (error) { result.agenda = { refreshed: false, error: error.message }; }
     return result;
   }
 
@@ -593,8 +619,7 @@ class AutomaticActionsService {
     const integration = this.getState().integration;
     const remoteRequested = enabled(settings.auto_appointments_create_remote) && integration.appointment_create;
     const missingFields = [];
-    if (remoteRequested && !contact.customer_phone) missingFields.push('customer_phone');
-    else if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) missingFields.push('customer_name', 'customer_phone');
+    if ((remoteRequested || enabled(settings.auto_appointments_require_contact)) && !contact.customer_phone) missingFields.push('customer_phone');
     if (missingFields.length) {
       return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: missingFields };
     }
@@ -619,6 +644,8 @@ class AutomaticActionsService {
       let remoteOrderId = null;
       let remoteReserved = false;
       let remoteLeadUrl = '';
+      let remoteReservedSlotKey = '';
+      let remoteRefreshResources = [];
       if (remoteRequested) {
         const appointmentDate = localDateKey(slot.start);
         const appointmentTime = String(slot.start.getHours()).padStart(2, '0') + ':' + String(slot.start.getMinutes()).padStart(2, '0');
@@ -639,6 +666,8 @@ class AutomaticActionsService {
         remoteOrderId = text(remotePayload.order_id || remotePayload.lead_id);
         remoteReserved = remotePayload.reserved !== false;
         remoteLeadUrl = text(remotePayload.lead_url);
+        remoteReservedSlotKey = text(remotePayload.reserved_slot_key);
+        remoteRefreshResources = Array.isArray(remotePayload.refresh_resources) ? remotePayload.refresh_resources.map(text).filter(Boolean) : [];
         if (remote.raw && remote.raw.ok === false) throw new Error(text(remote.raw.message) || 'The website did not create the appointment Lead.');
         if (!remoteAppointmentId || !remoteReserved) throw new Error('The website did not confirm the Lead appointment reservation.');
         websiteRefresh = await this.refreshAppointmentWebsiteState(settings, {
@@ -654,15 +683,20 @@ class AutomaticActionsService {
         source_type: 'automatic-message', source_id: sourceMessageId, thread_id: candidate.thread_id,
         remote_appointment_id: remoteAppointmentId, created_by: 'nexa-automatic-actions'
       });
-      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created and synchronized with Dealer Office', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
+      this.database.completeAutomaticActionEvent(event.id, { status: 'completed', engine: 'availability', confidence: 1, summary: 'Appointment Lead created and synchronized with Dealer Office', payload: { appointment_id: saved.id, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
       await this.notify('Nexa created an authorized appointment', customerName + ' · ' + formatSlot(slot), 'success', 'auto-appointment-notification:' + sourceMessageId, { appointment_id: saved.id, thread_id: candidate.thread_id });
-      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, lead_url: remoteLeadUrl, website_refresh: websiteRefresh };
+      return { created: true, appointment: saved, customerName: customerName, remote_appointment_id: remoteAppointmentId, lead_id: remoteLeadId, order_id: remoteOrderId, reserved: remoteReserved, reserved_slot_key: remoteReservedSlotKey, refresh_resources: remoteRefreshResources, lead_url: remoteLeadUrl, website_refresh: websiteRefresh };
     } catch (error) {
       if (Number(error && error.status || 0) === 409) {
         const appointmentDate = localDateKey(slot.start);
         const websiteRefresh = await this.refreshAppointmentWebsiteState(settings, { appointment_date: appointmentDate, store_id: slot.store_id || '' });
         this.database.completeAutomaticActionEvent(event.id, { status: 'blocked', engine: 'availability', summary: 'Website slot changed before reservation', error: error.message, payload: { slot_id: slot.id, thread_id: candidate.thread_id, website_refresh: websiteRefresh } });
         return { slotUnavailable: true, reason: 'website_slot_changed', error: error.message, website_refresh: websiteRefresh };
+      }
+      if (Number(error && error.status || 0) === 422 && /customer_(?:phone|name)|contact phone/i.test(text(error.message))) {
+        const requestedFields = /customer_phone|contact phone/i.test(text(error.message)) ? ['customer_phone'] : ['customer_name'];
+        this.database.completeAutomaticActionEvent(event.id, { status: 'blocked', engine: 'availability', summary: 'Website requested customer contact information', error: error.message, payload: { slot_id: slot.id, thread_id: candidate.thread_id, missing_fields: requestedFields } });
+        return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: requestedFields };
       }
       this.database.completeAutomaticActionEvent(event.id, { status: 'failed', engine: 'availability', summary: 'Appointment creation failed', error: error.message });
       await this.notify('Automatic appointment needs attention', error.message, 'danger', 'auto-appointment-error:' + sourceMessageId, { thread_id: candidate.thread_id });
@@ -904,6 +938,8 @@ module.exports = {
   NEXA_APPOINTMENT_CONTACT_RECOVERY_V1,
   NEXA_APPOINTMENT_THREAD_LEAD_CREATION_V2,
   NEXA_APPOINTMENT_PAGE_V7_SYNC_V1,
+  NEXA_APPOINTMENT_PAGE_V8_SYNC_V1,
+  NEXA_APPOINTMENT_CONTACT_CONTEXT_V3,
   availabilityStart,
   classifyRisk,
   inQuietHours,
