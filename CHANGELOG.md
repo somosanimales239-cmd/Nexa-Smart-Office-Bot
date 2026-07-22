@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.21
+
+- Added `si`/`sí` and `yes` to the state-aware bilingual appointment acceptance library.
+- Prevented a one-word acceptance from falling through to general AI and generating a false confirmation.
+- Made customer name plus phone mandatory for all automatic appointment creation paths; email remains optional.
+- Made the structured checkpoint run after a short acceptance even if the appointment destination setting is local.
+- Added `NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1` and the exact reported bare-`si` regression.
+- Updated the appointment communication library to 2.1.0 with 373 phrases.
+
 ## 1.6.20
 
 - Added `NEXA_PREBOOK_CONTACT_CHECKPOINT_V1` for customer acceptance of an offered Dealer Agenda time.

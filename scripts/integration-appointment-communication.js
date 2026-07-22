@@ -91,7 +91,7 @@ test('professional appointment communication contract marker is present', functi
   assert.deepEqual(summary.locales, ['en', 'es']);
   assert.equal(summary.state_contract, 'NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2');
   assert.equal(summary.intents, 40);
-  assert.ok(summary.phrases >= 371);
+  assert.ok(summary.phrases >= 373);
   assert.ok(summary.templates >= 90);
 });
 

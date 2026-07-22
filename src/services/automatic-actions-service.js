@@ -25,6 +25,7 @@ const NEXA_APPOINTMENT_CONTACT_CONTEXT_V3 = 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3
 const NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1 = 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1';
 const NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1 = 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1';
 const NEXA_PREBOOK_CONTACT_CHECKPOINT_V1 = 'NEXA_PREBOOK_CONTACT_CHECKPOINT_V1';
+const NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1 = 'NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -375,6 +376,11 @@ function hasRecentAppointmentOffer(conversation) {
     if (isAppointmentContactPrompt(body)) return false;
     return /(?:le reservo|desea que prepare|quiere que prepare|quiere que reserve|shall i reserve|would you like me to (?:prepare|book|reserve)|do you want me to (?:book|reserve))/.test(body);
   });
+}
+
+function isShortAppointmentAcceptance(message) {
+  const source = text(message).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return ['si', 'si por favor', 'por favor', 'dale', 'ok', 'okay', 'perfecto', 'de acuerdo', 'confirmo', 'yes', 'yes please', 'please', 'sounds good', 'i agree'].includes(source);
 }
 
 function pendingContactSelection(conversation, slots, referenceDate) {
@@ -828,10 +834,8 @@ class AutomaticActionsService {
       };
     }
     const missingFields = [];
-    if (remoteRequested) {
-      if (!contact.customer_name) missingFields.push('customer_name');
-      if (!contact.customer_phone) missingFields.push('customer_phone');
-    } else if (enabled(settings.auto_appointments_require_contact) && !contact.customer_name && !contact.customer_phone && !contact.customer_email) missingFields.push('customer_name', 'customer_phone');
+    if (!contact.customer_name) missingFields.push('customer_name');
+    if (!contact.customer_phone) missingFields.push('customer_phone');
     if (missingFields.length) {
       return { needsContact: true, reason: 'customer_identity_required', slot: slot, contact: contact, missing_fields: missingFields };
     }
@@ -991,7 +995,7 @@ class AutomaticActionsService {
     });
     if (!plan.relevant) return { handled: false };
     if (plan.shouldCreate && plan.selectedSlot) {
-      if (enabled(settings.auto_appointments_create_remote) && hasRecentAppointmentOffer(conversation)) {
+      if (hasRecentAppointmentOffer(conversation) || isShortAppointmentAcceptance(message)) {
         const contact = contactFromConversation(conversation, null, this.database);
         if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
           const form = appointmentContactReviewForm(plan.selectedSlot, plan.locale, contact);
@@ -1184,6 +1188,7 @@ module.exports = {
   NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1,
   NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1,
   NEXA_PREBOOK_CONTACT_CHECKPOINT_V1,
+  NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,
@@ -1196,5 +1201,6 @@ module.exports = {
   appointmentContactRequest,
   appointmentContactReviewForm,
   contactFromConversation,
-  hasRecentAppointmentOffer
+  hasRecentAppointmentOffer,
+  isShortAppointmentAcceptance
 };

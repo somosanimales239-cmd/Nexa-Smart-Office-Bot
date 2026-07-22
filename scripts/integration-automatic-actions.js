@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, NEXA_PREBOOK_CONTACT_CHECKPOINT_V1, NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, appointmentContactRequest, appointmentContactReviewForm, contactFromConversation, extractCustomerContact, hasRecentAppointmentOffer, parseRequestedDateTime, safeDeferredKnowledge, usableCustomerName } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, NEXA_PREBOOK_CONTACT_CHECKPOINT_V1, NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, appointmentContactRequest, appointmentContactReviewForm, contactFromConversation, extractCustomerContact, hasRecentAppointmentOffer, isShortAppointmentAcceptance, parseRequestedDateTime, safeDeferredKnowledge, usableCustomerName } = require('../src/services/automatic-actions-service');
 const { MessageResponseEngine } = require('../src/services/message-response-engine');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
@@ -121,6 +121,7 @@ async function run() {
   assert.equal(NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1');
   assert.equal(NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1');
   assert.equal(NEXA_PREBOOK_CONTACT_CHECKPOINT_V1, 'NEXA_PREBOOK_CONTACT_CHECKPOINT_V1');
+  assert.equal(NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1, 'NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1');
   assert.equal(usableCustomerName('mi numero'), '', 'A contact phrase must never become the Dealer Lead customer name.');
   assert.equal(usableCustomerName('Mi número'), '', 'Accented contact phrases must never become a customer name.');
   assert.deepEqual(extractCustomerContact('mi numero es 239-444-6565'), {
@@ -151,6 +152,8 @@ async function run() {
   assert.match(reviewForm, /^Teléfono: __________________$/m);
   assert.match(reviewForm, /La cita todavía no está confirmada/i);
   assert.equal(hasRecentAppointmentOffer({ messages: [{ direction: 'outbound', body: '11:00 AM está disponible. ¿Desea que prepare la cita?' }] }), true);
+  assert.equal(isShortAppointmentAcceptance('si'), true);
+  assert.equal(isShortAppointmentAcceptance('Sí por favor'), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
@@ -352,15 +355,15 @@ async function run() {
   availabilityPayload = { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', open_dates: [remoteDateKey], verified_open_slots: [{ slot_id: 'remote-v6-slot', listing_id: 'listing-77', start_at: remoteDay.toISOString(), available: true, location: '100 Main Street' }] };
   remoteAppointmentBody = null;
   sentMessages = [];
-  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_create_remote: '1', auto_appointments_send_confirmation: '1' });
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_create_remote: '0', auto_appointments_send_confirmation: '1' });
   database.replaceIntegrationCache('messages', [{ thread_id: 'thread-prebook-review', subject: 'Appointment contact review', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
   currentThread = function prebookReviewThread(threadId) {
     return {
       thread: { thread_id: threadId, subject: 'Appointment contact review', context_type: 'listing', context_id: 'listing-77', participant_name: 'Samir Tabarcia', can_reply: 1, is_announcement: 0 },
       messages: [
-        { message_id: 'prebook-request', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'Mejor mañana a las 2:30 PM.', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
-        { message_id: 'prebook-offer', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: '2:30 PM está disponible y verificada. ¿Desea que prepare la cita?', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
-        { message_id: 'prebook-confirm', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'Sí por favor.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+        { message_id: 'prebook-request', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'Quiero la cita el ' + remoteDateText + ' a las 2:30 PM.', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
+        { message_id: 'prebook-offer', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: 'La Agenda confirma que el ' + remoteDateText + ' a las 2:30 PM está disponible. ¿Le reservo ese horario?', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'prebook-confirm', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'si', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
       ]
     };
   };

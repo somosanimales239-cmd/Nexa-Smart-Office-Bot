@@ -1,19 +1,19 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.6.20",
+  "update_version": "1.6.21",
   "minimum_base_version": "1.6.0",
   "delivery_type": "complete_software_source_replacement",
   "website_files_included": false,
   "openai_required": false,
-  "database_migration": "No new schema migration in 1.6.20. Migration 9 from 1.6.17 remains active. Existing SQLite data, encrypted keys, conversations, appointments, settings and Knowledge libraries are preserved.",
+  "database_migration": "No new schema migration in 1.6.21. Migration 9 from 1.6.17 remains active. Existing SQLite data, encrypted keys, conversations, appointments, settings and Knowledge libraries are preserved.",
   "appointment_communication_library": {
     "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "locales": [
       "en",
       "es"
     ],
-    "phrases": 371,
+    "phrases": 373,
     "intents": 40,
     "response_templates": 90,
     "topic_lock": true,
@@ -87,6 +87,9 @@
     "labeled_contact_fields_en_es": true,
     "structured_contact_form_contract": "NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1",
     "prebook_contact_checkpoint_contract": "NEXA_PREBOOK_CONTACT_CHECKPOINT_V1",
+    "bare_acceptance_guard_contract": "NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1",
+    "bare_si_and_yes_are_state_aware": true,
+    "name_and_phone_required_for_all_destinations": true,
     "customer_acceptance_requires_form_before_post": true,
     "premature_confirmation_blocked": true,
     "rejects_contact_phrases_as_names": true,
@@ -109,6 +112,9 @@
     "categories": 9
   },
   "features": [
+    "state-aware bare si, sí and yes appointment acceptance",
+    "required customer name and phone for local and website appointments",
+    "general AI bypass prevention during appointment acceptance",
     "mandatory pre-book contact checkpoint after customer acceptance",
     "no appointment-create POST before contact review form",
     "no customer confirmation before verified website reservation",
@@ -137,7 +143,7 @@
     "latest customer date correction precedence",
     "duplicate-time isolation across appointment dates",
     "stale contact-request invalidation after date or time correction",
-    "371-phrase bilingual appointment state library",
+    "373-phrase bilingual appointment state library",
     "thread-to-Lead appointment creation with customer phone",
     "appointment-create alias discovery",
     "remote Lead reservation verification before customer confirmation",
@@ -199,8 +205,8 @@
     },
     {
       "path": "AUTOMATIC_ACTIONS.md",
-      "sha256": "4378293a810e307a67511780bcd11f3b7e8cc1234b85af028cb2634c9787cba9",
-      "size": 6657,
+      "sha256": "bb6f39f6fb94c2eebcffed46fc330663a6514d7a1aee215a1bb95b0264907ea5",
+      "size": 7087,
       "operation": "replace_or_create"
     },
     {
@@ -211,8 +217,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "864b31ee15006748cd76330e58d553ea0d7c33e7e04de3d81d7ea259c3037e6d",
-      "size": 14740,
+      "sha256": "5760df4c94bb4e11b15ca8d787f7d5b6925e90f4e1782aff74895f189282cd71",
+      "size": 15348,
       "operation": "replace_or_create"
     },
     {
@@ -247,8 +253,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "c0cc28679ebc8480f0d5c7e5d813bc28951aafec0739dfde4502d491037c8d13",
-      "size": 18371,
+      "sha256": "d7683dfff0ab59d6a3ff89a9848b896bc02b3773dd428ae7e3439fec140140cc",
+      "size": 19036,
       "operation": "replace_or_create"
     },
     {
@@ -309,6 +315,12 @@
       "path": "UPDATE_1.6.20_ES.txt",
       "sha256": "77cb1f401a73fd1a7130ca625939da41715b55cd67f7eb814da2b42ab176486e",
       "size": 1276,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "UPDATE_1.6.21_ES.txt",
+      "sha256": "f800bcd57fe23d124cc8348c102defa5d2a6541cca05d7cf793ad11e63745b7f",
+      "size": 1443,
       "operation": "replace_or_create"
     },
     {
@@ -426,6 +438,12 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "VALIDATION_1.6.21.txt",
+      "sha256": "51d0714e283436cc4ad29646da1bf63868664b06ec36579ad09d9bd34aad7cb1",
+      "size": 798,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_1.6.4.txt",
       "sha256": "221a2fe8a113ea95de7bba6c49c16bcdb026ee5d4de2da806233e5c9b9e07bc9",
       "size": 1277,
@@ -463,31 +481,31 @@
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "2f686833b8c6873bc69f6ffb3ba2085074bf2bca84fc19e6c10e467806b2ae23",
-      "size": 6795,
+      "sha256": "f80369a165129c4d4296860318dd6c2b417783dcd6e1c6df1257885a181c4b7f",
+      "size": 7029,
       "operation": "replace_or_create"
     },
     {
       "path": "main.js",
-      "sha256": "451d8bd6f3490882a94966a1f91dfc92b8c46c6d3b20b7356ae3ecde5d0d250a",
+      "sha256": "87ba33e360d7a3f7476534eef52fd32470c9b659c3d0f67060a24f01c3d60e68",
       "size": 10957,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "767ca92cda6c3fbb42838b23842d61392b8881e8558d475e19f34385f525c23c",
-      "size": 1851,
+      "sha256": "1c422901b57d7861931c055b5ee7f60b1e3de8afeda068bdb2ea0fa07876fd41",
+      "size": 1904,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "180aa7d2b1116b7cf9083ec4e5c3c1c771c0f87432efba42ee060eed291174ad",
+      "sha256": "c4dc682bc95398766dd62bd080beae504ef1c93ee4f9d26687b04abe657372e9",
       "size": 102949,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "e8f9ee8f7978a9fc7588455aa3ead0797f66ade7b3460335fe8e37b20e15af92",
+      "sha256": "96c445e8f28266cc9fa3c4304d0c9918e2b8549a1749a00e5ab59c248e094cbc",
       "size": 3493,
       "operation": "replace_or_create"
     },
@@ -499,8 +517,8 @@
     },
     {
       "path": "scripts/acceptance-tests.js",
-      "sha256": "4aff866013b7824ad360a1933f12f1dfd5f657bc801a79cbdbbbe6024ffd5ea4",
-      "size": 5663,
+      "sha256": "ca9687fffe39999fdd2c7829054009c28de88931760318c3c9ccd55fbcada6c2",
+      "size": 5756,
       "operation": "replace_or_create"
     },
     {
@@ -511,26 +529,26 @@
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "601fe252119ce3f9162ee90b23705096499365983366c9acc3aaeb4faae9d6de",
-      "size": 8498,
+      "sha256": "ccff15ad74ef9abb4a720aef4e40ddcd10b6c4d5c55bc31e85f322a426c558e4",
+      "size": 8591,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "6659e77c339201b82acf999ab6d3cd64c9e8644e62eb388b5f481ba9147459f5",
+      "sha256": "3620e9adbaf427e12994506073161c3c10b2098081a77c5dc4457e9a5e89252d",
       "size": 32597,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-appointment-communication.js",
-      "sha256": "1cc428e10e52415873226db12d6bb5eeb1452063c2629373b575eb8a976cb30b",
+      "sha256": "469df409b8630e4370b3b9f29a4568281c95cfe41cdb1db73de45fa2c624a119",
       "size": 27189,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-automatic-actions.js",
-      "sha256": "72cec1f3be368ee6244c3d04cd1261d1811f391e78c159a1dcd69548b589bc0a",
-      "size": 52888,
+      "sha256": "0cd85218d5f432a7e26dc0580ec5d472ab64757dde456f849b76585740efcf0b",
+      "size": 53246,
       "operation": "replace_or_create"
     },
     {
@@ -589,8 +607,8 @@
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "e19ac8bb9e74009083cb73e9643a2d33c14a1e23f98fffec742af01557f4a913",
-      "size": 3818,
+      "sha256": "6f630c7a2ebf209511f8576c15902c6e713f2f12e3714c95ec2a88cc692b8ed3",
+      "size": 3865,
       "operation": "replace_or_create"
     },
     {
@@ -625,8 +643,8 @@
     },
     {
       "path": "src/data/appointment-communication-library.json",
-      "sha256": "dde4e96de1548e3707d42356dc4443a721022f9984720b606bb70dd62fd7f26c",
-      "size": 25986,
+      "sha256": "ee16166517005cc9ddbdcc472be1fd8a98c722ae83e7afa8d55a6a028a7fd455",
+      "size": 25999,
       "operation": "replace_or_create"
     },
     {
@@ -655,7 +673,7 @@
     },
     {
       "path": "src/index.html",
-      "sha256": "9d69789a970e310db3ba914d5896bfe3b886fdc6dd02165bbeb68a3a74df4a7e",
+      "sha256": "67b54cc93058a21be5f7b7a1c3a2463a35282d3607847ccadfe9f9b93cf69edf",
       "size": 8393,
       "operation": "replace_or_create"
     },
@@ -775,8 +793,8 @@
     },
     {
       "path": "src/services/automatic-actions-service.js",
-      "sha256": "26a6538e30423a205e4a09ebc4ccf5880327200074e59af546c08284a5eb0454",
-      "size": 81921,
+      "sha256": "8c16dcb87d44f2b5f99ed288b9944055b6595549a191e76ea8bf9f707b4812a8",
+      "size": 82209,
       "operation": "replace_or_create"
     },
     {

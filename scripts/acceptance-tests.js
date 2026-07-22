@@ -40,6 +40,7 @@ assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V8_SYNC_V1'), tru
 assert.equal(automationService.includes('NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1'), true);
 assert.equal(automationService.includes('NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1'), true);
 assert.equal(automationService.includes('NEXA_PREBOOK_CONTACT_CHECKPOINT_V1'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1'), true);
 assert.equal(automationService.includes("invalidNames.includes(generic)"), true);
 assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8'), true);
 assert.equal(appSource.includes('NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1'), true);

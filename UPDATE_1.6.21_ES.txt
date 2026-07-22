@@ -1,0 +1,35 @@
+NEXA SMART OFFICE BOT 1.6.21
+
+CORRECCIÓN EXACTA DEL MENSAJE "SI"
+
+La versión anterior probó "Sí por favor", pero la conversación real terminó con una sola palabra: "si". Esa palabra no estaba en la biblioteca de aceptación de citas y podía salir del flujo de appointments hacia la AI general, que redactaba una confirmación sin pedir el teléfono.
+
+CORRECCIÓN
+
+1. "si", "sí" y "yes" ahora se reconocen dentro de una conversación activa de cita.
+2. Esas respuestas no pueden pasar a la AI general.
+3. La ficha se envía antes de crear la cita:
+
+Nombre: Samir Tabarcia
+Teléfono: __________________
+Email (opcional): __________
+
+4. Nombre y teléfono son obligatorios para toda cita automática, local o creada en la página.
+5. Email continúa siendo opcional.
+6. La regla funciona aunque la configuración de destino local/remoto sea diferente.
+7. Solo después de recibir los datos se llama appointment-create, se reserva Dealer Agenda, se crea Dealer Lead y se confirma al cliente.
+
+BIBLIOTECA
+
+La biblioteca bilingüe de citas sube a versión 2.1.0 con 373 frases verificadas.
+
+PRUEBA EXACTA INCLUIDA
+
+- Cliente solicita sábado a las 2:00 PM.
+- Nexa ofrece sábado a las 2:00 PM.
+- Cliente responde solamente: si
+- Resultado obligatorio: ficha de contacto, teléfono vacío, cero citas creadas y cero confirmaciones prematuras.
+
+DESPUÉS DE INSTALAR
+
+Ejecute Test connection y Sync now antes de probar una conversación nueva.

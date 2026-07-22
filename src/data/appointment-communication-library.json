@@ -1,6 +1,6 @@
 {
   "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "state_contract": "NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2",
   "description": "Curated English and Spanish communication library for natural, context-aware dealer appointment conversations backed by verified availability.",
   "supported_locales": ["en", "es"],
@@ -51,7 +51,7 @@
         "accept_recommendation": [
           "si ese", "si esa", "ese me conviene", "esa me conviene", "ese me sirve", "esa me sirve",
           "perfecto", "me parece bien", "reservalo", "agendalo", "confirmalo", "puedes reservarlo",
-          "quiero ese horario", "tomare esa hora", "si por favor", "dale"
+          "quiero ese horario", "tomare esa hora", "si", "si por favor", "dale"
         ],
         "correct_date": [
           "la fecha esta incorrecta", "la fecha es incorrecta", "esa no es la fecha", "ese no es el dia",
@@ -229,7 +229,7 @@
         "select_third": ["the third one", "third option", "third time", "i will take the third", "option three"],
         "accept_recommendation": [
           "yes that one", "that works for me", "that time works", "perfect", "sounds good", "book it",
-          "schedule it", "confirm it", "please reserve it", "i want that time", "i will take that time", "yes please"
+          "schedule it", "confirm it", "please reserve it", "i want that time", "i will take that time", "yes", "yes please"
         ],
         "correct_date": [
           "the date is incorrect", "that is the wrong date", "that is not the date", "that is not the day",

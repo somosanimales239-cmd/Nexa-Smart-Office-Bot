@@ -1,5 +1,9 @@
 # Nexa AI Control and Message Runtime Diagnostics
 
+## Bare acceptance and required phone (1.6.21)
+
+Inside an active appointment conversation, a customer reply containing only `si`, `sí`, or `yes` remains in the appointment state machine. It cannot fall through to general AI. Nexa sends the structured checkpoint and requires a valid customer name plus phone before any local or website appointment is created. This rule no longer depends on the appointment destination setting.
+
 ## Pre-book contact checkpoint (1.6.20)
 
 When a customer accepts a time Nexa just offered, website appointment creation pauses for one structured contact review. The form displays known values, leaves missing values blank and says the appointment is not yet confirmed. `appointment-create` runs only after the customer returns or confirms that form. Nexa then requires the normal all-or-nothing Dealer Agenda and Dealer Leads verification before sending the final confirmation. The resulting Lead keeps `Nexa Smart Office Bot` and `Software appointment` as its source labels.

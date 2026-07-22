@@ -1,4 +1,4 @@
-Nexa Smart Office Bot 1.6.20 Validation Report
+Nexa Smart Office Bot 1.6.21 Validation Report
 
 Package feature
 Date-scoped bilingual appointment state, guarded thread-to-Lead creation,
@@ -33,6 +33,9 @@ Validation scope
 - Implementation and acceptance contracts
 
 Appointment communication regression verified
+- A bare customer reply of "si" remains inside the appointment state machine.
+- Name and phone are mandatory for every automatic appointment destination.
+- Bare acceptance cannot fall through to general AI or bypass the contact form.
 - “Sí por favor” after a verified offer sends the structured contact checkpoint before any website POST.
 - No appointment confirmation is allowed while the checkpoint is pending.
 - The same selected slot remains fixed until the customer returns or confirms the form.
@@ -43,7 +46,7 @@ Appointment communication regression verified
 - Customer confirmation is sent only after all remote reservation evidence passes.
 - Existing thread/message name, phone and email are reused without duplicate prompts.
 - Appointment confirmations contain the dealer address exactly once.
-- The dedicated state-aware library contains 371 English/Spanish phrases,
+- The dedicated state-aware library contains 373 English/Spanish phrases,
   40 intents and 90 dynamic response templates.
 - Active appointment context takes priority over general inventory Knowledge.
 - The reported "algo mas disponible para ese dia" conversation is reproduced

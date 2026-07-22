@@ -56,6 +56,7 @@ assert.equal(automationService.includes('NEXA_APPOINTMENT_CONTACT_CONTEXT_V3'), 
 assert.equal(automationService.includes('NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1'), true);
 assert.equal(automationService.includes('NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1'), true);
 assert.equal(automationService.includes('NEXA_PREBOOK_CONTACT_CHECKPOINT_V1'), true);
+assert.equal(automationService.includes('NEXA_APPOINTMENT_BARE_ACCEPTANCE_GUARD_V1'), true);
 assert.equal(automationService.includes('Nombre: ____________________'), true);
 assert.equal(automationService.includes('Phone: _____________________'), true);
 assert.equal(automationService.includes('La cita todavía no está confirmada'), true);
@@ -89,13 +90,13 @@ assert.equal(appointmentLibraryService.includes('NEXA_BILINGUAL_APPOINTMENT_STAT
 assert.equal(appointmentLibraryService.includes('appointmentTopicActive'), true);
 assert.equal(appointmentLibrary.contract, 'NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1');
 assert.equal(appointmentLibrary.state_contract, 'NEXA_BILINGUAL_APPOINTMENT_STATE_LIBRARY_V2');
-assert.equal(appointmentLibrary.version, '2.0.0');
+assert.equal(appointmentLibrary.version, '2.1.0');
 assert.deepEqual(appointmentLibrary.supported_locales, ['en', 'es']);
 const appointmentPhraseCountEs = Object.values(appointmentLibrary.locales.es.intents).flat().length;
 const appointmentPhraseCountEn = Object.values(appointmentLibrary.locales.en.intents).flat().length;
 assert.ok(appointmentPhraseCountEs >= 140);
 assert.ok(appointmentPhraseCountEn >= 140);
-assert.ok(appointmentPhraseCountEs + appointmentPhraseCountEn >= 371);
+assert.ok(appointmentPhraseCountEs + appointmentPhraseCountEn >= 373);
 assert.equal(automationService.includes('cycle_skipped'), true);
 assert.equal(automationIpc.includes('Explicit user authorization'), true);
 assert.equal(automationService.includes('deleteContact'), false);
