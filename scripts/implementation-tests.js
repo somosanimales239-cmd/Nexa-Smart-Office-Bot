@@ -55,8 +55,10 @@ assert.equal(automationService.includes('NEXA_APPOINTMENT_PAGE_V8_SYNC_V1'), tru
 assert.equal(automationService.includes('NEXA_APPOINTMENT_CONTACT_CONTEXT_V3'), true);
 assert.equal(automationService.includes('NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1'), true);
 assert.equal(automationService.includes('NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1'), true);
+assert.equal(automationService.includes('NEXA_PREBOOK_CONTACT_CHECKPOINT_V1'), true);
 assert.equal(automationService.includes('Nombre: ____________________'), true);
 assert.equal(automationService.includes('Phone: _____________________'), true);
+assert.equal(automationService.includes('La cita todavía no está confirmada'), true);
 assert.equal(apiService.includes('NEXA_AUTOMARKET_APPOINTMENT_RESERVATION_V8'), true);
 assert.equal(apiService.includes('reserve-appointment-slot'), true);
 assert.equal(appSource.includes('NEXA_AGENDA_REMOTE_RESERVATION_DEDUP_V1'), true);

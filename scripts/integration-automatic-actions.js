@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, appointmentContactRequest, contactFromConversation, extractCustomerContact, parseRequestedDateTime, safeDeferredKnowledge, usableCustomerName } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, NEXA_PREBOOK_CONTACT_CHECKPOINT_V1, NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, appointmentContactRequest, appointmentContactReviewForm, contactFromConversation, extractCustomerContact, hasRecentAppointmentOffer, parseRequestedDateTime, safeDeferredKnowledge, usableCustomerName } = require('../src/services/automatic-actions-service');
 const { MessageResponseEngine } = require('../src/services/message-response-engine');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
@@ -120,6 +120,7 @@ async function run() {
   assert.equal(NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3');
   assert.equal(NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1');
   assert.equal(NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1');
+  assert.equal(NEXA_PREBOOK_CONTACT_CHECKPOINT_V1, 'NEXA_PREBOOK_CONTACT_CHECKPOINT_V1');
   assert.equal(usableCustomerName('mi numero'), '', 'A contact phrase must never become the Dealer Lead customer name.');
   assert.equal(usableCustomerName('Mi número'), '', 'Accented contact phrases must never become a customer name.');
   assert.deepEqual(extractCustomerContact('mi numero es 239-444-6565'), {
@@ -145,6 +146,11 @@ async function run() {
   }, null, database);
   assert.equal(phonePhraseConversation.customer_name, '', 'The words before a supplied phone must not overwrite Customer Name.');
   assert.equal(phonePhraseConversation.customer_phone, '2394446565');
+  const reviewForm = appointmentContactReviewForm({ id: 'review-slot', start: new Date(2026, 6, 23, 11, 0, 0) }, 'es', { customer_name: 'Samir Tabarcia' });
+  assert.match(reviewForm, /^Nombre: Samir Tabarcia$/m);
+  assert.match(reviewForm, /^Teléfono: __________________$/m);
+  assert.match(reviewForm, /La cita todavía no está confirmada/i);
+  assert.equal(hasRecentAppointmentOffer({ messages: [{ direction: 'outbound', body: '11:00 AM está disponible. ¿Desea que prepare la cita?' }] }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
@@ -344,6 +350,28 @@ async function run() {
   });
   calendarPayload = { stores: [{ store_id: 'store-1', days: [{ date: remoteDateKey, available_slots: [{ slot_id: 'remote-v6-slot', start_time: '14:30', end_time: '15:00', available: true }] }] }], appointment_count: 0, verified_open_slots: 1 };
   availabilityPayload = { store_id: 'store-1', store_name: 'Main dealership', phone: '239-555-0100', location: '100 Main Street', open_dates: [remoteDateKey], verified_open_slots: [{ slot_id: 'remote-v6-slot', listing_id: 'listing-77', start_at: remoteDay.toISOString(), available: true, location: '100 Main Street' }] };
+  remoteAppointmentBody = null;
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1', auto_appointments_create_remote: '1', auto_appointments_send_confirmation: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-prebook-review', subject: 'Appointment contact review', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function prebookReviewThread(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: 'Appointment contact review', context_type: 'listing', context_id: 'listing-77', participant_name: 'Samir Tabarcia', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'prebook-request', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'Mejor mañana a las 2:30 PM.', sent_at: new Date(Date.now() - 180000).toISOString(), is_read: 1 },
+        { message_id: 'prebook-offer', thread_id: threadId, direction: 'outbound', sender_type: 'dealer', body: '2:30 PM está disponible y verificada. ¿Desea que prepare la cita?', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'prebook-confirm', thread_id: threadId, direction: 'inbound', sender_type: 'customer', sender_name: 'Samir Tabarcia', body: 'Sí por favor.', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+      ]
+    };
+  };
+  const prebookReviewResult = await service.runNow('test-prebook-contact-checkpoint');
+  assert.equal(prebookReviewResult.appointments_created, 0, 'Customer acceptance must not create the website appointment before the contact form is returned.');
+  assert.equal(prebookReviewResult.messages_sent, 1);
+  assert.equal(remoteAppointmentBody, null, 'appointment-create must not run before the structured contact checkpoint.');
+  assert.match(sentMessages[0].body, /^Nombre: Samir Tabarcia$/m);
+  assert.match(sentMessages[0].body, /^Teléfono: __________________$/m);
+  assert.match(sentMessages[0].body, /todavía no está confirmada/i);
+  assert.doesNotMatch(sentMessages[0].body, /he reservado|cita (?:está|esta) confirmada/i);
   remoteAppointmentBody = null;
   remoteOrdersPayload = [];
   calendarFetchCount = 0;

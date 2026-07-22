@@ -24,6 +24,7 @@ const NEXA_APPOINTMENT_PAGE_V8_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1';
 const NEXA_APPOINTMENT_CONTACT_CONTEXT_V3 = 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3';
 const NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1 = 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1';
 const NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1 = 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1';
+const NEXA_PREBOOK_CONTACT_CHECKPOINT_V1 = 'NEXA_PREBOOK_CONTACT_CHECKPOINT_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -102,6 +103,8 @@ function isAppointmentContactPrompt(value) {
   if ((body.includes('antes de confirmar') || body.includes('before confirming') || body.includes('before i confirm'))
     && (body.includes('teléfono') || body.includes('telefono') || body.includes('phone number'))) return true;
   if ((body.includes('copie y complete') || body.includes('copy and fill in'))
+    && (body.includes('teléfono:') || body.includes('telefono:') || body.includes('phone:'))) return true;
+  if ((body.includes('revise esta ficha') || body.includes('review this form'))
     && (body.includes('teléfono:') || body.includes('telefono:') || body.includes('phone:'))) return true;
   return false;
 }
@@ -327,6 +330,51 @@ function appointmentContactRequest(slot, locale, contact, missingFields) {
   if (!known.customer_email) lines.push('Email (optional): __________');
   lines.push('', 'I will keep that date and time selected while I verify and create the reservation.');
   return lines.join('\n');
+}
+
+function appointmentContactReviewForm(slot, locale, contact) {
+  const known = contact && typeof contact === 'object' ? contact : {};
+  const customerName = usableCustomerName(known.customer_name);
+  const customerPhone = phoneKey(known.customer_phone);
+  const customerEmail = text(known.customer_email);
+  const date = new Intl.DateTimeFormat(locale === 'es' ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(slot.start);
+  const time = formatTime(slot.start, locale);
+  if (locale === 'es') {
+    return [
+      'Antes de crear y confirmar la cita del ' + date + ' a las ' + time + ', revise esta ficha:',
+      '',
+      'Nombre: ' + (customerName || '____________________'),
+      'Teléfono: ' + (customerPhone || '__________________'),
+      'Email (opcional): ' + (customerEmail || '__________'),
+      '',
+      customerName && customerPhone
+        ? 'Si los datos están correctos, responda: Confirmo datos. Si necesita corregirlos, copie la ficha y cambie el valor.'
+        : 'Copie la ficha y complete los campos vacíos. Necesito por lo menos nombre y teléfono.',
+      'La cita todavía no está confirmada; reservaré la hora en Dealer Agenda y crearé el Lead después de recibir esta ficha.'
+    ].join('\n');
+  }
+  return [
+    'Before creating and confirming the appointment for ' + date + ' at ' + time + ', review this form:',
+    '',
+    'Name: ' + (customerName || '____________________'),
+    'Phone: ' + (customerPhone || '__________________'),
+    'Email (optional): ' + (customerEmail || '__________'),
+    '',
+    customerName && customerPhone
+      ? 'If the information is correct, reply: I confirm the information. To correct it, copy the form and change the value.'
+      : 'Copy the form and complete the blank fields. I need at least a name and phone number.',
+    'The appointment is not confirmed yet; I will reserve the Dealer Agenda time and create the Lead after receiving this form.'
+  ].join('\n');
+}
+
+function hasRecentAppointmentOffer(conversation) {
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice(-16) : [];
+  return messages.some(function offered(row) {
+    if (String(row && row.direction || '').toLowerCase() !== 'outbound') return false;
+    const body = text(row && row.body).toLowerCase();
+    if (isAppointmentContactPrompt(body)) return false;
+    return /(?:le reservo|desea que prepare|quiere que prepare|quiere que reserve|shall i reserve|would you like me to (?:prepare|book|reserve)|do you want me to (?:book|reserve))/.test(body);
+  });
 }
 
 function pendingContactSelection(conversation, slots, referenceDate) {
@@ -943,6 +991,15 @@ class AutomaticActionsService {
     });
     if (!plan.relevant) return { handled: false };
     if (plan.shouldCreate && plan.selectedSlot) {
+      if (enabled(settings.auto_appointments_create_remote) && hasRecentAppointmentOffer(conversation)) {
+        const contact = contactFromConversation(conversation, null, this.database);
+        if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
+          const form = appointmentContactReviewForm(plan.selectedSlot, plan.locale, contact);
+          const sent = await this.sendAutomaticMessage(candidate.thread_id, form, candidate.inbound_message_id, { engine: 'availability', confidence: 1 }, settings, 'Appointment contact checkpoint sent before website reservation');
+          return { handled: true, sent: Boolean(sent && sent.sent), failed: Boolean(sent && sent.failed), error: sent && sent.error, reason: 'prebook_contact_checkpoint' };
+        }
+        return { handled: true, skipped: true, reason: 'prebook_contact_checkpoint_not_sent' };
+      }
       const created = await this.createAppointmentFromSlot(candidate, conversation, plan.selectedSlot, settings);
       if (created.needsContact) {
         if (enabled(settings.auto_messages_enabled) && this.canSendMore(settings)) {
@@ -1126,6 +1183,7 @@ module.exports = {
   NEXA_APPOINTMENT_CONTACT_CONTEXT_V3,
   NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1,
   NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1,
+  NEXA_PREBOOK_CONTACT_CHECKPOINT_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,
@@ -1136,5 +1194,7 @@ module.exports = {
   extractCustomerContact,
   usableCustomerName,
   appointmentContactRequest,
-  contactFromConversation
+  appointmentContactReviewForm,
+  contactFromConversation,
+  hasRecentAppointmentOffer
 };

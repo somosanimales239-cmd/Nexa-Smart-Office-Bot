@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.20
+
+- Added `NEXA_PREBOOK_CONTACT_CHECKPOINT_V1` for customer acceptance of an offered Dealer Agenda time.
+- A short confirmation such as “Sí por favor” now sends a prefilled structured contact form and cannot call `appointment-create` in the same turn.
+- The form clearly says the appointment is not confirmed yet and requires at least customer name and phone.
+- After the customer returns or confirms the form, Nexa revalidates the same slot, creates the website Lead, reserves Dealer Agenda, refreshes local Agenda, and then sends confirmation.
+- Preserved Nexa Smart Office Bot / Software appointment Lead-source metadata.
+- Added the reported Samir Tabarcia conversation as an end-to-end guarded automatic-action regression.
+
 ## 1.6.19
 
 - Rejected contact-label phrases, placeholders, phone-like strings and generic participants as customer names.

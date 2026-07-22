@@ -1,5 +1,9 @@
 # Nexa AI Control and Message Runtime Diagnostics
 
+## Pre-book contact checkpoint (1.6.20)
+
+When a customer accepts a time Nexa just offered, website appointment creation pauses for one structured contact review. The form displays known values, leaves missing values blank and says the appointment is not yet confirmed. `appointment-create` runs only after the customer returns or confirms that form. Nexa then requires the normal all-or-nothing Dealer Agenda and Dealer Leads verification before sending the final confirmation. The resulting Lead keeps `Nexa Smart Office Bot` and `Software appointment` as its source labels.
+
 ## Structured appointment contact collection (1.6.19)
 
 When a verified appointment is ready but the website thread lacks a valid customer name or phone, Nexa sends a small bilingual fill-in form with separate `Name/Nombre`, `Phone/Teléfono`, and optional `Email` fields. Existing valid fields are reused and omitted from the request. Blank placeholders are ignored, and phrases such as “mi número” or “my phone” can never be written into Dealer Leads as a customer name.

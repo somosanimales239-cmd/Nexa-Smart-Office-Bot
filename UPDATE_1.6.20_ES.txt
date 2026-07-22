@@ -1,0 +1,33 @@
+NEXA SMART OFFICE BOT 1.6.20
+
+FICHA OBLIGATORIA ANTES DE RESERVAR
+
+Esta versión corrige la conversación donde Samir Tabarcia respondió "Sí por favor" y Nexa confirmó inmediatamente la cita sin mostrar primero la ficha creada.
+
+NUEVO FLUJO
+
+1. Nexa ofrece un horario verificado.
+2. El cliente acepta el horario.
+3. Nexa todavía NO llama appointment-create y NO dice que la cita está confirmada.
+4. Nexa envía esta ficha con los datos conocidos rellenados:
+
+Nombre: Samir Tabarcia
+Teléfono: __________________
+Email (opcional): __________
+
+5. El cliente completa los campos vacíos o confirma los datos existentes.
+6. Nexa vuelve a verificar exactamente la misma fecha y hora.
+7. Nexa llama appointment-create.
+8. La página crea Dealer Lead con source Nexa Smart Office Bot / Software appointment.
+9. Dealer Agenda bloquea el horario.
+10. Nexa refresca la Agenda local.
+11. Solo después de verificar todo, Nexa confirma la cita al cliente.
+
+La ficha dice claramente que la cita todavía no está confirmada. Si faltan datos, se requiere por lo menos nombre y teléfono.
+
+DESPUÉS DE INSTALAR
+
+1. Ejecute Test connection.
+2. Ejecute Sync now.
+3. Pruebe: elegir horario → responder "Sí por favor".
+4. Confirme que Nexa envía la ficha antes de crear el appointment.

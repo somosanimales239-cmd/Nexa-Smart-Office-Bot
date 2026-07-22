@@ -1,8 +1,18 @@
-# Nexa Smart Office Bot 1.6.19
+# Nexa Smart Office Bot 1.6.20
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.19
+## New in 1.6.20
+
+- Adds a mandatory pre-book contact checkpoint after the customer accepts a verified offered time.
+- Sends the structured bilingual Name/Phone/Email form before calling the website `appointment-create` endpoint.
+- Prefills valid contact values already present in the conversation and leaves only missing values blank.
+- Explicitly states that the appointment is not confirmed until the form is returned, Dealer Agenda reserves the slot, and Dealer Leads is created.
+- Prevents AI or Knowledge from sending a premature booking confirmation during this checkpoint.
+- Preserves the website Lead source labels `Nexa Smart Office Bot` and `Software appointment` after the verified reservation succeeds.
+- Adds the exact Samir Tabarcia “Sí por favor” conversation as an automatic regression.
+
+## Included from 1.6.19
 
 - Prevents contact phrases such as `mi número`, `mi teléfono`, `my number`, or a phone-like value from becoming the Dealer Lead customer name.
 - Requests missing appointment contact data through a bilingual, structured fill-in form with separate Name, Phone, and optional Email fields.
