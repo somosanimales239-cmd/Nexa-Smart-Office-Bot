@@ -32,6 +32,7 @@ const notificationService = fs.readFileSync(path.join(root, 'src', 'services', '
 const migrations = fs.readFileSync(path.join(root, 'src', 'database', 'migrations.js'), 'utf8');
 const automationService = fs.readFileSync(path.join(root, 'src', 'services', 'automatic-actions-service.js'), 'utf8');
 const dealerAvailabilityService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-availability-service.js'), 'utf8');
+const dealerContactService = fs.readFileSync(path.join(root, 'src', 'services', 'dealer-contact-service.js'), 'utf8');
 const appointmentCommunicationService = fs.readFileSync(path.join(root, 'src', 'services', 'appointment-communication-service.js'), 'utf8');
 const appointmentLibraryService = fs.readFileSync(path.join(root, 'src', 'services', 'appointment-communication-library-service.js'), 'utf8');
 const appointmentLibrary = JSON.parse(fs.readFileSync(path.join(root, 'src', 'data', 'appointment-communication-library.json'), 'utf8'));
@@ -70,6 +71,9 @@ assert.equal(dealerAvailabilityService.includes('NEXA_APPOINTMENT_CONSISTENCY_GU
 assert.equal(dealerAvailabilityService.includes('NEXA_APPOINTMENT_DATE_CONTEXT_RECOVERY_V1'), true);
 assert.equal(dealerAvailabilityService.includes('blocked_dates'), true);
 assert.equal(dealerAvailabilityService.includes('verified_open_slots'), true);
+assert.equal(dealerContactService.includes('NEXA_LIVE_DEALER_CONTACT_V1'), true);
+assert.equal(dealerContactService.includes('liveDealerContactMatch'), true);
+assert.equal(dealerContactService.includes('context_type'), true);
 assert.equal(appointmentCommunicationService.includes('NEXA_PRO_APPOINTMENT_COMMUNICATION_V1'), true);
 assert.equal(appointmentCommunicationService.includes('NEXA_CONTEXTUAL_TIME_SELECTION_V1'), true);
 assert.equal(appointmentCommunicationService.includes('NEXA_APPOINTMENT_STATE_MACHINE_V2'), true);

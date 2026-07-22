@@ -1,0 +1,35 @@
+NEXA SMART OFFICE BOT 1.6.18
+
+CORRECCIÓN DE DIRECCIÓN DEL DEALER
+
+La versión anterior conservaba address/location del API, pero el Knowledge no tenía un flujo dinámico para responder direcciones. Por eso usaba una plantilla que decía que verificaría el local y luego no completaba la respuesta.
+
+La versión 1.6.18 corrige el flujo completo:
+
+1. Lee el context_type y context_id de la conversación.
+2. Si el hilo pertenece a un order o Lead, busca ese registro.
+3. Obtiene listing_id y store_id.
+4. Busca el listing y el dealer/store correspondiente.
+5. Lee address/location desde store, stores, dealer-appointment-availability, dealer-agenda-calendar o el listing sincronizado.
+6. Responde la dirección verificada inmediatamente.
+7. Entrega el mismo contacto resuelto al contexto de la AI externa.
+
+También entiende preguntas y seguimientos como:
+
+- ¿Cuál es la dirección?
+- ¿Dónde está el vehículo?
+- ¿Dónde queda el dealer?
+- Ok, dame la dirección.
+- What is the address?
+- Where is the vehicle located?
+
+Cuando una cuenta reseller tiene varios dealers, Nexa usa el order/listing/store de esa conversación para evitar responder la dirección de otro dealer.
+
+La conversación reportada de Standard Buyer y 2003 EZGO Gol está incluida como prueba automática completa.
+
+DESPUÉS DE INSTALAR
+
+1. Ejecute Test connection.
+2. Ejecute Sync now.
+3. Confirme que store o dealer-appointment-availability tenga address/location.
+4. Vuelva a probar la conversación.

@@ -1,5 +1,9 @@
 # Nexa AI Control and Message Runtime Diagnostics
 
+## Live dealer address replies (1.6.18)
+
+Address questions are resolved from the connected order/Lead, listing and dealer/store records before Knowledge or AI drafts a reply. Nexa returns the synchronized address immediately and never sends a placeholder promising to verify it later. If several reseller dealers exist, listing/store context is required before an address is selected.
+
 ## Dealer Agenda reservation commit (1.6.16)
 
 Remote appointment creation is not complete merely because `appointment-create` returned a Lead ID. Nexa sends the complete customer, thread, date, time, optional listing/location and notes payload, then reloads `dealer-appointment-availability`, `dealer-agenda-calendar`, `orders` and `agenda`.

@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
 const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
+const { MessageResponseEngine } = require('../src/services/message-response-engine');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexa-auto-actions-'));
@@ -519,6 +520,35 @@ async function run() {
   assert.match(sentMessages[0].body, /239-555-0100/);
   assert.match(sentMessages[0].body, /100 Main Street|13500 Intrepid Lane/);
   assert.match(sentMessages[0].body, /same chat/i);
+
+  const dealerAddress = '13500 Intrepid Lane, Fort Myers, Florida 33913';
+  availabilityPayload = {
+    dealer_id: 'dealer-ezgo', dealer_name: 'Standard Dealer', store_id: 'store-ezgo', store_name: 'Standard Dealer',
+    location: dealerAddress, phone: '239-799-1416', assigned_listings: [{ listing_id: 'listing-ezgo-2003', listing_title: '2003 EZGO Gol' }],
+    verified_open_slots: []
+  };
+  calendarPayload = { stores: [{ store_id: 'store-ezgo', store_name: 'Standard Dealer', location: dealerAddress, days: [] }], appointment_count: 0, verified_open_slots: 0 };
+  database.replaceIntegrationCache('orders', [{ id: 'order-ezgo-2003', order_id: 'order-ezgo-2003', listing_id: 'listing-ezgo-2003', store_id: 'store-ezgo', listing_title: '2003 EZGO Gol', customer_name: 'Standard Buyer' }]);
+  database.replaceIntegrationCache('reseller-listings', [{ id: 'assignment-ezgo', assignment_id: 'assignment-ezgo', listing_id: 'listing-ezgo-2003', store_id: 'store-ezgo', listing_title: '2003 EZGO Gol', store_name: 'Standard Dealer', dealer_name: 'Standard Dealer' }]);
+  sentMessages = [];
+  saveBaseSettings({ auto_messages_enabled: '1', auto_appointments_enabled: '1' });
+  database.replaceIntegrationCache('messages', [{ thread_id: 'thread-dealer-address', subject: '2003 EZGO Gol', context_type: 'order', context_id: 'order-ezgo-2003', unread_count: 1, can_reply: 1, is_announcement: 0, last_message_at: new Date().toISOString() }]);
+  currentThread = function dealerAddressThread(threadId) {
+    return {
+      thread: { thread_id: threadId, subject: '2003 EZGO Gol', context_type: 'order', context_id: 'order-ezgo-2003', participant_name: 'Standard Buyer', can_reply: 1, is_announcement: 0 },
+      messages: [
+        { message_id: 'dealer-address-question', thread_id: threadId, direction: 'inbound', sender_type: 'buyer', body: 'New order request sent from listing.\n\nCustomer: Standard Buyer\nListing: 2003 EZGO Gol\nOrder notes: quiero saber más de este artículo y la dirección donde está', sent_at: new Date(Date.now() - 120000).toISOString(), is_read: 1 },
+        { message_id: 'dealer-address-followup', thread_id: threadId, direction: 'inbound', sender_type: 'buyer', body: 'ok dame la direccion', sent_at: new Date(Date.now() - 60000).toISOString(), is_read: 0 }
+      ]
+    };
+  };
+  const originalMessageEngine = aiService.messageEngine;
+  aiService.messageEngine = new MessageResponseEngine(database);
+  const addressResult = await service.runNow('test-live-dealer-address-reply');
+  aiService.messageEngine = originalMessageEngine;
+  assert.equal(addressResult.messages_sent, 1, 'The synchronized dealer address must produce an automatic customer reply.');
+  assert.match(sentMessages[0].body, new RegExp(dealerAddress));
+  assert.doesNotMatch(sentMessages[0].body, /primero verificar|verificar[eé]|responder[eé] en breve/i);
 
   const state = service.getState();
   assert.equal(state.invariants.never_edits_existing_customer_records, true);

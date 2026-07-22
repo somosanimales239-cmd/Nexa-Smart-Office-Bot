@@ -31,7 +31,7 @@ const Tray = electron.Tray;
 const Menu = electron.Menu;
 const nativeImage = electron.nativeImage;
 
-const APP_VERSION = '1.6.17';
+const APP_VERSION = '1.6.18';
 const NOTIFICATION_IMPLEMENTATION_MARKER = 'notification marker: new Notification(...)';
 const webPreferences = {
   preload: path.join(__dirname, 'preload.js'),

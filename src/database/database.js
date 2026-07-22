@@ -395,6 +395,8 @@ class DatabaseService {
         store_id: connectedStatus.store_id || null,
         sync_state: connectedStatus.sync_state || 'idle',
         last_sync_at: connectedStatus.last_sync_at || null,
+        store: this.listIntegrationCache('store', '', 1)[0] || null,
+        stores: this.listIntegrationCache('stores', '', 20),
         summary: connectedSummary,
         recent_orders: this.listIntegrationCache('orders', '', 40),
         reseller_appointments: this.listIntegrationCache('reseller-appointments', '', 15),

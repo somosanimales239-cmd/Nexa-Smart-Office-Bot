@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
 const { MessageResponseEngine, detectLocale, inferDealerSegment } = require('../src/services/message-response-engine');
+const { AIService } = require('../src/services/ai-service');
 const { availabilityCacheItems } = require('../src/services/dealer-availability-service');
 const { calendarCacheItems } = require('../src/services/dealer-agenda-calendar-service');
 const manifest = require('../src/data/automotive-dealer-library-manifest.json');
@@ -206,6 +207,58 @@ test('Dealer Agenda booked appointments remove an otherwise open website slot fr
   assert.match(match.response, /no verified appointment times|does not show verified open appointment times|no other verified|does not show a verifiable opening/i);
 });
 
+test('order conversation returns the synchronized dealer address immediately and on follow-up', function () {
+  const address = '13500 Intrepid Lane, Fort Myers, Florida 33913';
+  database.replaceIntegrationCache('orders', [{
+    id: 'order-ezgo-2003', order_id: 'order-ezgo-2003', listing_id: 'listing-ezgo-2003', store_id: 'store-ezgo',
+    listing_title: '2003 EZGO Gol', customer_name: 'Standard Buyer'
+  }]);
+  database.replaceIntegrationCache('reseller-listings', [{
+    id: 'assignment-ezgo', assignment_id: 'assignment-ezgo', listing_id: 'listing-ezgo-2003', store_id: 'store-ezgo',
+    listing_title: '2003 EZGO Gol', store_name: 'Standard Dealer', dealer_name: 'Standard Dealer'
+  }]);
+  database.replaceIntegrationCache('dealer-appointment-availability', availabilityCacheItems({
+    dealer_id: 'dealer-ezgo', dealer_name: 'Standard Dealer', store_id: 'store-ezgo', store_name: 'Standard Dealer',
+    location: address, phone: '239-799-1416', assigned_listings: [{ listing_id: 'listing-ezgo-2003', listing_title: '2003 EZGO Gol' }],
+    verified_open_slots: []
+  }));
+  const firstMessage = 'New order request sent from listing.\n\nCustomer: Standard Buyer\nListing: 2003 EZGO Gol\nOrder notes: I am interested.quiero saver mas de este articulo y la direccion donde esta';
+  database.saveMessageThreadSnapshot(
+    { thread_id: 'dealer-address-order', context_type: 'order', context_id: 'order-ezgo-2003', subject: '2003 EZGO Gol', can_reply: 1 },
+    [{ message_id: 'dealer-address-1', direction: 'inbound', sender_type: 'buyer', body: firstMessage, sent_at: new Date().toISOString() }],
+    { thread_id: 'dealer-address-order' }
+  );
+  const engine = new MessageResponseEngine(database);
+  const first = engine.match(database.getMessageConversationContext('dealer-address-order', 20));
+  assert.equal(first.dynamic, true);
+  assert.equal(first.intentKey, 'live_dealer_address');
+  assert.match(first.response, new RegExp(address));
+  assert.doesNotMatch(first.response, /primero verificar|verificar[eé]|responder[eé] en breve/i);
+
+  database.saveMessageThreadSnapshot(
+    { thread_id: 'dealer-address-order', context_type: 'order', context_id: 'order-ezgo-2003', subject: '2003 EZGO Gol', can_reply: 1 },
+    [
+      { message_id: 'dealer-address-1', direction: 'inbound', sender_type: 'buyer', body: firstMessage, sent_at: new Date(Date.now() - 120000).toISOString() },
+      { message_id: 'dealer-address-old-reply', direction: 'outbound', sender_type: 'dealer', body: 'Primero verificaré el local correcto.', sent_at: new Date(Date.now() - 60000).toISOString() },
+      { message_id: 'dealer-address-2', direction: 'inbound', sender_type: 'buyer', body: 'ok dame la direccion', sent_at: new Date().toISOString() }
+    ],
+    { thread_id: 'dealer-address-order' }
+  );
+  const followUp = engine.match(database.getMessageConversationContext('dealer-address-order', 20));
+  assert.equal(followUp.dynamic, true);
+  assert.equal(followUp.locale, 'es');
+  assert.match(followUp.response, new RegExp(address));
+  assert.doesNotMatch(followUp.response, /primero verificar|verificar[eé]|responder[eé] en breve/i);
+  const aiService = new AIService(database, {
+    getPublicSettings: function settings() { return { secrets: {} }; },
+    getSecret: function noSecret() { return ''; }
+  });
+  const aiPrompt = aiService.buildMessageReplyPrompt(database.getMessageConversationContext('dealer-address-order', 20), 'Answer the customer now.');
+  assert.match(aiPrompt.system, /provide the verified address immediately/i);
+  assert.match(aiPrompt.user, /thread_dealer_contact/);
+  assert.match(aiPrompt.user, new RegExp(address));
+});
+
 database.close();
-console.log('Automotive dealer knowledge library tests: ' + passed + '/13 passed.');
+console.log('Automotive dealer knowledge library tests: ' + passed + '/14 passed.');
 if (process.exitCode) process.exit(process.exitCode);

@@ -1,4 +1,4 @@
-Nexa Smart Office Bot 1.6.16 Validation Report
+Nexa Smart Office Bot 1.6.18 Validation Report
 
 Package feature
 Date-scoped bilingual appointment state, guarded thread-to-Lead creation,

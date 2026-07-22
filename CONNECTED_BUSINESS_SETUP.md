@@ -6,7 +6,7 @@ For page-backed appointments, include `appointment-create:write`, `dealer-agenda
 
 ## AutoMarket Pro appointment/Lead V8
 
-Nexa 1.6.16 uses the website's stable API resources rather than automating authenticated HTML forms:
+Nexa 1.6.18 uses the website's stable API resources rather than automating authenticated HTML forms:
 
 1. Read `dealer-appointment-availability` and `dealer-agenda-calendar`.
 2. Create the confirmed appointment with `appointment-create` and `appointment-create:write`.

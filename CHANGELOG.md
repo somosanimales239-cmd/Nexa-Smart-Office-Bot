@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.18
+
+- Added live dealer-contact Knowledge backed by synchronized `store`, `stores`, availability, Dealer Agenda and listing resources.
+- Resolves the correct dealer from message-thread order/Lead and listing context before selecting an address.
+- Added the resolved `thread_dealer_contact` to external AI prompts.
+- Added `store` and `stores` to bounded AI business context and preserved safe address fields returned with listings/stores.
+- Removed the dead-end address response that promised a later verification without performing it.
+- Added direct and automatic regressions for the reported Spanish address conversation.
+
 ## 1.6.17
 
 - Fixed the availability safety filter so the page's real `stores`, `days`, and abbreviated weekday containers survive synchronization.

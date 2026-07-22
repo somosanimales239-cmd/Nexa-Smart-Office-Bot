@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { OpenAIProvider } = require('./openai-provider');
 const { DeepSeekProvider } = require('./deepseek-provider');
 const { MessageResponseEngine } = require('./message-response-engine');
+const { resolveDealerContact } = require('./dealer-contact-service');
 
 const PROVIDER_CLASSES = 'provider classes: OpenAIProvider, DeepSeekProvider';
 const PROVIDER_METHODS = 'provider methods: testConnection, generateSuggestion, cancelRequest, getStatus';
@@ -78,6 +79,9 @@ class AIService {
       return '[' + direction + name + ' · ' + String(row.sent_at || row.created_at || '') + '] ' + String(row.body || '');
     }).join('\n');
     const daily = this.database.dailyContext();
+    const connectedBusiness = Object.assign({}, daily.connected_business || {}, {
+      thread_dealer_contact: resolveDealerContact(this.database, conversation)
+    });
     const extra = String(focus || '').trim() || 'Prepare the most helpful next response.';
     return {
       system: [
@@ -85,6 +89,7 @@ class AIService {
         'Use the complete conversation and the safe business context supplied below.',
         'Answer only what is supported by the conversation or business data.',
         'Never invent inventory, prices, availability, appointments, financing approval, policies, or actions.',
+        'When the customer asks for the dealer or vehicle address, use thread_dealer_contact and provide the verified address immediately. Never promise to verify it later.',
         'For appointment questions, use dealer_appointment_availability: state the verified dealer hours for the requested day, offer the verified times that day, and ask which is convenient.',
         'If that day or time is unavailable, offer the next verified available day. If the customer declines an appointment, respond courteously and provide the dealer contact details present in the business context.',
         'Keep the appointment topic active across short follow-ups such as that day, another time, the second one, or yes that works. Do not reinterpret appointment availability as vehicle inventory availability.',
@@ -92,7 +97,7 @@ class AIService {
         'Do not say a message was sent. Do not include internal analysis.',
         'Return only the proposed customer-facing reply, concise and professional.'
       ].join(' '),
-      user: 'Thread: ' + JSON.stringify(thread) + '\n\nConversation:\n' + transcript + '\n\nSafe business context: ' + JSON.stringify(daily.connected_business || {}) + '\n\nUser instruction: ' + extra
+      user: 'Thread: ' + JSON.stringify(thread) + '\n\nConversation:\n' + transcript + '\n\nSafe business context: ' + JSON.stringify(connectedBusiness) + '\n\nUser instruction: ' + extra
     };
   }
 

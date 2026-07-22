@@ -7,6 +7,7 @@ const {
 } = require('./dealer-availability-service');
 const { appointmentConversationPlan } = require('./appointment-communication-service');
 const { calendarAppointmentsFromCache } = require('./dealer-agenda-calendar-service');
+const { liveDealerContactMatch } = require('./dealer-contact-service');
 
 const NEXA_KNOWLEDGE_FIRST_MESSAGE_ENGINE_V2 = 'NEXA_KNOWLEDGE_FIRST_MESSAGE_ENGINE_V2';
 const NEXA_AUTOMOTIVE_KNOWLEDGE_LIBRARY_V1 = 'NEXA_AUTOMOTIVE_KNOWLEDGE_LIBRARY_V1';
@@ -56,8 +57,8 @@ function safeJsonArray(value) {
 
 function detectLocale(value) {
   const text = ' ' + normalize(value) + ' ';
-  const spanish = [' que ',' como ',' cuando ',' donde ',' cuanto ',' precio ',' disponible ',' cita ',' financiamiento ',' credito ',' vehiculo ',' gracias ',' necesito ',' tienen ',' puedo ',' quiero ',' titulo ',' garantia '];
-  const english = [' what ',' how ',' when ',' where ',' price ',' available ',' appointment ',' financing ',' credit ',' vehicle ',' thanks ',' need ',' have ',' can ',' want ',' title ',' warranty '];
+  const spanish = [' que ',' como ',' cuando ',' donde ',' cuanto ',' precio ',' disponible ',' cita ',' financiamiento ',' credito ',' vehiculo ',' articulo ',' direccion ',' ubicacion ',' dame ',' saber ',' gracias ',' necesito ',' tienen ',' puedo ',' quiero ',' titulo ',' garantia '];
+  const english = [' what ',' how ',' when ',' where ',' price ',' available ',' appointment ',' financing ',' credit ',' vehicle ',' item ',' address ',' location ',' directions ',' thanks ',' need ',' have ',' can ',' want ',' title ',' warranty '];
   let es = 0;
   let en = 0;
   spanish.forEach(function count(word) { if (text.includes(word)) es += 1; });
@@ -208,6 +209,8 @@ class MessageResponseEngine {
     const latest = this.latestInbound(conversation);
     const text = latest ? String(latest.body || '') : '';
     const context = { locale: detectLocale(text), segment: inferDealerSegment(conversation) };
+    const contactMatch = liveDealerContactMatch(this.database, conversation, text, context);
+    if (contactMatch) return contactMatch;
     const liveMatch = liveAvailabilityMatch(this.database, conversation, text, context);
     if (liveMatch) return liveMatch;
     const records = this.records().filter(function languageFirst(row) {
