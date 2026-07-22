@@ -1,5 +1,9 @@
 # Nexa AI Control and Message Runtime Diagnostics
 
+## Structured appointment contact collection (1.6.19)
+
+When a verified appointment is ready but the website thread lacks a valid customer name or phone, Nexa sends a small bilingual fill-in form with separate `Name/Nombre`, `Phone/Teléfono`, and optional `Email` fields. Existing valid fields are reused and omitted from the request. Blank placeholders are ignored, and phrases such as “mi número” or “my phone” can never be written into Dealer Leads as a customer name.
+
 ## Live dealer address replies (1.6.18)
 
 Address questions are resolved from the connected order/Lead, listing and dealer/store records before Knowledge or AI drafts a reply. Nexa returns the synchronized address immediately and never sends a placeholder promising to verify it later. If several reseller dealers exist, listing/store context is required before an address is selected.

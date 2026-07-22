@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { DatabaseService } = require('../src/database/database');
-const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, parseRequestedDateTime, safeDeferredKnowledge } = require('../src/services/automatic-actions-service');
+const { AutomaticActionsService, NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, NEXA_APPOINTMENT_PAGE_V7_SYNC_V1, NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, appointmentContactRequest, contactFromConversation, extractCustomerContact, parseRequestedDateTime, safeDeferredKnowledge, usableCustomerName } = require('../src/services/automatic-actions-service');
 const { MessageResponseEngine } = require('../src/services/message-response-engine');
 const { registerAutomationIpc } = require('../src/ipc/automation-ipc');
 
@@ -119,6 +119,32 @@ async function run() {
   assert.equal(NEXA_APPOINTMENT_PAGE_V8_SYNC_V1, 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1');
   assert.equal(NEXA_APPOINTMENT_CONTACT_CONTEXT_V3, 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3');
   assert.equal(NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1, 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1');
+  assert.equal(NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1, 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1');
+  assert.equal(usableCustomerName('mi numero'), '', 'A contact phrase must never become the Dealer Lead customer name.');
+  assert.equal(usableCustomerName('Mi número'), '', 'Accented contact phrases must never become a customer name.');
+  assert.deepEqual(extractCustomerContact('mi numero es 239-444-6565'), {
+    customer_name: '', customer_phone: '2394446565', customer_email: '', provided: true
+  });
+  assert.deepEqual(extractCustomerContact('Nombre: María López\nTeléfono: (239) 444-6565\nEmail: maria@example.com'), {
+    customer_name: 'María López', customer_phone: '2394446565', customer_email: 'maria@example.com', provided: true
+  });
+  assert.deepEqual(extractCustomerContact('Nombre: ____________________\nTeléfono: __________________\nEmail (opcional): __________'), {
+    customer_name: '', customer_phone: '', customer_email: '', provided: false
+  });
+  const structuredContactForm = appointmentContactRequest({ id: 'form-slot', start: new Date(2026, 6, 25, 11, 0, 0) }, 'es', {}, ['customer_name', 'customer_phone']);
+  assert.match(structuredContactForm, /^Para completar la reserva/m);
+  assert.match(structuredContactForm, /^Nombre: ____________________$/m);
+  assert.match(structuredContactForm, /^Teléfono: __________________$/m);
+  assert.match(structuredContactForm, /^Email \(opcional\): __________$/m);
+  const phonePhraseConversation = contactFromConversation({
+    thread: { participant_name: 'Standard Buyer' },
+    messages: [
+      { direction: 'outbound', body: structuredContactForm },
+      { direction: 'inbound', sender_name: 'Standard Buyer', body: 'mi numero es 239-444-6565' }
+    ]
+  }, null, database);
+  assert.equal(phonePhraseConversation.customer_name, '', 'The words before a supplied phone must not overwrite Customer Name.');
+  assert.equal(phonePhraseConversation.customer_phone, '2394446565');
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'I will verify current availability for you.' }), true);
   assert.equal(safeDeferredKnowledge({ requiredContext: ['inventory'], response: 'It is guaranteed available now.' }), false);
   assert.equal(database.getSettings().auto_actions_enabled, '0', 'Automation must default to disabled.');
@@ -278,7 +304,9 @@ async function run() {
   const contactRequestResult = await service.runNow('test-missing-contact-request');
   assert.equal(contactRequestResult.appointments_created, 0);
   assert.equal(contactRequestResult.messages_sent, 1, 'Missing identity must produce a customer-facing request instead of stopping silently.');
-  assert.match(sentMessages[0].body, /nombre del cliente|nombre y teléfono|customer name/i);
+  assert.match(sentMessages[0].body, /Nombre:\s*_+/i);
+  assert.match(sentMessages[0].body, /Teléfono:\s*_+/i);
+  assert.match(sentMessages[0].body, /Email \(opcional\):\s*_+/i);
   assert.match(sentMessages[0].body, /11:00 AM/i);
   assert.equal(notifications.filter((item) => item.title === 'Automatic appointment needs attention').length, attentionBefore, 'Missing identity should be a recoverable conversation step, not a terminal error notification.');
 

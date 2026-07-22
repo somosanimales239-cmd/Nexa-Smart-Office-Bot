@@ -23,6 +23,7 @@ const NEXA_APPOINTMENT_PAGE_V7_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V7_SYNC_V1';
 const NEXA_APPOINTMENT_PAGE_V8_SYNC_V1 = 'NEXA_APPOINTMENT_PAGE_V8_SYNC_V1';
 const NEXA_APPOINTMENT_CONTACT_CONTEXT_V3 = 'NEXA_APPOINTMENT_CONTACT_CONTEXT_V3';
 const NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1 = 'NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1';
+const NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1 = 'NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1';
 
 function text(value) { return String(value === undefined || value === null ? '' : value).trim(); }
 function number(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
@@ -79,8 +80,16 @@ function formatSlot(slot) {
 function usableCustomerName(value) {
   const candidate = text(value);
   if (!candidate) return '';
-  const generic = candidate.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  if (['buyer', 'standard buyer', 'customer', 'standard customer', 'cliente', 'comprador', 'user', 'usuario', 'website customer'].includes(generic)) return '';
+  const generic = candidate.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const invalidNames = [
+    'buyer', 'standard buyer', 'customer', 'standard customer', 'cliente', 'comprador', 'user', 'usuario', 'website customer',
+    'mi numero', 'mi numero es', 'este es mi numero', 'numero', 'numero de telefono', 'mi telefono', 'mi telefono es', 'telefono',
+    'my number', 'my number is', 'this is my number', 'number', 'phone number', 'my phone', 'my phone is', 'phone', 'contact phone'
+  ];
+  if (invalidNames.includes(generic)) return '';
+  if (!/[A-Za-zÀ-ÿ]/.test(candidate) || /\d{7,}/.test(candidate)) return '';
+  if (/^(?:mi|my|este es mi|this is my)?\s*(?:numero|number|telefono|phone|celular|cell|contacto|contact)(?:\s+(?:de telefono|phone|es|is))?$/i.test(generic)) return '';
+  if (/^[_\s.-]+$/.test(candidate)) return '';
   return candidate;
 }
 
@@ -92,6 +101,8 @@ function isAppointmentContactPrompt(value) {
   if ((body.includes('mantengo') || body.includes('i am keeping')) && (body.includes('teléfono') || body.includes('telefono') || body.includes('phone number'))) return true;
   if ((body.includes('antes de confirmar') || body.includes('before confirming') || body.includes('before i confirm'))
     && (body.includes('teléfono') || body.includes('telefono') || body.includes('phone number'))) return true;
+  if ((body.includes('copie y complete') || body.includes('copy and fill in'))
+    && (body.includes('teléfono:') || body.includes('telefono:') || body.includes('phone:'))) return true;
   return false;
 }
 
@@ -158,8 +169,8 @@ function contactFromConversation(conversation, override, database) {
 
 function extractCustomerContact(message) {
   const source = text(message);
-  const labeledName = source.match(/(?:^|\n)\s*(?:customer|customer name|name|cliente|nombre)\s*:\s*([^\n,;]+)/i);
-  const labeledPhone = source.match(/(?:^|\n)\s*(?:contact phone|phone|telephone|tel(?:ephone)?|tel[eé]fono|celular)\s*:\s*([^\n,;]+)/i);
+  const labeledName = source.match(/(?:^|\n)\s*(?:customer name|customer|name|cliente|nombre)\s*:\s*([^\n,;]+)/i);
+  const labeledPhone = source.match(/(?:^|\n)\s*(?:contact phone|phone number|n[uú]mero de tel[eé]fono|mi n[uú]mero|phone|telephone|tel(?:ephone)?|tel[eé]fono|celular|n[uú]mero)\s*:\s*([^\n,;]+)/i);
   const labeledEmail = source.match(/(?:^|\n)\s*(?:email|e-mail|correo(?: electr[oó]nico)?)\s*:\s*([^\s,;]+)/i);
   const emailMatch = source.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
   const phoneMatch = labeledPhone && labeledPhone[1].match(/(?:\+?\d[\d().\s-]{7,}\d)/) || source.match(/(?:\+?\d[\d().\s-]{7,}\d)/);
@@ -168,15 +179,19 @@ function extractCustomerContact(message) {
   let name = source;
   if (emailMatch) name = name.replace(emailMatch[0], ' ');
   if (phoneMatch) name = name.replace(phoneMatch[0], ' ');
-  name = name.replace(/\b(mi nombre es|me llamo|nombre|name is|my name is|telefono|teléfono|phone|correo|email|es|soy)\b\s*[:=-]?/gi, ' ')
+  name = name.replace(/\b(mi nombre es|me llamo|nombre|name is|my name is|telefono|teléfono|phone number|phone|celular|número|numero|contacto|correo|email|es|soy)\b\s*[:=-]?/gi, ' ')
     .replace(/[^A-Za-zÀ-ÿ\u0027 -]/g, ' ').replace(/\s+/g, ' ').trim()
     .replace(/\b(?:y\s+mi|and\s+my|mi|my)\b\s*$/i, '').trim();
   const words = name.split(' ').filter(Boolean);
   const explicitName = /\b(mi nombre es|me llamo|my name is|i am)\b/i.test(source);
+  const contactOnlyReply = /\b(?:mi\s+)?(?:n[uú]mero|tel[eé]fono|celular|contacto)|\b(?:my\s+)?(?:number|phone|cell|contact)\b/i.test(source);
   const plainName = words.length >= 1 && words.length <= 4 && !/[?]/.test(source)
+    && !contactOnlyReply
     && !/\b(quiero|necesito|por que|porque|cita|horario|gracias|no|si|why|what|when|appointment|schedule|thanks|yes)\b/i.test(source);
-  const customerName = labeledName && usableCustomerName(labeledName[1]) || ((explicitName || plainName) && name.length >= 2 ? usableCustomerName(name) : '');
-  const customerEmail = labeledEmail && labeledEmail[1] || (emailMatch ? emailMatch[0] : '');
+  const labeledCustomerName = labeledName ? usableCustomerName(labeledName[1]) : '';
+  const customerName = labeledCustomerName || ((explicitName || plainName) && name.length >= 2 ? usableCustomerName(name) : '');
+  const labeledCustomerEmail = labeledEmail && !/^[_\s.-]+$/.test(labeledEmail[1]) ? labeledEmail[1] : '';
+  const customerEmail = labeledCustomerEmail || (emailMatch ? emailMatch[0] : '');
   return { customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail, provided: Boolean(customerName || customerPhone || customerEmail) };
 }
 
@@ -286,14 +301,32 @@ function appointmentContactRequest(slot, locale, contact, missingFields) {
   const time = formatTime(slot.start, locale);
   const fields = Array.isArray(missingFields) ? missingFields : [];
   const known = contact && typeof contact === 'object' ? contact : {};
-  const phoneOnly = fields.length === 1 && fields[0] === 'customer_phone' || Boolean(known.customer_name) && !known.customer_phone;
+  const phoneOnly = (fields.length === 1 && fields[0] === 'customer_phone') || (Boolean(usableCustomerName(known.customer_name)) && !known.customer_phone);
   const nameOnly = fields.length === 1 && fields[0] === 'customer_name';
-  if (nameOnly) {
-    return locale === 'es'
-      ? 'Para completar la reserva del ' + date + ' a las ' + time + ', ya tengo su teléfono. Solo necesito el nombre del cliente para llenar el Lead y reservar esa hora en la Agenda.'
-      : 'To complete the reservation for ' + date + ' at ' + time + ', I already have your phone number. I only need the customer name to complete the Lead and reserve that time in the Agenda.';
+  if (locale === 'es') {
+    const heading = nameOnly
+      ? 'Para completar la reserva del ' + date + ' a las ' + time + ', ya tengo su teléfono. Copie y complete esta ficha:'
+      : (phoneOnly
+        ? 'Para completar la reserva del ' + date + ' a las ' + time + ', ya tengo su nombre. Copie y complete esta ficha:'
+        : 'Para completar la reserva del ' + date + ' a las ' + time + ', copie y complete esta ficha:');
+    const lines = [heading, ''];
+    if (!phoneOnly) lines.push('Nombre: ____________________');
+    if (!nameOnly) lines.push('Teléfono: __________________');
+    if (!known.customer_email) lines.push('Email (opcional): __________');
+    lines.push('', 'Mantendré esa fecha y hora mientras verifico y creo la reserva.');
+    return lines.join('\n');
   }
-  return appointmentResponse(phoneOnly ? 'contact_phone_request' : 'contact_identity_request', locale, { date: date, time: time }, slot.id);
+  const heading = nameOnly
+    ? 'To complete the reservation for ' + date + ' at ' + time + ', I already have your phone number. Copy and fill in this form:'
+    : (phoneOnly
+      ? 'To complete the reservation for ' + date + ' at ' + time + ', I already have your name. Copy and fill in this form:'
+      : 'To complete the reservation for ' + date + ' at ' + time + ', copy and fill in this form:');
+  const lines = [heading, ''];
+  if (!phoneOnly) lines.push('Name: ______________________');
+  if (!nameOnly) lines.push('Phone: _____________________');
+  if (!known.customer_email) lines.push('Email (optional): __________');
+  lines.push('', 'I will keep that date and time selected while I verify and create the reservation.');
+  return lines.join('\n');
 }
 
 function pendingContactSelection(conversation, slots, referenceDate) {
@@ -1092,11 +1125,16 @@ module.exports = {
   NEXA_APPOINTMENT_PAGE_V8_SYNC_V1,
   NEXA_APPOINTMENT_CONTACT_CONTEXT_V3,
   NEXA_APPOINTMENT_REMOTE_COMMIT_VERIFICATION_V1,
+  NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1,
   availabilityStart,
   classifyRisk,
   inQuietHours,
   isAppointmentIntent,
   normalizeAvailability,
   parseRequestedDateTime,
-  safeDeferredKnowledge
+  safeDeferredKnowledge,
+  extractCustomerContact,
+  usableCustomerName,
+  appointmentContactRequest,
+  contactFromConversation
 };

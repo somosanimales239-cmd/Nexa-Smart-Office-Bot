@@ -1,0 +1,30 @@
+NEXA SMART OFFICE BOT 1.6.19
+
+FORMULARIO ESTRUCTURADO DE CONTACTO PARA CITAS
+
+Esta versión corrige el caso donde el mensaje "mi numero 2394446565" podía terminar guardando "mi numero" como Customer Name en Dealer Leads.
+
+CAMBIOS
+
+1. "mi numero", "mi teléfono", "my number", "my phone" y valores parecidos ya no son nombres válidos.
+2. Un teléfono o una línea de guiones bajos tampoco puede convertirse en nombre.
+3. Cuando falten datos para reservar, Nexa envía una ficha pequeña:
+
+Nombre: ____________________
+Teléfono: __________________
+Email (opcional): __________
+
+4. Si el hilo ya contiene un nombre, teléfono o email válido, Nexa no lo vuelve a pedir.
+5. Los espacios sin completar se ignoran y la cita no se envía a la página hasta tener nombre y teléfono válidos.
+6. La fecha y hora verificadas se mantienen mientras se recopila el contacto.
+
+IMPORTANTE
+
+El Lead incorrecto que ya existe con Customer Name "mi numero" no se edita automáticamente, porque Nexa no modifica registros existentes. Puede corregir ese Lead manualmente en Dealer Office. Todos los Leads nuevos usarán el flujo corregido.
+
+DESPUÉS DE INSTALAR
+
+1. Ejecute Test connection.
+2. Ejecute Sync now.
+3. Pruebe una cita desde una conversación sin nombre/teléfono.
+4. Complete la ficha enviada por Nexa y confirme que Dealer Leads reciba cada valor en su campo.

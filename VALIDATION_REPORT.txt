@@ -1,4 +1,4 @@
-Nexa Smart Office Bot 1.6.18 Validation Report
+Nexa Smart Office Bot 1.6.19 Validation Report
 
 Package feature
 Date-scoped bilingual appointment state, guarded thread-to-Lead creation,
@@ -33,6 +33,9 @@ Validation scope
 - Implementation and acceptance contracts
 
 Appointment communication regression verified
+- Contact phrases such as "mi numero" are never accepted as customer names.
+- Structured Spanish and English forms keep name, phone and optional email in separate fields.
+- Blank form placeholders are ignored and existing valid contact values are not requested again.
 - A Lead without a matching Dealer Agenda appointment and consumed slot is rejected.
 - Customer confirmation is sent only after all remote reservation evidence passes.
 - Existing thread/message name, phone and email are reused without duplicate prompts.

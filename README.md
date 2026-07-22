@@ -1,8 +1,16 @@
-# Nexa Smart Office Bot 1.6.18
+# Nexa Smart Office Bot 1.6.19
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.18
+## New in 1.6.19
+
+- Prevents contact phrases such as `mi número`, `mi teléfono`, `my number`, or a phone-like value from becoming the Dealer Lead customer name.
+- Requests missing appointment contact data through a bilingual, structured fill-in form with separate Name, Phone, and optional Email fields.
+- Ignores blank form placeholders and asks only for fields that are still missing from the conversation or website thread.
+- Reuses an existing valid name, phone, or email without requesting it again.
+- Adds exact regressions for the reported `mi numero 2394446565` failure and for structured Spanish contact parsing.
+
+## Included from 1.6.18
 
 - Answers dealer and vehicle address questions immediately from synchronized website data instead of promising to verify later.
 - Resolves `order/lead → listing → store/dealer` so reseller conversations receive the address for the correct dealer.

@@ -1,11 +1,11 @@
 {
   "product": "Nexa Smart Office Bot",
-  "update_version": "1.6.18",
+  "update_version": "1.6.19",
   "minimum_base_version": "1.6.0",
   "delivery_type": "complete_software_source_replacement",
   "website_files_included": false,
   "openai_required": false,
-  "database_migration": "No new schema migration in 1.6.18. Migration 9 from 1.6.17 remains active. Existing SQLite data, encrypted keys, conversations, appointments, settings and Knowledge libraries are preserved.",
+  "database_migration": "No new schema migration in 1.6.19. Migration 9 from 1.6.17 remains active. Existing SQLite data, encrypted keys, conversations, appointments, settings and Knowledge libraries are preserved.",
   "appointment_communication_library": {
     "contract": "NEXA_BILINGUAL_APPOINTMENT_LIBRARY_V1",
     "version": "2.0.0",
@@ -85,6 +85,10 @@
     "identical_times_scoped_to_active_date": true,
     "order_lead_contact_cross_reference": true,
     "labeled_contact_fields_en_es": true,
+    "structured_contact_form_contract": "NEXA_STRUCTURED_APPOINTMENT_CONTACT_FORM_V1",
+    "rejects_contact_phrases_as_names": true,
+    "blank_placeholders_are_ignored": true,
+    "existing_valid_contact_is_reused": true,
     "reseller_outbound_direction": true,
     "refuses_local_confirmation_when_remote_not_ready": true
   },
@@ -102,6 +106,9 @@
     "categories": 9
   },
   "features": [
+    "structured bilingual appointment contact form",
+    "contact phrase and placeholder rejection for customer names",
+    "existing valid name, phone and email reuse",
     "all-or-nothing Dealer Agenda remote reservation verification",
     "complete Reserve Appointment Lead fields",
     "Lead-only partial reservation rejection",
@@ -186,8 +193,8 @@
     },
     {
       "path": "AUTOMATIC_ACTIONS.md",
-      "sha256": "72b19a6b7e9168e241273a65541eca83ff497e8ac1f311b195d146b56a33a4ff",
-      "size": 5598,
+      "sha256": "0418b75b6d66d6cd0f18bdc9e7449d6ad8007f5c20eac77eff2b07a175171e67",
+      "size": 6080,
       "operation": "replace_or_create"
     },
     {
@@ -198,8 +205,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "d3ea02c1247dc2312e319562d09dcd37cb65461db79953b97e7af63a75b03522",
-      "size": 13405,
+      "sha256": "ceef627ec92deb77be975cda4ec2156b76682b40e620820fd9926fac2bf0cd78",
+      "size": 13997,
       "operation": "replace_or_create"
     },
     {
@@ -234,8 +241,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "68e5423071a8057654444d3ab36d2fe47463a3cb2f971c9397115065f7c0b21e",
-      "size": 16922,
+      "sha256": "be690d3dce33981e821d3e89a6c7a9c37f14060c560a6c564eb7272642d81aca",
+      "size": 17554,
       "operation": "replace_or_create"
     },
     {
@@ -284,6 +291,12 @@
       "path": "UPDATE_1.6.18_ES.txt",
       "sha256": "1b364c5f3db824e6d6d627397991e442a7eb5da41e1ec04902ee2837807d7e92",
       "size": 1482,
+      "operation": "replace_or_create"
+    },
+    {
+      "path": "UPDATE_1.6.19_ES.txt",
+      "sha256": "3f5bb39004c2cae15f2f6484be5b30e0b43db39f9c11011c7df4a840ba29ffd8",
+      "size": 1357,
       "operation": "replace_or_create"
     },
     {
@@ -383,6 +396,12 @@
       "operation": "replace_or_create"
     },
     {
+      "path": "VALIDATION_1.6.19.txt",
+      "sha256": "1e1f028f38abfbbcec556d0c733613595b282f795b92523a3c9c4deffca218f9",
+      "size": 593,
+      "operation": "replace_or_create"
+    },
+    {
       "path": "VALIDATION_1.6.2.txt",
       "sha256": "2b4fe4f5b3f11167334b0ba3e10d73d1c7b5658de1485393fa74fb57750650c5",
       "size": 1192,
@@ -426,31 +445,31 @@
     },
     {
       "path": "VALIDATION_REPORT.txt",
-      "sha256": "b84766f2f60a7beefd8cc9796b1eed485e8cca2d92ddbdb456c0793a9af43166",
-      "size": 6255,
+      "sha256": "58e9fda6a4fdd7b058fbb353384a0dfe875ae0dc6a7c5aecd4a115947620f61e",
+      "size": 6523,
       "operation": "replace_or_create"
     },
     {
       "path": "main.js",
-      "sha256": "3fb13d41254c59867bfe34fccbde36e178a0e6c0aac5b805af28984cdb9485a1",
+      "sha256": "86a48216fd9e9c1250ac0510134d3506ff8b1198a0e3cd7d750d95cf9f6ee724",
       "size": 10957,
       "operation": "replace_or_create"
     },
     {
       "path": "nexa.project.json",
-      "sha256": "3c7df9826a2d197ca57d692308a687794f684c70e94d8242f922214caf6c9aa4",
-      "size": 1752,
+      "sha256": "185988dc2ca1d077034e2d090c3f2fafb6b60c048adf8d34200bef00b661126b",
+      "size": 1806,
       "operation": "replace_or_create"
     },
     {
       "path": "package-lock.json",
-      "sha256": "b96a55628bdb557dc2820a24f509af5194e67f54cbd94a183e25ecea390616c2",
+      "sha256": "2ece8e548a81480b4de449a72b01ae6eb7342e8e74d9afbdd2d5e17086a78fc7",
       "size": 102949,
       "operation": "replace_or_create"
     },
     {
       "path": "package.json",
-      "sha256": "0856affbf4234d85b65139c062a424ee6f6f30f73b1149f11d79bc076516fec8",
+      "sha256": "8a7dbf0746b1134d162b0dbc1c69cabc0c283edc35de7dba993e894c2cc7cda4",
       "size": 3493,
       "operation": "replace_or_create"
     },
@@ -462,8 +481,8 @@
     },
     {
       "path": "scripts/acceptance-tests.js",
-      "sha256": "510b550786c57e8aa34a8ae356bf01e42d6b0fac3974df1d96826b7b351e40a6",
-      "size": 5400,
+      "sha256": "043c1bb7137965a5394cf3003acb73e18d2174f2efa243bc776f93385c374e05",
+      "size": 5577,
       "operation": "replace_or_create"
     },
     {
@@ -474,13 +493,13 @@
     },
     {
       "path": "scripts/implementation-tests.js",
-      "sha256": "85da1941651eaa91fc2c41ba77963dc5d2f7e9e8e7c1b5c9644ff8e3766f5f22",
-      "size": 8069,
+      "sha256": "eb675f4cb71529a6917d2f7f101f9a3b7815f872d030ea2fddf44837900d7201",
+      "size": 8324,
       "operation": "replace_or_create"
     },
     {
       "path": "scripts/integration-api-notifications.js",
-      "sha256": "59d15f7967bdc6fda956bd7d80fb341ca76408ce0ceea7b30bd9aad0cd16270e",
+      "sha256": "13c55c1244b3aac0f100344a2e57c2be006cedacc489481a021e5e00f4be287d",
       "size": 32597,
       "operation": "replace_or_create"
     },
@@ -492,8 +511,8 @@
     },
     {
       "path": "scripts/integration-automatic-actions.js",
-      "sha256": "c06244b8997e1f63857c28933a78e2c3d137f766c020ce6d7eaeb201f83c065a",
-      "size": 47807,
+      "sha256": "2ac7a76ebb0b27247a91261152cb27b16f6e3603a34dda6e33eb2fddd032e267",
+      "size": 49996,
       "operation": "replace_or_create"
     },
     {
@@ -552,8 +571,8 @@
     },
     {
       "path": "scripts/validate-project.js",
-      "sha256": "f6b6171ef5763b4e98ad78339fc81bd84146c2fdb5a583fb68eb363d5a8e5700",
-      "size": 3729,
+      "sha256": "4cfb13c496bfd28bef27d1da823f0bbca8ba57441c5dce74e4d78c15e6ded526",
+      "size": 3778,
       "operation": "replace_or_create"
     },
     {
@@ -618,7 +637,7 @@
     },
     {
       "path": "src/index.html",
-      "sha256": "dc13718fe4f89da58dfda52f388ecf7d3c3e57a2bcb45970eed7a6052023e9c4",
+      "sha256": "686948241043a4f1fb7a5c0041b4c8797eb0ebfc592d42b2367b68a66639d68f",
       "size": 8393,
       "operation": "replace_or_create"
     },
@@ -738,8 +757,8 @@
     },
     {
       "path": "src/services/automatic-actions-service.js",
-      "sha256": "784a451cb69ff9eeb44565b4a99d46a3b58dea776328615cbbb1cf47c8e93ce4",
-      "size": 75540,
+      "sha256": "745932c3ace1e6ba90039f47c7aaa4d348609d1bc7262919da104f90dd579668",
+      "size": 78062,
       "operation": "replace_or_create"
     },
     {

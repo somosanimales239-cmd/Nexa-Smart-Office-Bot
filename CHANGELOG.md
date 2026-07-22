@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.19
+
+- Rejected contact-label phrases, placeholders, phone-like strings and generic participants as customer names.
+- Added a deterministic English/Spanish appointment contact form that keeps each value in its proper field.
+- Preserved valid contact fields already supplied by the website thread or conversation and requested only missing values.
+- Added parser and automatic-action regressions for `mi numero`, accent variants, filled forms and blank forms.
+- Kept the selected verified date/time pending while collecting contact data; website reservation behavior remains unchanged.
+
 ## 1.6.18
 
 - Added live dealer-contact Knowledge backed by synchronized `store`, `stores`, availability, Dealer Agenda and listing resources.
