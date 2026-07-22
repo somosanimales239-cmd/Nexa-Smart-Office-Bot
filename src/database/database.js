@@ -456,10 +456,12 @@ class DatabaseService {
           body=excluded.body, body_format=excluded.body_format, sent_at=excluded.sent_at, status=excluded.status,
           is_read=excluded.is_read, payload_json=excluded.payload_json, updated_at=excluded.updated_at
       `);
+      const connectedAccountType = normalizeText(this.getIntegrationStatus() && this.getIntegrationStatus().account_type).toLowerCase();
       rows.forEach((entry, index) => {
         const messageId = normalizeText(entry && (entry.message_id || entry.id)) || crypto.createHash('sha256').update(threadId + ':' + index + ':' + JSON.stringify(entry || {})).digest('hex').slice(0, 32);
         const sentAt = nullable(entry && (entry.sent_at || entry.created_at || entry.updated_at));
-        const direction = normalizeText(entry && entry.direction) || (String(entry && entry.sender_type || '').toLowerCase().includes('dealer') || String(entry && entry.sender_type || '').toLowerCase().includes('admin') ? 'outbound' : 'inbound');
+        const senderType = String(entry && entry.sender_type || '').toLowerCase();
+        const direction = normalizeText(entry && entry.direction) || (senderType.includes('dealer') || senderType.includes('admin') || senderType.includes('business') || connectedAccountType === 'reseller' && senderType.includes('reseller') ? 'outbound' : 'inbound');
         const createdAt = sentAt || timestamp;
         upsert.run(
           messageId, threadId, normalizeText(entry && entry.sender_type), nullable(entry && entry.sender_id),

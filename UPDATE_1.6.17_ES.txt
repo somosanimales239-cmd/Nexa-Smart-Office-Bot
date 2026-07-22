@@ -1,0 +1,35 @@
+NEXA SMART OFFICE BOT 1.6.17
+
+Esta versión conserva toda la aplicación 1.6.16 y corrige la lectura de la página real entregada por el usuario.
+
+CAMBIOS PRINCIPALES
+
+1. Dealer Appointment Availability
+   - Conserva los contenedores stores y days.
+   - Conserva mon, tue, wed, thu, fri, sat y sun.
+   - Los slots anidados ya llegan al Knowledge y a AI Control.
+
+2. Reserva real en la página
+   - Website Lead + reserved Agenda slot queda seleccionado por defecto.
+   - Si appointment-create no está listo, Nexa no crea ni confirma una cita solamente local.
+   - La confirmación exige reserved=true, identificador remoto, Lead completo, cita visible en Dealer Agenda y slot consumido.
+
+3. Contacto del cliente
+   - Para conversaciones context_type=order o lead, Nexa cruza context_id con el cache de Dealer Leads/orders.
+   - Recupera nombre, teléfono, correo y ubicación cuando message-thread no los repite.
+   - Reconoce Customer, Name, Phone, Telephone, Teléfono, Email y Correo dentro del mensaje.
+
+4. Conversaciones de reseller
+   - En una conexión reseller, los mensajes escritos por el reseller se guardan como outbound.
+   - Esto evita que una respuesta anterior del vendedor sea confundida con una nueva solicitud del comprador.
+
+5. Confirmación profesional
+   - La dirección se menciona una sola vez.
+   - Se solicita teléfono solamente cuando no está presente en el hilo ni en el Lead conectado.
+
+DESPUÉS DE INSTALAR
+
+1. Abra Connected Business.
+2. Ejecute Test connection.
+3. Ejecute Sync now.
+4. Confirme en AI Control que availability, Dealer Agenda y appointment-create aparecen Ready.

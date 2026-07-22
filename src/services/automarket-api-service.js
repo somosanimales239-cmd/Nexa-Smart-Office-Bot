@@ -83,7 +83,7 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
   validation: ['id','validation_id','dealer_user_id','store_id','business_name','authorized_representative','phone','email','address','city','state','zip','driver_license_number','dealer_license_number','business_tax_account_number','business_tax_receipt_number','resale_certificate_number','status','submitted_at','reviewed_at','reviewed_by','admin_note'],
   'api-keys-status': ['id','key_id','name','owner_type','owner_id','status','scopes','expires_at','last_used_at','created_at','updated_at'],
   'dealer-appointment-availability': [
-    'id','slot_id','availability_id','record_type','dealer','store','dealer_id','dealer_name','dealer_phone','dealer_email','dealer_location',
+    'id','slot_id','availability_id','record_type','dealer','store','stores','dealer_id','dealer_name','dealer_phone','dealer_email','dealer_location',
     'reseller_id','store_id','store_name','store_phone','store_email','store_location','phone','email','location','address','city','state','zip',
     'listing_id','listing_title','listing_url','listing_image_url','assigned_listings','listings','assignment_id','category','price',
     'slot_minutes','slot_duration_minutes','duration_minutes','timezone','weekly_schedule','business_hours','dealer_schedule','availability_schedule',
@@ -93,10 +93,10 @@ const RESOURCE_FIELD_ALLOWLISTS = Object.freeze({
     'date','appointment_date','open_date','blocked_date','off_date','start_at','starts_at','datetime','date_time','end_at','ends_at',
     'start_time','appointment_time','time','from_time','open_time','end_time','to_time','close_time','start','end','from','to','open','close','opens_at','closes_at','times','hours','periods','intervals','ranges',
     'available','is_available','enabled','is_open','is_off','day_off','closed','blocked','booked','is_booked','is_blocked','status','state','verified','is_verified',
-    'resource','scope','store_slug','day','day_key','day_name','weekday','day_of_week','day_number','name','label','reason','recurrence','capacity','available_count','booked_count','appointment_count','notes','created_at','updated_at','appointment_create_enabled','appointment_create_endpoint','appointment_create_aliases','reserve_slot_contract',
+    'resource','scope','store_slug','days','day','day_key','day_name','weekday','day_of_week','day_number','name','label','reason','recurrence','capacity','available_count','booked_count','appointment_count','notes','created_at','updated_at','appointment_create_enabled','appointment_create_endpoint','appointment_create_aliases','reserve_slot_contract',
     'order_id','appointment_id','customer_name','customer_email','customer_phone','message','order_type','source_context','source_label','created_by_platform','appointment_label','appointment_status','appointment_result_status','sale_price','commission_percent','commission_amount',
     'assignment_listing_id','listing_status','assignment_status',
-    'monday','tuesday','wednesday','thursday','friday','saturday','sunday','lunes','martes','miercoles','jueves','viernes','sabado','domingo'
+    'mon','tue','wed','thu','fri','sat','sun','monday','tuesday','wednesday','thursday','friday','saturday','sunday','lunes','martes','miercoles','jueves','viernes','sabado','domingo'
   ],
   'dealer-agenda-calendar': [
     'id','calendar_id','record_type','dealer','store','stores','dealer_id','dealer_name','store_id','store_name','store_phone','store_email','store_location','phone','email','location','address','city','state','zip','timezone','slot_minutes','slot_duration_minutes',

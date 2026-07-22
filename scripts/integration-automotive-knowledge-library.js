@@ -203,7 +203,7 @@ test('Dealer Agenda booked appointments remove an otherwise open website slot fr
   const match = new MessageResponseEngine(database).match(database.getMessageConversationContext('calendar-booked-slot', 20));
   assert.equal(match.dynamic, true);
   assert.doesNotMatch(match.response, /available and verified/i);
-  assert.match(match.response, /no verified appointment times|does not show verified open appointment times|no other verified/i);
+  assert.match(match.response, /no verified appointment times|does not show verified open appointment times|no other verified|does not show a verifiable opening/i);
 });
 
 database.close();

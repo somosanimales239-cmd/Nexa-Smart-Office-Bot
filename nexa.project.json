@@ -1,7 +1,7 @@
 {
     "name": "Nexa Smart Office Bot",
-    "application_version": "1.6.16",
-    "workspace_revision": "1.0.51",
+    "application_version": "1.6.17",
+    "workspace_revision": "1.0.52",
     "project_type": "electron",
     "build_target": "windows",
     "delivery": {
@@ -35,8 +35,9 @@
         "SBO-23-automarket-v7-agenda-leads-roundtrip",
         "SBO-24-local-validator-conservative-delimiters",
         "SBO-25-automarket-v8-reservation-contact-agenda-sync",
-        "SBO-26-remote-reservation-commit-verification"
+        "SBO-26-remote-reservation-commit-verification",
+        "SBO-27-real-page-availability-contact-recovery"
     ],
-    "version": "1.6.16",
-    "updated_at": "2026-07-21 16:21:55"
+    "version": "1.6.17",
+    "updated_at": "2026-07-22 08:20:58"
 }

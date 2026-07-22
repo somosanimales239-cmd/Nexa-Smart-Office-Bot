@@ -432,6 +432,9 @@ async function run() {
   const raceEvent = database.listAutomaticActionEvents(30).find((item) => item.source_id === 'inbound-v7-race' && item.action_type === 'appointment_create');
   assert.equal(raceEvent.status, 'blocked');
 
+  // Keep this historical regression fixture independent from the day the test
+  // suite runs. Earlier dynamic fixtures can also land on July 25, 2026.
+  database.listAppointments('Ana López').forEach((item) => database.deleteAppointment(item.id));
   const correctedSaturday = new Date(2026, 6, 25, 11, 0, 0, 0);
   const correctedTuesday = new Date(2026, 6, 21, 11, 0, 0, 0);
   availabilityPayload = {

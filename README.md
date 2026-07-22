@@ -1,8 +1,16 @@
-# Nexa Smart Office Bot 1.6.16
+# Nexa Smart Office Bot 1.6.17
 
 Nexa Smart Office Bot is a local-first Windows business assistant for connected website conversations, automotive dealer knowledge, contacts, leads, orders, agenda, tasks, notifications and controlled AI assistance.
 
-## New in 1.6.16
+## New in 1.6.17
+
+- Reads the real nested Dealer Appointment Availability structure, including `stores`, `days`, and `mon` through `sun` schedule keys.
+- Recovers customer name, phone, email, and location from the Dealer Lead linked to an order conversation.
+- Treats reseller-authored messages as outbound on reseller connections so appointment context stays correct.
+- Defaults upgraded workspaces to website Lead creation plus a verified Dealer Agenda reservation.
+- Never confirms a local-only appointment when website reservation is selected but `appointment-create` is not ready.
+
+## Included from 1.6.16
 
 - Treats Dealer Agenda reservation as an all-or-nothing transaction. A Lead alone is no longer accepted as a completed appointment.
 - Sends the complete Reserve Appointment data: thread, customer name, phone, optional email/location/listing, date, time and notes.

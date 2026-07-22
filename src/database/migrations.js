@@ -329,7 +329,7 @@ function applyMigrations(database) {
           auto_messages_excluded_intents: 'financing_approval,legal_issue,emergency_issue,human_escalation,complaint,refund_dispute,payment_dispute',
           auto_appointments_enabled: '0', auto_appointments_source: 'dealer-appointment-availability',
           auto_appointments_offer_slots: '1', auto_appointments_duration_minutes: '30', auto_appointments_min_notice_hours: '2',
-          auto_appointments_max_days: '60', auto_appointments_require_contact: '1', auto_appointments_create_remote: '0',
+          auto_appointments_max_days: '60', auto_appointments_require_contact: '1', auto_appointments_create_remote: '1',
           auto_appointments_send_confirmation: '1', auto_appointments_timezone: 'local', auto_appointments_slot_limit: '50',
           auto_actions_no_delete_guard: '1'
         };
@@ -347,6 +347,15 @@ function applyMigrations(database) {
         addColumnIfMissing(database, 'message_threads', 'automation_blocked_reason', "TEXT NOT NULL DEFAULT ''");
         database.exec('CREATE INDEX IF NOT EXISTS idx_message_threads_automation_blocked ON message_threads(automation_blocked, updated_at DESC);');
         database.prepare("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('messages_ai_enabled', '1', ?)").run(nowIso());
+      }
+    },
+    {
+      id: 9,
+      name: 'NEXA_WEBSITE_APPOINTMENT_RESERVATION_DEFAULT_V1',
+      apply: function enableWebsiteAppointmentReservation(database) {
+        const timestamp = nowIso();
+        database.prepare("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('auto_appointments_create_remote', '1', ?)").run(timestamp);
+        database.prepare("UPDATE settings SET value='1', updated_at=? WHERE key='auto_appointments_create_remote' AND value='0'").run(timestamp);
       }
     }
 

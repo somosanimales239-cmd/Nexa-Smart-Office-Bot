@@ -1,0 +1,14 @@
+Nexa Smart Office Bot 1.6.17 - Validation Summary
+
+- JavaScript syntax checks: PASS
+- Core integration tests: PASS
+- API synchronization and notification tests: PASS
+- Workspace reflection: PASS
+- Realtime messaging tests: PASS
+- Automotive Knowledge tests: PASS
+- Bilingual appointment communication tests: PASS
+- Guarded automatic actions tests: PASS
+- Website reservation commit verification retained: PASS
+- Version consistency: PASS
+
+The source ZIP excludes node_modules, .git, and release output. GitHub Actions installs the locked dependencies and creates the Windows installer, portable app, and Windows ZIP.

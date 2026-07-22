@@ -95,7 +95,7 @@ function isAppointmentContactPrompt(value) {
   return false;
 }
 
-function contactFromConversation(conversation, override) {
+function contactFromConversation(conversation, override, database) {
   const thread = conversation && conversation.thread || {};
   const threadPayload = safeJson(thread.payload_json, {});
   const participants = [];
@@ -104,7 +104,8 @@ function contactFromConversation(conversation, override) {
   const result = {
     customer_name: usableCustomerName(thread.participant_name || thread.customer_name || threadPayload.customer_name || threadPayload.participant_name),
     customer_phone: text(thread.customer_phone || thread.phone || threadPayload.customer_phone || threadPayload.phone),
-    customer_email: text(thread.customer_email || thread.email || threadPayload.customer_email || threadPayload.email)
+    customer_email: text(thread.customer_email || thread.email || threadPayload.customer_email || threadPayload.email),
+    customer_location: text(thread.customer_location || thread.location || threadPayload.customer_location || threadPayload.location)
   };
   for (const participant of participants) {
     const role = text(participant && (participant.role || participant.type || participant.participant_type || participant.sender_type)).toLowerCase();
@@ -112,6 +113,19 @@ function contactFromConversation(conversation, override) {
     if (!result.customer_name) result.customer_name = usableCustomerName(participant && (participant.name || participant.display_name));
     if (!result.customer_phone) result.customer_phone = text(participant && participant.phone);
     if (!result.customer_email) result.customer_email = text(participant && participant.email);
+  }
+  const contextType = text(thread.context_type || threadPayload.context_type).toLowerCase();
+  const contextId = text(thread.context_id || threadPayload.context_id);
+  if (database && /order|lead/.test(contextType) && contextId && typeof database.listIntegrationCache === 'function') {
+    const lead = database.listIntegrationCache('orders', '', 500).find(function matchingLead(item) {
+      return [item && item.id, item && item.order_id, item && item.lead_id].map(text).includes(contextId);
+    });
+    if (lead) {
+      if (!result.customer_name) result.customer_name = usableCustomerName(lead.customer_name || lead.name);
+      if (!result.customer_phone) result.customer_phone = text(lead.customer_phone || lead.phone);
+      if (!result.customer_email) result.customer_email = text(lead.customer_email || lead.email);
+      if (!result.customer_location) result.customer_location = text(lead.customer_location || lead.location);
+    }
   }
   const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages.slice().reverse() : [];
   for (const row of messages) {
@@ -144,8 +158,11 @@ function contactFromConversation(conversation, override) {
 
 function extractCustomerContact(message) {
   const source = text(message);
+  const labeledName = source.match(/(?:^|\n)\s*(?:customer|customer name|name|cliente|nombre)\s*:\s*([^\n,;]+)/i);
+  const labeledPhone = source.match(/(?:^|\n)\s*(?:contact phone|phone|telephone|tel(?:ephone)?|tel[eé]fono|celular)\s*:\s*([^\n,;]+)/i);
+  const labeledEmail = source.match(/(?:^|\n)\s*(?:email|e-mail|correo(?: electr[oó]nico)?)\s*:\s*([^\s,;]+)/i);
   const emailMatch = source.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
-  const phoneMatch = source.match(/(?:\+?\d[\d().\s-]{7,}\d)/);
+  const phoneMatch = labeledPhone && labeledPhone[1].match(/(?:\+?\d[\d().\s-]{7,}\d)/) || source.match(/(?:\+?\d[\d().\s-]{7,}\d)/);
   const phoneDigits = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : '';
   const customerPhone = phoneDigits.length >= 10 && phoneDigits.length <= 15 ? phoneDigits : '';
   let name = source;
@@ -158,8 +175,8 @@ function extractCustomerContact(message) {
   const explicitName = /\b(mi nombre es|me llamo|my name is|i am)\b/i.test(source);
   const plainName = words.length >= 1 && words.length <= 4 && !/[?]/.test(source)
     && !/\b(quiero|necesito|por que|porque|cita|horario|gracias|no|si|why|what|when|appointment|schedule|thanks|yes)\b/i.test(source);
-  const customerName = (explicitName || plainName) && name.length >= 2 ? usableCustomerName(name) : '';
-  const customerEmail = emailMatch ? emailMatch[0] : '';
+  const customerName = labeledName && usableCustomerName(labeledName[1]) || ((explicitName || plainName) && name.length >= 2 ? usableCustomerName(name) : '');
+  const customerEmail = labeledEmail && labeledEmail[1] || (emailMatch ? emailMatch[0] : '');
   return { customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail, provided: Boolean(customerName || customerPhone || customerEmail) };
 }
 
@@ -719,9 +736,16 @@ class AutomaticActionsService {
   async createAppointmentFromSlot(candidate, conversation, slot, settings, contactOverride) {
     const sourceMessageId = text(candidate.inbound_message_id);
     const dedupeKey = 'auto-appointment:' + sourceMessageId + ':' + slot.id;
-    const contact = contactFromConversation(conversation, contactOverride);
+    const contact = contactFromConversation(conversation, contactOverride, this.database);
     const integration = this.getState().integration;
-    const remoteRequested = enabled(settings.auto_appointments_create_remote) && integration.appointment_create;
+    const remoteRequested = enabled(settings.auto_appointments_create_remote);
+    if (remoteRequested && !integration.appointment_create) {
+      return {
+        failed: true,
+        reason: 'website_appointment_creation_not_ready',
+        error: 'The website reservation is authorized, but appointment-create is not ready. Nexa did not create or confirm a local-only appointment.'
+      };
+    }
     const missingFields = [];
     if (remoteRequested) {
       if (!contact.customer_name) missingFields.push('customer_name');
@@ -764,7 +788,7 @@ class AutomaticActionsService {
         const listingId = text(slot.listing_id || payload.listing_id || contextListingId);
         const remote = await this.apiService.createRemoteAppointment({
           thread_id: candidate.thread_id, listing_id: listingId, customer_name: customerName, customer_phone: customerPhone, customer_email: customerEmail,
-          customer_location: text(payload.customer_location || thread.customer_location || slot.location),
+          customer_location: text(contact.customer_location || payload.customer_location || thread.customer_location || slot.location),
           appointment_date: appointmentDate, appointment_time: appointmentTime,
           notes: 'Customer confirmed the appointment through Nexa Smart Office Bot. Reserve this exact Dealer Agenda slot and add the completed appointment to Dealer Leads.'
         }, dedupeKey);

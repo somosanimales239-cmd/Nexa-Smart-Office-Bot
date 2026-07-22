@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.17
+
+- Fixed the availability safety filter so the page's real `stores`, `days`, and abbreviated weekday containers survive synchronization.
+- Added migration 9 to make website Lead + Dealer Agenda reservation the default appointment destination.
+- Added order/Lead contact recovery for message threads whose API payload does not repeat customer phone or email.
+- Added labeled contact parsing for English and Spanish messages.
+- Corrected reseller message direction inference.
+- Added a guard against false local confirmations when remote appointment creation is unavailable.
+
 ## 1.6.16
 
 - Added strict remote reservation commit verification. Nexa now requires a reserved response, remote appointment/Lead ID, complete Lead fields, a matching Dealer Agenda appointment and removal of the selected availability slot.
